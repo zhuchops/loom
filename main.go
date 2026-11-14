@@ -1,0 +1,63 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+)
+
+const version = "0.5.1"
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "loom:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	profile := flag.String("profile", "", "editing profile (vim or helix)")
+	path := flag.String("config", "", "path to a JSON config")
+	showVersion := flag.Bool("version", false, "print the editor version")
+	dump := flag.Bool("dump-config", false, "print the default JSON config")
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: loom [flags] [file]")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+	if *showVersion {
+		fmt.Println("loom " + version)
+		return nil
+	}
+	if *dump {
+		return printConfig()
+	}
+	if flag.NArg() > 1 {
+		flag.Usage()
+		return fmt.Errorf("expected at most one file")
+	}
+	explicit := *path != ""
+	if !explicit {
+		*path = configPath()
+	}
+	cfg, err := readConfig(*path, explicit)
+	if err != nil {
+		return fmt.Errorf("config %s: %w", *path, err)
+	}
+	if *profile != "" {
+		cfg.Profile = *profile
+	}
+	b, err := loadBuffer(flag.Arg(0))
+	if err != nil {
+		return err
+	}
+	root, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	e, err := newEditor(cfg, b, root)
+	if err != nil {
+		return err
+	}
+	return runTerminal(e, flag.NArg() > 0)
+}

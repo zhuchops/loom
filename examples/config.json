@@ -1,0 +1,13 @@
+{
+  "bindings": {
+    "vim.select": { "g U": "plugin.uppercase" },
+    "helix.select": { "g U": "plugin.uppercase" }
+  },
+  "plugins": [
+    {
+      "id": "uppercase",
+      "title": "Uppercase Selection",
+      "command": ["./loom-uppercase"]
+    }
+  ]
+}
