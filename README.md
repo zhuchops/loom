@@ -22,11 +22,15 @@ Launch it from the directory you want to browse. Bare `loom` starts on the Dashb
 
 ```sh
 loom
+loom .
+loom path/to/project
 loom main.go
 loom -profile helix main.go
 ```
 
 Inside the editor, `:vim` and `:helix` switch profiles for the session. `:w` saves, `:w PATH` saves to a path, `:q` quits, and `:q!` discards unsaved changes and quits.
+
+A directory argument sets the project root and opens its Dashboard and saved session.
 
 On the Dashboard, use `j`/`k` or the arrow keys and Enter, or click an action. Run `:dashboard` to return after closing the tab.
 
@@ -50,6 +54,8 @@ On the Dashboard, use `j`/`k` or the arrow keys and Enter, or click an action. R
 | Manual completion | Ctrl+Space in Insert |
 | Choose a completion | ↑ / ↓ |
 | Accept or dismiss a completion | Tab or Enter / Esc |
+
+Completion opens below the cursor and moves above it when more room is available there and the list would otherwise be clipped.
 | Search the current buffer | /, then n or N to repeat |
 | Undo / redo / repeat edit | u / Ctrl+R / . |
 
@@ -221,6 +227,8 @@ Formatting runs on save when `format_on_save` is on, which is the default. Go us
 Loom reads languages from the `languages` table in your config. Each entry names a language by its LSP language ID and sets its file extensions, language server, formatter, and project root markers. The built-in table covers Go, TypeScript, JavaScript, Python, Rust, C, C++, Ruby, Lua, shell, JSON, YAML, TOML, Markdown, CSS, HTML, and SQL. Run `loom -dump-config` to see every default.
 
 A language server or formatter is used only when its command is on `PATH`. Missing tools are skipped without an error. Go gets the full set: gopls, syntax colors, and gofmt or goimports. For other languages, the language server adds completion, hover, definition, references, diagnostics, rename, and code actions, and it also provides semantic colors. Syntax colors without a server are built in for TypeScript, JavaScript, Rust, Python, JSON, TOML, YAML, shell, CSS, HTML, Lua, SQL, and Markdown. Completion inserts plain text.
+
+Use **Restart Language Server** in the command palette or run `:lsp-restart` from a file tab. Loom restarts that file's language server for its workspace and sends the current contents of its open buffers, including unsaved changes.
 
 The status bar shows errors and warnings for the current file and for the whole project, as `file E0 W0 · project E0 W0`. The project count includes every file under the project root that the language server reports, whether or not it is open. Space D opens Project Problems, and Space d opens File Problems. Each popup lists errors and warnings with their file and line. Type to filter, for example `error` or a file name. Enter jumps to the location. Project counts depend on the server. gopls reports every file in the module, but a server that reports only open files gives a partial count. A language's server starts when you open a file of that language, so its files are counted from then on.
 

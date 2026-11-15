@@ -212,6 +212,27 @@ func TestGoLanguageIntegration(t *testing.T) {
 	if len(e.b.semantic) == 0 {
 		t.Fatal("gopls returned no semantic colors")
 	}
+	old := e.session(e.b, false)
+	oldClient := old.client
+	// Restart through the public command while the active buffer has unsaved text.
+	e.b.replace(span{0, 0}, "// unsaved\n")
+	e.ex("lsp-restart")
+	fresh := e.session(e.b, false)
+	if fresh == old || !fresh.restarting {
+		t.Fatal("restart did not replace the language server session")
+	}
+	awaitUpdate(t, e, func() bool { return !fresh.restarting })
+	if e.message != "Language server restarted" || !e.b.dirty() {
+		t.Fatalf("restart failed or lost the active edit: %s", e.message)
+	}
+	select {
+	case <-oldClient.done:
+	default:
+		t.Fatal("old language server is still running")
+	}
+	awaitUpdate(t, e, func() bool { return e.b.semanticVersion == e.b.version })
+	// Restore the original lines for the remaining navigation assertions.
+	e.b.history(false)
 	e.b.cursor = e.b.lines[3] + strings.Index(string(e.b.text[e.b.lines[3]:e.b.lineEnd(3)]), "greet")
 	e.languageAction("hover")
 	awaitUpdate(t, e, func() bool { return e.menu != nil })

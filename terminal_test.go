@@ -43,3 +43,38 @@ func TestBubbleTeaEditorInput(t *testing.T) {
 		t.Fatal("small terminal kept a stale cursor or mouse target")
 	}
 }
+
+func TestCompletionPopupFollowsCursor(t *testing.T) {
+	e := testEditor(t, "vim", strings.Repeat("line\n", 29)+"word")
+	m := &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(36, 14)}}
+	e.mode = "insert"
+	items := make([]completionItem, 12)
+	for i := range items {
+		items[i].Label = "Earlier"
+	}
+	items[11].Label = "Selected"
+	e.completion.items, e.completion.selected = items, 11
+
+	view := m.View()
+	box := m.view.completeBox
+	if view.Cursor == nil || box.y != view.Cursor.Y+2 || box.x+1 != view.Cursor.X || box.h != 8 {
+		t.Fatalf("expected popup below cursor, got %+v at %+v", box, view.Cursor)
+	}
+
+	e.b.cursor = len(e.b.text)
+	view = m.View()
+	box = m.view.completeBox
+	if view.Cursor == nil || box.y+box.h != view.Cursor.Y-1 || box.y < 2 || box.x+box.w >= 36 {
+		t.Fatalf("expected popup above cursor within the editor, got %+v at %+v", box, view.Cursor)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 12, Height: 5})
+	view = m.View()
+	box = m.view.completeBox
+	if view.Cursor == nil || box.h == 0 || box.y+box.h != view.Cursor.Y || box.y < 1 || box.x+box.w > 12 {
+		t.Fatalf("expected a compact popup above cursor, got %+v at %+v", box, view.Cursor)
+	}
+	m.Update(tea.MouseClickMsg{X: box.x, Y: box.y + 11 - box.start, Button: tea.MouseLeft})
+	if !strings.HasSuffix(string(e.b.text), "Selected") || len(e.completion.items) != 0 {
+		t.Fatal("clicking the visible completion did not accept it")
+	}
+}

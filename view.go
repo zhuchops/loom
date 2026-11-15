@@ -111,8 +111,12 @@ func (v *renderer) draw(e *editor) {
 	} else if e.menu != nil {
 		v.dim(w, h-1)
 		v.drawMenu(e.menu, w, h)
-	} else if v.completeBox.h > 0 {
-		v.drawCompletion(e.completion, w, h)
+	} else if v.screen.cursorVisible && e.mode == "insert" && len(e.completion.items) > 0 {
+		top := 1 // Keep the tab bar and status line visible.
+		if e.zen {
+			top = 0
+		}
+		v.drawCompletion(e.completion, top, h-1)
 	} else {
 		doc := e
 		if e.directory != nil {
@@ -375,9 +379,6 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	x, y := box.x+gutter+col-b.left, box.y+row-b.top
 	if !box.contains(x, y) || x < box.x+gutter {
 		return
-	}
-	if len(e.completion.items) > 0 {
-		v.completeBox.h = 1
 	}
 	cursor := cursorBlock
 	if e.mode == "insert" {

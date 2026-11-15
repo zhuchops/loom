@@ -21,7 +21,7 @@ func publish(t *testing.T, e *editor, path string, severities ...int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.handleNotification(rpcMessage{Method: "textDocument/publishDiagnostics", Params: params})
+	e.handleServerNotification(nil, rpcMessage{Method: "textDocument/publishDiagnostics", Params: params})
 }
 
 func TestProjectProblemsCountUnopenedFiles(t *testing.T) {

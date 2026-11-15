@@ -155,8 +155,9 @@ var exAliases = map[string]string{
 	"tab-next": ":tabnext", "tab-prev": ":tabprev", "tab-first": ":tabfirst", "tab-last": ":tablast",
 	"tab-left": ":tabmove -1", "tab-right": ":tabmove +1", "split": ":vsplit", "split-below": ":split",
 	"close-split": ":close", "only-pane": ":only", "split-join": ":split-join",
-	"messages":  ":messages",
-	"dashboard": ":dashboard",
+	"messages":    ":messages",
+	"dashboard":   ":dashboard",
+	"lsp-restart": ":lsp-restart",
 }
 
 func paletteHidden(id string) bool {

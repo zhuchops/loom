@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -71,12 +72,16 @@ func pathFromURI(raw string) string {
 	return filepath.FromSlash(u.Path)
 }
 
-func (e *editor) handleNotification(msg rpcMessage) {
+func (e *editor) handleServerNotification(s *languageSession, msg rpcMessage) {
 	if msg.Method == "window/showMessage" {
 		var params struct{ Message string }
 		if json.Unmarshal(msg.Params, &params) == nil && params.Message != "" {
 			select {
-			case e.async <- func() { e.notify("LSP: " + params.Message) }:
+			case e.async <- func() {
+				if s == nil || s.ctx.Err() == nil {
+					e.notify("LSP: " + params.Message)
+				}
+			}:
 			default:
 			}
 		}
@@ -93,6 +98,9 @@ func (e *editor) handleNotification(msg rpcMessage) {
 	inProject := path != "" && within(e.root, path)
 	select {
 	case e.async <- func() {
+		if s != nil && s.ctx.Err() != nil {
+			return
+		}
 		for _, b := range e.buffers {
 			if b.path == path {
 				if event.Version != 0 && b.version != event.Version {
@@ -105,8 +113,13 @@ func (e *editor) handleNotification(msg rpcMessage) {
 		if inProject {
 			if len(event.Diagnostics) == 0 {
 				delete(e.problems, path)
+				delete(e.problemServers, path)
 			} else {
 				e.problems[path] = event.Diagnostics
+				if e.problemServers == nil {
+					e.problemServers = make(map[string]*languageSession)
+				}
+				e.problemServers[path] = s
 			}
 		}
 	}:
@@ -163,7 +176,7 @@ func (e *editor) refreshLanguage() {
 		s.mu.Unlock()
 		e.async <- func() {
 			e.languageRunning = false
-			if err == nil && b.version == doc.version && b.path == doc.path {
+			if err == nil && s.ctx.Err() == nil && b.version == doc.version && b.path == doc.path {
 				b.semanticVersion, b.semanticPath = doc.version, doc.path
 				b.semantic = decodeSemantic(b, result.Data, types, modifiers)
 
@@ -259,6 +272,7 @@ func (e *editor) closeDocument(path string) {
 }
 
 func (e *editor) languageCommands() {
+	e.add("lsp-restart", "Restart Language Server", func(e *editor) { e.restartLanguageServer() })
 	e.add("code-actions", "Code Actions", func(e *editor) { e.codeActions() })
 	e.add("rename-symbol", "Rename Symbol", func(e *editor) { e.renameSymbol() })
 	e.add("definition", "Go to Definition", func(e *editor) { e.languageAction("definition") })
@@ -268,6 +282,72 @@ func (e *editor) languageCommands() {
 	e.add("file-problems", "File Problems", func(e *editor) { e.showFileProblems() })
 	e.add("next-problem", "Next Diagnostic", func(e *editor) { e.stepProblem(false) })
 	e.add("prev-problem", "Previous Diagnostic", func(e *editor) { e.stepProblem(true) })
+}
+
+func (e *editor) restartLanguageServer() {
+	key, root, argv := e.sessionKey(e.b)
+	if key == "" || e.directory != nil {
+		e.notify("No language server for this buffer")
+		return
+	}
+	old := e.sessions[key]
+	if old != nil && old.restarting {
+		return
+	}
+	if _, err := exec.LookPath(argv[0]); err != nil {
+		e.notify("LSP: " + err.Error())
+		return
+	}
+	if old != nil {
+		old.cancel()
+		for path, server := range e.problemServers {
+			if server == old {
+				delete(e.problemServers, path)
+				delete(e.problems, path)
+			}
+		}
+	}
+	s := e.newLanguageSession(key, root, argv)
+	s.restarting = true
+	e.invalidateCompletion()
+	var docs []document
+	for _, b := range e.buffers {
+		if e.session(b, false) == s {
+			b.semantic, b.diagnostics = nil, nil
+			b.semanticVersion, b.semanticPath = 0, ""
+			docs = append(docs, e.document(b))
+		}
+	}
+	e.notify("Restarting language server…")
+	// Hold the fresh session until the previous process stops and our buffer
+	// snapshots are sent. Later requests can then sync newer versions normally.
+	s.mu.Lock()
+	go func() {
+		if old != nil {
+			old.mu.Lock()
+			if old.client != nil {
+				<-old.client.done
+			}
+			old.mu.Unlock()
+		}
+		err := s.connect()
+		for _, doc := range docs {
+			if err != nil {
+				break
+			}
+			err = s.sync(doc)
+		}
+		s.mu.Unlock()
+		e.async <- func() {
+			s.restarting = false
+			if err != nil {
+				e.notify("LSP restart failed: " + err.Error())
+				return
+			}
+			e.notify("Language server restarted")
+			e.refreshLanguage()
+		}
+	}()
 }
 
 func (e *editor) languageAction(action string) {
@@ -299,7 +379,7 @@ func (e *editor) languageAction(action string) {
 		}
 		s.mu.Unlock()
 		e.async <- func() {
-			if e.b != b || b.version != doc.version || b.path != doc.path || b.cursor != cursor || e.menu != nil || e.tree.focused || e.directory != nil {
+			if s.ctx.Err() != nil || e.b != b || b.version != doc.version || b.path != doc.path || b.cursor != cursor || e.menu != nil || e.tree.focused || e.directory != nil {
 				return
 			}
 			if err != nil {

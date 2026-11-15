@@ -83,7 +83,7 @@ func (e *editor) requestAction(t actionTarget, method string, params any, callba
 		}
 		s.mu.Unlock()
 		e.async <- func() {
-			if !t.current(e) || e.menu != nil || e.directory != nil || e.tree.focused {
+			if s.ctx.Err() != nil || !t.current(e) || e.menu != nil || e.directory != nil || e.tree.focused {
 				return
 			}
 			if err != nil {

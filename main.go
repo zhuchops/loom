@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.5.1"
+const version = "0.5.2"
 
 func main() {
 	if err := run(); err != nil {
@@ -21,7 +21,7 @@ func run() error {
 	showVersion := flag.Bool("version", false, "print the editor version")
 	dump := flag.Bool("dump-config", false, "print the default JSON config")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "Usage: loom [flags] [file]")
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: loom [flags] [file or directory]")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -34,7 +34,7 @@ func run() error {
 	}
 	if flag.NArg() > 1 {
 		flag.Usage()
-		return fmt.Errorf("expected at most one file")
+		return fmt.Errorf("expected at most one file or directory")
 	}
 	explicit := *path != ""
 	if !explicit {
@@ -47,7 +47,14 @@ func run() error {
 	if *profile != "" {
 		cfg.Profile = *profile
 	}
-	b, err := loadBuffer(flag.Arg(0))
+	target := flag.Arg(0)
+	if info, err := os.Stat(target); err == nil && info.IsDir() {
+		if err := os.Chdir(target); err != nil {
+			return err
+		}
+		target = ""
+	}
+	b, err := loadBuffer(target)
 	if err != nil {
 		return err
 	}
@@ -59,5 +66,5 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	return runTerminal(e, flag.NArg() > 0)
+	return runTerminal(e, target != "")
 }

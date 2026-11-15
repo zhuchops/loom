@@ -214,22 +214,52 @@ func (v *renderer) drawWhichKey(e *editor, w, h int) {
 	v.screen.HideCursor()
 }
 
-func (v *renderer) drawCompletion(c completionState, w, h int) {
-	rows := min(8, len(c.items), max(1, h-4))
-	box := centerBox(w, h, min(66, w-2), rows+2)
-	v.frame(box, "Completion")
+func (v *renderer) drawCompletion(c completionState, top, bottom int) {
+	w := v.screen.Width()
+	x, y := v.screen.cursorX, v.screen.cursorY
+	rows := min(8, len(c.items))
+	below, above := bottom-y-1, y-top
+	flip := below < rows+2 && above > below
+	space := below
+	if flip {
+		space = above
+	}
+	if space < 1 {
+		return
+	}
+	border := 1
+	if space < 3 {
+		border = 0
+	}
+	rows = min(rows, space-2*border)
+	maxWidth := min(66, w)
+	width := min(16, maxWidth)
+	for _, item := range c.items {
+		width = min(maxWidth, max(width, 4+cellWidth(item.Label)+cellWidth(item.Detail)))
+		if width == maxWidth {
+			break
+		}
+	}
+	height := rows + 2*border
+	box := hitBox{x: max(0, min(x-border-1, w-width)), y: y + 1, w: width, h: height}
+	if flip {
+		box.y = y - height
+	}
+	if border != 0 {
+		v.frame(box, "Completion")
+	}
 	first := max(0, c.selected-rows+1)
-	v.completeBox = hitBox{box.x + 1, box.y + 1, box.w - 2, rows, first}
+	v.completeBox = hitBox{box.x + border, box.y + border, box.w - 2*border, rows, first}
 	for i := range rows {
 		item := c.items[first+i]
 		style := menuStyle
 		if first+i == c.selected {
 			style = activeStyle
 		}
-		v.screen.FillArea(box.x+1, box.y+i+1, box.w-2, 1, ' ', style)
-		v.write(box.x+2, box.y+i+1, box.w-4, item.Label+"  "+item.Detail, style)
+		row := v.completeBox.y + i
+		v.screen.FillArea(v.completeBox.x, row, v.completeBox.w, 1, ' ', style)
+		v.write(v.completeBox.x+1, row, v.completeBox.w-2, item.Label+"  "+item.Detail, style)
 	}
-	v.screen.HideCursor()
 }
 
 func (v *renderer) write(x, y, limit int, s string, style cellStyle) {

@@ -40,8 +40,8 @@ type rpcClient struct {
 	done           chan struct{}
 }
 
-func startRPC(argv []string, root string, onNotification func(rpcMessage)) (*rpcClient, error) {
-	cmd := exec.Command(argv[0], argv[1:]...)
+func startRPC(ctx context.Context, argv []string, root string, onNotification func(rpcMessage)) (*rpcClient, error) {
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = root
 	in, err := cmd.StdinPipe()
 	if err != nil {
@@ -203,6 +203,9 @@ type document struct {
 	position, end        position
 }
 type languageSession struct {
+	ctx                              context.Context
+	cancel                           context.CancelFunc
+	restarting                       bool // Editor event loop only.
 	onNotification                   func(rpcMessage)
 	semanticFull                     bool
 	semanticTypes, semanticModifiers []string
@@ -222,6 +225,9 @@ func fileURI(path string) string {
 }
 
 func (s *languageSession) connect() error {
+	if err := s.ctx.Err(); err != nil {
+		return err
+	}
 	if s.client != nil {
 		select {
 		case <-s.client.done:
@@ -230,11 +236,11 @@ func (s *languageSession) connect() error {
 			return nil
 		}
 	}
-	c, err := startRPC(s.argv, s.root, s.onNotification)
+	c, err := startRPC(s.ctx, s.argv, s.root, s.onNotification)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(s.ctx, 8*time.Second)
 	defer cancel()
 	var result struct {
 		Capabilities struct {
@@ -388,6 +394,7 @@ func (s *languageSession) didSave(doc document) {
 func (s *languageSession) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.cancel()
 	if s.client == nil {
 		return
 	}

@@ -72,6 +72,7 @@ type editor struct {
 	pluginRunning               bool
 	panel                       *sourceControl
 	problems                    map[string][]diagnostic
+	problemServers              map[string]*languageSession
 	diff                        *diffView
 	lastFind                    characterFind
 	surroundFlash               surroundFlash

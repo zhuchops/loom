@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -92,25 +93,39 @@ func workspaceRoot(path, lang string, roots []string) string {
 	return dir
 }
 
-func (e *editor) session(b *buffer, create bool) *languageSession {
+func (e *editor) sessionKey(b *buffer) (key, root string, argv []string) {
 	if b.path == "" {
-		return nil
+		return "", "", nil
 	}
 	lang := e.cfg.languageFor(b.path)
 	spec := e.cfg.Languages[lang]
 	if len(spec.Server) == 0 {
+		return "", "", nil
+	}
+	root = workspaceRoot(b.path, lang, spec.Roots)
+	return lang + "\x00" + root, root, spec.Server
+}
+
+func (e *editor) session(b *buffer, create bool) *languageSession {
+	key, root, argv := e.sessionKey(b)
+	if key == "" {
 		return nil
 	}
-	root := workspaceRoot(b.path, lang, spec.Roots)
-	key := lang + "\x00" + root
 	s := e.sessions[key]
 	if s == nil && create {
-		if _, err := exec.LookPath(spec.Server[0]); err != nil {
+		if _, err := exec.LookPath(argv[0]); err != nil {
 			return nil
 		}
-		s = &languageSession{root: root, argv: spec.Server, onNotification: e.handleNotification}
-		e.sessions[key] = s
+		s = e.newLanguageSession(key, root, argv)
 	}
+	return s
+}
+
+func (e *editor) newLanguageSession(key, root string, argv []string) *languageSession {
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &languageSession{root: root, argv: argv, ctx: ctx, cancel: cancel}
+	s.onNotification = func(msg rpcMessage) { e.handleServerNotification(s, msg) }
+	e.sessions[key] = s
 	return s
 }
 
