@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func fixture(t *testing.T, root, name, content string) string {
@@ -204,7 +206,7 @@ func TestGoLanguageIntegration(t *testing.T) {
 	}
 	e := testEditor(t, "vim", "")
 	fixture(t, e.root, "go.mod", "module test.local/loom\n\ngo 1.26\n")
-	path := fixture(t, e.root, "main.go", "package main\nimport \"fmt\"\nfunc greet(who string) string { return who }\nfunc main(){fmt.Println(greet(\"hello\"))}\n")
+	path := fixture(t, e.root, "main.go", "package main\nimport \"fmt\"\nfunc greet(who string, count int) string { return who }\nfunc main(){fmt.Println(greet( \"hello\", 2))}\n")
 	e.open(path)
 	t.Cleanup(e.closeServers)
 	e.refreshLanguage()
@@ -234,6 +236,36 @@ func TestGoLanguageIntegration(t *testing.T) {
 	// Restore the original lines for the remaining navigation assertions.
 	e.b.history(false)
 	e.b.cursor = e.b.lines[3] + strings.Index(string(e.b.text[e.b.lines[3]:e.b.lineEnd(3)]), "greet")
+	call := e.b.cursor
+	e.b.cursor = call + len("greet(")
+	model := &terminalModel{editor: e}
+	_, wake := model.Update(tea.KeyPressMsg{Code: 'i'})
+	_, request := model.Update(wake())
+	first := request()
+	model.Update(first)
+	if hint := e.signature; hint.label[hint.start:hint.end] != "who string" {
+		t.Fatalf("first argument hint = %+v", hint)
+	}
+	e.b.cursor = call + len("greet( \"he")
+	_, wake = model.Update(flashExpired{})
+	_, request = model.Update(wake())
+	model.Update(request())
+	if hint := e.signature; hint.label[hint.start:hint.end] != "who string" {
+		t.Fatalf("hint while typing the string = %+v", hint)
+	}
+	e.b.cursor = call + len("greet( \"hello\",")
+	_, wake = model.Update(flashExpired{})
+	_, request = model.Update(wake())
+	model.Update(request())
+	model.Update(first)
+	if hint := e.signature; hint.label[hint.start:hint.end] != "count int" {
+		t.Fatalf("second argument hint = %+v", hint)
+	}
+	model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if e.signature.label != "" {
+		t.Fatal("signature hint remained after leaving Insert")
+	}
+	e.b.cursor = call
 	e.languageAction("hover")
 	awaitUpdate(t, e, func() bool { return e.menu != nil })
 	if e.menu.title != "Hover Documentation" {
@@ -324,8 +356,8 @@ func TestEditableDirectory(t *testing.T) {
 	}
 }
 
-func TestPaletteExAndDirectoryInHelix(t *testing.T) {
-	e := testEditor(t, "helix", "hello\nworld\nhello\n")
+func TestPaletteExAndDirectory(t *testing.T) {
+	e := testEditor(t, "vim", "hello\nworld\nhello\n")
 	press(e, ": 2 enter")
 	if e.b.rowAt(e.b.cursor) != 1 {
 		t.Fatal("line address failed")
@@ -344,7 +376,7 @@ func TestPaletteExAndDirectoryInHelix(t *testing.T) {
 	}
 	file := fixture(t, e.root, "first.txt", "data")
 	press(e, "space x")
-	press(e, "j m i w c s e c o n d esc ctrl+s")
+	press(e, "j 0 c i w s e c o n d esc ctrl+s")
 	if e.menu == nil || len(e.menu.options) != 1 {
 		t.Fatalf("expected one rename: %s", e.message)
 	}
@@ -374,6 +406,9 @@ func TestCenteredPaletteAndWhichKey(t *testing.T) {
 	box := centerBox(100, 30, 78, 15)
 	if text, _, _ := s.Get(box.x, box.y); text != "╭" {
 		t.Fatalf("no border at centered position: %q", text)
+	}
+	if v.previewBox.h != 0 {
+		t.Fatal("command palette displayed a preview")
 	}
 	_, dimmed, _ := s.Get(0, 0)
 	if dimmed.GetBackground().Hex() == panelStyle.GetBackground().Hex() {

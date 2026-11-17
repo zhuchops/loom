@@ -34,7 +34,7 @@ func (e *editor) notify(message string) {
 }
 
 func (e *editor) openNotifications() {
-	m := &menu{title: "Notification History", empty: "No notifications yet"}
+	m := &menu{title: "Notification History", empty: "No notifications yet", details: true}
 	if len(e.notifications) > 0 {
 		m.empty = "No matching notifications"
 	}
@@ -42,17 +42,23 @@ func (e *editor) openNotifications() {
 		n := e.notifications[i]
 		preview := strings.Join(strings.Fields(n.text), " ")
 		m.options = append(m.options, option{preview, n.at.Format("15:04:05"), func() {
-			e.menu = m
-			e.notificationDetail = &notificationDetail{notification: n}
-		}})
+			e.showDetails(m, "Notification · "+n.at.Format("15:04:05"), n.text, nil)
+		}, func() itemPreview { return itemPreview{title: n.at.Format("15:04:05"), message: n.text} }})
 	}
 	e.openMenu(m)
 }
 
 type notificationDetail struct {
 	notification
+	title               string
+	jump                func()
 	lines               []string
 	width, rows, scroll int
+}
+
+func (e *editor) showDetails(parent *menu, title, text string, jump func()) {
+	e.menu = parent
+	e.notificationDetail = &notificationDetail{notification: notification{text: text}, title: title, jump: jump}
 }
 
 func (d *notificationDetail) move(delta int) {
@@ -64,6 +70,11 @@ func (e *editor) notificationInput(key string) {
 	switch key {
 	case "esc", "backspace":
 		e.notificationDetail = nil
+	case "o":
+		if d.jump != nil {
+			e.notificationDetail, e.menu = nil, nil
+			d.jump()
+		}
 	case "down", "j":
 		d.move(1)
 	case "up", "k":
@@ -88,12 +99,19 @@ func (v *renderer) drawNotification(d *notificationDetail, w, h int) {
 	}
 	d.rows = box.h - 3
 	d.move(0)
-	v.frame(box, "Notification · "+d.at.Format("15:04:05"))
+	title := d.title
+	if title == "" {
+		title = "Notification · " + d.at.Format("15:04:05")
+	}
+	v.frame(box, title)
 	end := min(len(d.lines), d.scroll+d.rows)
 	for i, line := range d.lines[d.scroll:end] {
 		v.write(box.x+1, box.y+1+i, width, line, menuStyle)
 	}
 	footer := fmt.Sprintf("%d–%d/%d  ↑/↓ Scroll  Esc Back", d.scroll+1, end, len(d.lines))
+	if d.jump != nil {
+		footer = fmt.Sprintf("%d–%d/%d  o Source  Esc Back", d.scroll+1, end, len(d.lines))
+	}
 	v.write(box.x+1, box.y+box.h-2, width, footer, menuStyle)
 	v.screen.HideCursor()
 }

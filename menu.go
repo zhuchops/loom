@@ -14,16 +14,23 @@ import (
 type option struct {
 	label, hint string
 	run         func()
+	preview     func() itemPreview
 }
 type menu struct {
-	title, input     string
-	options, matches []option
-	selected         int
-	submit           func(string)
-	exact            func(string) bool
-	suggestions      func(string) []option
-	confirmation     bool
-	empty            string
+	title, input                string
+	options, matches            []option
+	selected                    int
+	submit                      func(string)
+	exact                       func(string) bool
+	suggestions                 func(string) []option
+	confirmation                bool
+	hidePreview                 bool
+	details                     bool // Hover selects an entry; Enter opens its full text.
+	hovering                    bool
+	empty                       string
+	previewIndex, previewScroll int
+	previewReady                bool
+	preview                     itemPreview
 }
 
 func (e *editor) openMenu(m *menu) {
@@ -34,6 +41,7 @@ func (e *editor) openMenu(m *menu) {
 
 func (m *menu) filter() {
 	m.matches = m.matches[:0]
+	m.previewReady, m.previewScroll = false, 0
 	query := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(m.input), ":")))
 	if m.suggestions != nil {
 		m.matches = append(m.matches, m.suggestions(query)...)
@@ -53,6 +61,21 @@ func (m *menu) filter() {
 		m.matches = append(m.matches, r.option)
 	}
 	m.selected = 0
+}
+
+func (m *menu) selectedPreview() itemPreview {
+	if len(m.matches) == 0 {
+		return itemPreview{message: m.input}
+	}
+	if !m.previewReady || m.previewIndex != m.selected {
+		o := m.matches[m.selected]
+		m.preview = itemPreview{title: o.label, message: o.hint}
+		if o.preview != nil {
+			m.preview = o.preview()
+		}
+		m.previewIndex, m.previewScroll, m.previewReady = m.selected, 0, true
+	}
+	return m.preview
 }
 
 // matchRank orders results: exact command names and labels first, then label prefixes,
@@ -92,10 +115,15 @@ func fuzzyMatch(text, query string) bool {
 
 func (e *editor) menuInput(in keyInput) {
 	m := e.menu
-	if m.confirmation && in.key != "esc" && in.key != "enter" && in.key != "up" && in.key != "down" && in.key != "tab" && in.key != "ctrl+p" && in.key != "ctrl+n" {
+	m.hovering = false
+	if m.confirmation && in.key != "esc" && in.key != "enter" && in.key != "up" && in.key != "down" && in.key != "tab" && in.key != "ctrl+p" && in.key != "ctrl+n" && in.key != "pageup" && in.key != "pagedown" {
 		return
 	}
 	switch in.key {
+	case "pageup":
+		m.previewScroll -= 4
+	case "pagedown":
+		m.previewScroll += 4
 	case "esc":
 		e.menu = nil
 	case "up", "ctrl+p":
@@ -150,7 +178,7 @@ var keyOnlyCommands = map[string]bool{
 
 // Palette entries show the Ex command that does the same thing, when there is one.
 var exAliases = map[string]string{
-	"save": ":w", "quit": ":q", "profile-vim": ":vim", "profile-helix": ":helix",
+	"save": ":w", "quit": ":q", "profile-vim": ":vim",
 	"directory-jump": ":cd", "relative-numbers": ":set rnu!", "close-tab": ":tabclose",
 	"tab-next": ":tabnext", "tab-prev": ":tabprev", "tab-first": ":tabfirst", "tab-last": ":tablast",
 	"tab-left": ":tabmove -1", "tab-right": ":tabmove +1", "split": ":vsplit", "split-below": ":split",
@@ -221,25 +249,25 @@ func (e *editor) openPalette() {
 		}
 		e.runCommand(id)
 	}
-	m := &menu{title: "Command Palette", submit: e.ex, exact: e.paletteExact, suggestions: func(input string) []option {
+	m := &menu{title: "Command Palette", hidePreview: true, submit: e.ex, exact: e.paletteExact, suggestions: func(input string) []option {
 		if n, ok := exAddress(input); ok {
-			return []option{{fmt.Sprintf("Go to Line %d", n), ":" + input, func() { e.ex(input) }}}
+			return []option{{fmt.Sprintf("Go to Line %d", n), ":" + input, func() { e.ex(input) }, nil}}
 		}
 		if input == "$" {
-			return []option{{"Go to Last Line", ":$", func() { e.ex(input) }}}
+			return []option{{"Go to Last Line", ":$", func() { e.ex(input) }, nil}}
 		}
 		return nil
 	}}
 	for _, item := range exCommands {
-		m.options = append(m.options, option{item.title, ":" + item.syntax, func() { e.ex(item.syntax) }})
+		m.options = append(m.options, option{item.title, ":" + item.syntax, func() { e.ex(item.syntax) }, nil})
 	}
 	m.options = append(m.options, option{"Go to Line", ":42", func() {
-		e.openMenu(&menu{title: "Go to Line", submit: e.ex})
-	}})
+		e.openMenu(&menu{title: "Go to Line", hidePreview: true, submit: e.ex})
+	}, nil})
 	for _, id := range sortedKeys(e.commands) {
 		cmd := e.commands[id]
 		if cmd.title != "" && !paletteHidden(id) {
-			m.options = append(m.options, option{cmd.title, paletteHint(e.shortcut(id), exAliases[id]), func() { run(id, cmd) }})
+			m.options = append(m.options, option{cmd.title, paletteHint(e.shortcut(id), exAliases[id]), func() { run(id, cmd) }, nil})
 		}
 	}
 	slices.SortStableFunc(m.options, func(a, b option) int {
@@ -257,7 +285,7 @@ func (e *editor) showKeys() {
 		if title == "" {
 			title = humanize(id)
 		}
-		m.options = append(m.options, option{formatKey(key), title, func() { e.notify(key + " → " + id) }})
+		m.options = append(m.options, option{formatKey(key), title, func() { e.notify(key + " → " + id) }, nil})
 	}
 	e.openMenu(m)
 }
@@ -274,7 +302,12 @@ func (e *editor) openBuffers() {
 		if b.dirty() {
 			label += " *"
 		}
-		m.options = append(m.options, option{label, "", func() { e.switchBuffer(b) }})
+		m.options = append(m.options, option{label, "", func() { e.switchBuffer(b) }, func() itemPreview {
+			if b.dashboard {
+				return itemPreview{title: label, message: "Project start page"}
+			}
+			return bufferPreview(b, label, -1, 0, false, nil)
+		}})
 	}
 	e.openMenu(m)
 }
@@ -301,7 +334,7 @@ func (e *editor) openFiles() {
 			if err != nil {
 				return nil
 			}
-			options = append(options, option{rel, "", func() { e.open(path) }})
+			options = append(options, option{rel, "", func() { e.open(path) }, e.filePreview(path, -1, 0, false, nil)})
 			if len(options) >= 20000 {
 				return fs.SkipAll
 			}

@@ -39,6 +39,9 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 	if button == wheelDown {
 		wheel = 3
 	}
+	if v.mouseDiagnosticHover(e, event, wheel) {
+		return
+	}
 	if !down {
 		v.resize, v.dragging, v.drag = false, false, nil
 	}
@@ -49,6 +52,10 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 	if e.menu != nil {
 		m := e.menu
 		if wheel != 0 {
+			if v.previewBox.contains(x, y) {
+				m.previewScroll += wheel
+				return
+			}
 			m.selected = max(0, min(len(m.matches)-1, m.selected+wheel))
 			return
 		}
@@ -60,6 +67,12 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 					run()
 				}
 			}
+		}
+		if m.details && !down && button == pointerNone && v.menuBox.contains(x, y) {
+			m.selected = max(0, min(len(m.matches)-1, v.menuBox.start+y-v.menuBox.y))
+			m.hovering = true
+		} else if !v.previewBox.contains(x, y) {
+			m.hovering = false
 		}
 		return
 	}
@@ -260,7 +273,7 @@ func cellOffset(b *buffer, row, col int) int {
 func (e *editor) treeContext() {
 	m := &menu{title: "Explorer Actions"}
 	for _, action := range []struct{ label, key string }{{"Open", "enter"}, {"New File", "a"}, {"New Folder", "A"}, {"Rename", "r"}, {"Move", "m"}, {"Cut", "x"}, {"Paste", "p"}, {"Move to Trash", "d"}} {
-		m.options = append(m.options, option{action.label, formatKey(action.key), func() { e.treeInput(action.key) }})
+		m.options = append(m.options, option{action.label, formatKey(action.key), func() { e.treeInput(action.key) }, nil})
 	}
 	e.openMenu(m)
 }
@@ -269,7 +282,7 @@ func (e *editor) editorContext() {
 	m := &menu{title: "Editor Actions"}
 	for _, id := range []string{"definition", "references", "hover", "save", "split", "close-tab"} {
 		cmd := e.commands[id]
-		m.options = append(m.options, option{cmd.title, e.shortcut(id), func() { cmd.run(e) }})
+		m.options = append(m.options, option{cmd.title, e.shortcut(id), func() { cmd.run(e) }, nil})
 	}
 	for _, op := range []string{"Copy", "Cut", "Paste"} {
 		m.options = append(m.options, option{op, "", func() {
@@ -286,7 +299,7 @@ func (e *editor) editorContext() {
 				e.scheduleLanguage()
 			}
 			e.notify(strings.ToLower(op) + " selection")
-		}})
+		}, nil})
 	}
 	e.openMenu(m)
 }

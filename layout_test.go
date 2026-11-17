@@ -63,7 +63,7 @@ func TestTabsAndPaneLayout(t *testing.T) {
 }
 
 func TestParentAndDirectoryJump(t *testing.T) {
-	e := testEditor(t, "helix", "")
+	e := testEditor(t, "vim", "")
 	child := filepath.Join(e.root, "child")
 	if err := os.Mkdir(child, 0755); err != nil {
 		t.Fatal(err)

@@ -1,6 +1,6 @@
 # Loom 0.5
 
-Loom is a Go terminal editor with a Zed-inspired workspace, Everforest colors, Vim-style and Helix-style editing, and language-server integration.
+Loom is a Go terminal editor with a Zed-inspired workspace, Everforest colors, Vim-style editing, and language-server integration.
 
 ## Run it
 
@@ -25,10 +25,9 @@ loom
 loom .
 loom path/to/project
 loom main.go
-loom -profile helix main.go
 ```
 
-Inside the editor, `:vim` and `:helix` switch profiles for the session. `:w` saves, `:w PATH` saves to a path, `:q` quits, and `:q!` discards unsaved changes and quits.
+`:w` saves, `:w PATH` saves to a path, `:q` quits, and `:q!` discards unsaved changes and quits.
 
 A directory argument sets the project root and opens its Dashboard and saved session.
 
@@ -36,7 +35,7 @@ On the Dashboard, use `j`/`k` or the arrow keys and Enter, or click an action. R
 
 ## Shortcuts
 
-| Action | Vim and Helix |
+| Action | Vim |
 | --- | --- |
 | Quick Open / Go to File | Ctrl+P |
 | Command Palette | : or Space p |
@@ -49,6 +48,9 @@ On the Dashboard, use `j`/`k` or the arrow keys and Enter, or click an action. R
 | File problems / project problems | Space d / Space D |
 | Notification history | Space N |
 | Next / previous problem | ] d / [ d |
+| Toggle comment on current / selected lines | gcc / gc in Select mode |
+| Find / till character forward or backward | f / F / t / T, then the character |
+| Repeat last character find / reverse it | ; / , |
 | Switch open buffer | Space b |
 | Save | Ctrl+S |
 | Manual completion | Ctrl+Space in Insert |
@@ -61,18 +63,9 @@ Completion opens below the cursor and moves above it when more room is available
 
 The defaults use no Option, Command, function keys, or Ctrl+Shift chords. Space, g, and Ctrl+W start chords in Normal and Select modes. Ctrl+P and Ctrl+S work in every mode. Ctrl+Space starts completion in Insert. Press Esc to leave Insert before using a Space chord. Inside a picker, type to filter, use ↑/↓ to navigate, and press Enter or Esc. Search for **Show Keybindings** in the command palette to inspect the active mode.
 
-| Action | Vim profile | Helix profile |
-| --- | --- | --- |
-| Basic motion | h j k l, w b e, 0 $, gg G | h j k l, w b e, 0 $, gg G |
-| Characterwise / linewise selection | v / V | v |
-| Edit | dd, dw, ciw, yiw, p | w d, v … c, m i w y, p |
-| Inner / around text object | viw, va(, ci", da[ | m i w, m a (, m i " |
-| Add surround | ysiw), yss), or select then S ) | Select then m s ) |
-| Delete / change surround | ds) / cs)] | m d ) / m r ) ] |
-| Record / play a macro | qa … q / @a, @@ repeats last | Q … Q / q |
-| File picker / directory editor | Space f / Space x | Space f / Space x |
+In Vim, `f.` moves to the next period, `;` repeats that move, and `,` finds a period in the opposite direction. Counts work too: `3;` repeats the find three times. Character finds stay on the current line and also work in Select mode. `.` repeats the last edit.
 
-Examples use lowercase follow-up letters unless an uppercase key is shown in the modal command itself (`S` and `Q`). Text objects support words, brackets, and quotes. Counts work with motions and common edits. The Helix profile has one selection. Loom implements a subset of both editors' commands and uses its own plugin API. A typing burst and a macro replay in one buffer each form one undo step.
+Vim supports counts, text objects, macros, and a single selection. A typing burst and a macro replay in one buffer each form one undo step.
 
 ### Vim compatibility
 
@@ -159,7 +152,7 @@ Press Enter between adjacent braces to put the closing brace on its own line and
 
 The sidebar is a collapsible project tree. Each row shows a folder or file-type icon from Material Design Icons in Nerd Font, so the terminal needs a Nerd Font Mono variant. `Space e` focuses the sidebar. `Space x` opens an editable directory buffer in a centered popup. It starts beside the active file, or at the project root for an untitled buffer.
 
-Edit the listing with Vim or Helix motions. For example, Vim's `cc` replaces a filename, `o` adds a new entry, and `dd` removes an entry. In Helix, select the text with your usual motions and use `c` or `d`.
+Edit the listing with Vim motions. For example, `cc` replaces a filename, `o` adds a new entry, and `dd` removes an entry.
 
 - Edit a filename in place to rename it. Enter a relative path such as `src/main.go` to move it into an existing folder.
 - Add a line to create a file. End the name with `/` to create a directory.
@@ -232,11 +225,21 @@ Use **Restart Language Server** in the command palette or run `:lsp-restart` fro
 
 The status bar shows errors and warnings for the current file and for the whole project, as `file E0 W0 · project E0 W0`. The project count includes every file under the project root that the language server reports, whether or not it is open. Space D opens Project Problems, and Space d opens File Problems. Each popup lists errors and warnings with their file and line. Type to filter, for example `error` or a file name. Enter jumps to the location. Project counts depend on the server. gopls reports every file in the module, but a server that reports only open files gives a partial count. A language's server starts when you open a file of that language, so its files are counted from then on.
 
+Diagnostics underline the reported range in the editor. Errors use red, warnings use amber, and information and hints use teal. In either Problems picker, the preview shows the full message, line and column, and nearby source with the same underline.
+
+Hover over an underlined diagnostic or its gutter marker to read its full message. Hover over a symbol to see language server documentation after a brief pause; when the symbol has a diagnostic, both appear together. Messages wrap to the popup width; scroll over the popup for messages taller than the terminal. Hover Documentation also has a wrapped, scrollable preview.
+
+In Problems, press Enter or click an item to jump to its source. Hover over the underlined code or press `g h` to inspect the diagnostic. The `g h` list offers diagnostic and documentation entries; select one to read its wrapped details. Notification History also opens scrollable details with Enter. Esc returns to the list.
+
+Picker previews grow with the terminal. Use Page Up and Page Down or scroll over the preview to see more. In Insert mode, language servers that support signature help show the function signature near the cursor and highlight the active parameter as you type arguments.
+
+File, buffer, search, and reference pickers preview source as you move. The Command Palette and Code Actions picker use compact lists. Selecting a code action that edits files opens a confirmation with the proposed changes. Completion shows details and documentation when there is room.
+
 To add a language, or change one, list only what differs. Set `extensions` to claim file types, `server` for the language server, `format` for the formatter, and `roots` for extra project markers. The `{path}` placeholder is replaced with the file path. This example adds Zig and changes the Python formatter:
 
 ```json
 {
-  "profile": "helix",
+  "profile": "vim",
   "auto_complete": true,
   "languages": {
     "zig": {

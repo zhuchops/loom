@@ -12,7 +12,7 @@ func TestBubbleTeaEditorInput(t *testing.T) {
 	m := &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0)}}
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	initial := m.View()
-	if !initial.AltScreen || initial.MouseMode != tea.MouseModeCellMotion || initial.Cursor == nil || initial.Cursor.Shape != tea.CursorBlock {
+	if !initial.AltScreen || initial.MouseMode != tea.MouseModeAllMotion || initial.Cursor == nil || initial.Cursor.Shape != tea.CursorBlock {
 		t.Fatal("missing fullscreen, mouse, or normal-mode cursor")
 	}
 	x, y := initial.Cursor.X, initial.Cursor.Y
@@ -76,5 +76,45 @@ func TestCompletionPopupFollowsCursor(t *testing.T) {
 	m.Update(tea.MouseClickMsg{X: box.x, Y: box.y + 11 - box.start, Button: tea.MouseLeft})
 	if !strings.HasSuffix(string(e.b.text), "Selected") || len(e.completion.items) != 0 {
 		t.Fatal("clicking the visible completion did not accept it")
+	}
+}
+
+func TestCompletionShowsDocumentationPreview(t *testing.T) {
+	e := testEditor(t, "vim", "abc")
+	e.mode = "insert"
+	e.completion.items = []completionItem{{
+		Label: "Append", Detail: "func append", Documentation: []byte(`{"kind":"plaintext","value":"Adds elements.\nSecond.\nThird.\nFourth.\nFifth.\nSixth.\nSeventh."}`),
+	}}
+	v := renderer{screen: newTerminalFrame(100, 20)}
+	v.draw(e)
+	if !strings.Contains(v.screen.String(), "Seventh.") || !v.screen.cursorVisible {
+		t.Fatal("completion preview did not show documentation alongside the cursor")
+	}
+}
+
+func TestSignatureHintStaysClearOfCompletion(t *testing.T) {
+	e := testEditor(t, "vim", "first\ncall(\nlast")
+	e.mode = "insert"
+	e.signature = signatureHint{label: "call(name string)", start: len("call("), end: len("call(name string")}
+	e.completion.items = []completionItem{{Label: "someName"}}
+	v := renderer{screen: newTerminalFrame(60, 14)}
+	for _, row := range []int{0, 1} {
+		e.b.cursor = e.b.lineEnd(row)
+		v.draw(e)
+		hintRow := v.screen.cursorY - 1
+		if row == 0 {
+			hintRow = v.screen.cursorY + 1
+		}
+		if v.completeBox.y <= hintRow || v.completeBox.h == 0 {
+			t.Fatalf("completion overlaps the signature row %d: %+v", hintRow, v.completeBox)
+		}
+		highlighted := false
+		for x := 0; x < v.screen.Width(); x++ {
+			char, style, _ := v.screen.Get(x, hintRow)
+			highlighted = highlighted || char == "n" && style == menuStyle.Bold(true).Foreground(rgb(0xdbbc7f))
+		}
+		if !highlighted {
+			t.Fatalf("active argument was not highlighted on row %d", hintRow)
+		}
 	}
 }

@@ -108,7 +108,7 @@ func (e *editor) offerRecovery() {
 			name = "Untitled"
 		}
 		label := fmt.Sprintf("%s · %d buffers", name, len(c.tabs))
-		m.options = append(m.options, option{"Restore " + label, "", func() { e.restoreRecovery(c.path, c.tabs) }})
+		m.options = append(m.options, option{"Restore " + label, "", func() { e.restoreRecovery(c.path, c.tabs) }, nil})
 		m.options = append(m.options, option{"Discard " + label, "", func() {
 			e.openMenu(&menu{title: "Discard This Recovery Snapshot?", confirmation: true, submit: func(string) {
 				if err := os.Remove(c.path); err != nil {
@@ -117,7 +117,7 @@ func (e *editor) offerRecovery() {
 				}
 				e.offerRecovery()
 			}})
-		}})
+		}, nil})
 	}
 	e.openMenu(m)
 }

@@ -126,7 +126,7 @@ func (e *editor) codeActions() {
 			e.notify(err.Error())
 			return
 		}
-		m := &menu{title: "Code Actions"}
+		m := &menu{title: "Code Actions", hidePreview: true}
 		for _, wire := range actions {
 			var a codeAction
 			if json.Unmarshal(wire, &a) != nil || a.Title == "" {
@@ -138,7 +138,7 @@ func (e *editor) codeActions() {
 			} else if a.Edit == nil && (len(a.Data) == 0 || string(a.Data) == "null") {
 				hint = "command-only · unavailable"
 			}
-			m.options = append(m.options, option{a.Title, hint, func() { e.selectCodeAction(t, a, wire) }})
+			m.options = append(m.options, option{a.Title, hint, func() { e.selectCodeAction(t, a, wire) }, nil})
 		}
 		if len(m.options) == 0 {
 			e.notify("No code actions here")
@@ -330,12 +330,14 @@ func (e *editor) reviewWorkspaceEdit(t actionTarget, title string, change worksp
 		if path == "" {
 			path = s.path
 		}
-		m.options = append(m.options, option{path, fmt.Sprintf("%d edits", len(s.edits)), nil})
+		m.options = append(m.options, option{path, fmt.Sprintf("%d edits", len(s.edits)), nil, nil})
 		for _, ed := range s.edits {
 			label := fmt.Sprintf("  Line %d", s.buffer.rowAt(ed.start)+1)
 			before := strings.ReplaceAll(string(s.buffer.text[ed.start:ed.end]), "\n", " ↵ ")
 			after := strings.ReplaceAll(ed.text, "\n", " ↵ ")
-			m.options = append(m.options, option{label, before + " → " + after, nil})
+			m.options = append(m.options, option{label, before + " → " + after, nil, func() itemPreview {
+				return itemPreview{title: path + " · " + strings.TrimSpace(label), message: "Before\n" + string(s.buffer.text[ed.start:ed.end]) + "\n\nAfter\n" + ed.text}
+			}})
 		}
 	}
 	m.submit = func(string) {

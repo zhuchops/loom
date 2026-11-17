@@ -37,7 +37,7 @@ func (e *editor) runCommand(id string) {
 		switch id {
 		case "dashboard", "files", "buffers", "palette", "ex", "project-search",
 			"explorer", "explorer-popup", "close-explorer", "toggle-sidebar", "directory-jump",
-			"messages", "quit", "keybindings", "profile-vim", "profile-helix", "recover-buffers",
+			"messages", "quit", "keybindings", "profile-vim", "recover-buffers",
 			"jump-back", "jump-forward", "git-panel", "git-branch", "refresh-git", "problems",
 			"save", "normal", "zen", "relative-numbers", "close-tab", "only-pane", "close-split",
 			"split", "split-below", "focus-pane", "pane-h", "pane-j", "pane-k", "pane-l":

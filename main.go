@@ -16,7 +16,7 @@ func main() {
 }
 
 func run() error {
-	profile := flag.String("profile", "", "editing profile (vim or helix)")
+	profile := flag.String("profile", "", "editing profile (vim)")
 	path := flag.String("config", "", "path to a JSON config")
 	showVersion := flag.Bool("version", false, "print the editor version")
 	dump := flag.Bool("dump-config", false, "print the default JSON config")

@@ -1,7 +1,7 @@
 {
   "bindings": {
     "vim.select": { "g U": "plugin.uppercase" },
-    "helix.select": { "g U": "plugin.uppercase" }
+    "vim.select": { "g U": "plugin.uppercase" }
   },
   "plugins": [
     {

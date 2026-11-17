@@ -100,7 +100,7 @@ func (e *editor) reviewDisk(b *buffer, d diskState, quit bool) {
 		}
 	}
 	m.options = []option{
-		{"Keep Editing", "leave disk untouched", func() { e.notify("Kept unsaved buffer") }},
+		{"Keep Editing", "leave disk untouched", func() { e.notify("Kept unsaved buffer") }, nil},
 		{"Overwrite Disk", "save the buffer version", func() {
 			if e.b != b {
 				return
@@ -108,7 +108,7 @@ func (e *editor) reviewDisk(b *buffer, d diskState, quit bool) {
 			if e.saveAgainst(&d, quit) && quit {
 				e.tryQuit(false)
 			}
-		}},
+		}, nil},
 	}
 	if d.exists && utf8.ValidString(d.text) && !strings.ContainsRune(d.text, 0) {
 		m.options = append(m.options, option{"Reload from Disk", "discard editor changes", func() {
@@ -118,7 +118,7 @@ func (e *editor) reviewDisk(b *buffer, d diskState, quit bool) {
 				return
 			}
 			e.reloadBuffer(b, d)
-		}})
+		}, nil})
 	}
 	old, next := strings.Split(d.text, "\n"), strings.Split(string(b.text), "\n")
 	first := 0
@@ -134,13 +134,13 @@ func (e *editor) reviewDisk(b *buffer, d diskState, quit bool) {
 		if i == 150 {
 			break
 		}
-		m.options = append(m.options, option{fmt.Sprintf("− Disk %d", first+i+1), line, nil})
+		m.options = append(m.options, option{fmt.Sprintf("− Disk %d", first+i+1), line, nil, nil})
 	}
 	for i, line := range next[first:lastNext] {
 		if i == 150 {
 			break
 		}
-		m.options = append(m.options, option{fmt.Sprintf("+ Editor %d", first+i+1), line, nil})
+		m.options = append(m.options, option{fmt.Sprintf("+ Editor %d", first+i+1), line, nil, nil})
 	}
 	e.openMenu(m)
 }

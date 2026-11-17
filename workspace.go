@@ -196,7 +196,7 @@ func (e *editor) projectSearch(query string) {
 				path := filepath.Join(e.root, data.Path.Text)
 				label := fmt.Sprintf("%s:%d", strings.TrimPrefix(data.Path.Text, "./"), data.Line)
 				col := utf8.RuneCountInString(data.Lines.Text[:min(data.Matches[0].Start, len(data.Lines.Text))])
-				options = append(options, option{label, strings.TrimSpace(data.Lines.Text), func() { e.jumpTo(path, data.Line-1, col, false) }})
+				options = append(options, option{label, strings.TrimSpace(data.Lines.Text), func() { e.jumpTo(path, data.Line-1, col, false) }, e.filePreview(path, data.Line-1, col, false, nil)})
 			}
 			limited := len(options) >= 1000
 			if limited || scanner.Err() != nil {

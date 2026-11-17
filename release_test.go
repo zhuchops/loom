@@ -9,7 +9,7 @@ import (
 )
 
 func TestNormalLeadersAndJumpHistory(t *testing.T) {
-	for _, profile := range []string{"vim", "helix"} {
+	for _, profile := range []string{"vim"} {
 		t.Run(profile, func(t *testing.T) {
 			e := testEditor(t, profile, "")
 			e.cfg.Languages = nil
@@ -166,6 +166,11 @@ func TestGoplsActionsAndRename(t *testing.T) {
 	if e.menu.title != "Code Actions" {
 		t.Fatal(e.menu.title)
 	}
+	v := renderer{screen: newTerminalFrame(100, 24)}
+	v.draw(e)
+	if v.previewBox.h != 0 {
+		t.Fatal("code action list displayed a preview")
+	}
 	e.menuInput(keyInput{paste: "Organize Imports"})
 	if len(e.menu.matches) == 0 {
 		t.Fatalf("organize imports absent: %v", e.menu.options)
@@ -174,6 +179,10 @@ func TestGoplsActionsAndRename(t *testing.T) {
 	awaitUpdate(t, e, func() bool { return e.menu != nil })
 	if !e.menu.confirmation {
 		t.Fatal("no action preview")
+	}
+	v.draw(e)
+	if v.previewBox.h == 0 {
+		t.Fatal("code action confirmation did not display its edit preview")
 	}
 	press(e, "enter")
 	if strings.Contains(string(e.b.text), "import") {

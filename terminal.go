@@ -55,6 +55,13 @@ type terminalModel struct {
 	ctx     context.Context
 	signals <-chan os.Signal
 	ticks   <-chan time.Time
+
+	signatureTarget signatureTarget
+	signatureToken  uint64
+	cancelSignature context.CancelFunc
+	hoverTarget     hoverTarget
+	hoverToken      uint64
+	cancelHover     context.CancelFunc
 }
 
 type completionReady uint64
@@ -94,12 +101,15 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var next tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		m.view.clearDiagnosticHover()
 		m.view.screen.Resize(max(0, msg.Width), max(0, msg.Height))
 	case tea.KeyPressMsg:
+		m.view.clearDiagnosticHover()
 		if key := terminalKey(tea.Key(msg)); key != (keyInput{}) {
 			e.handle(key)
 		}
 	case tea.PasteMsg:
+		m.view.clearDiagnosticHover()
 		if msg.Content != "" {
 			e.handle(keyInput{paste: msg.Content})
 		}
@@ -112,6 +122,25 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			e.requestCompletion(1, e.completion.trigger)
 		}
 		next = m.waitForEditor
+	case signatureReady:
+		next = m.requestSignature(uint64(msg))
+	case hoverReady:
+		next = m.requestHover(uint64(msg))
+	case hoverResult:
+		if msg.token == m.hoverToken && diagnosticHoverAllowed(e) {
+			d := &m.view.diagnosticHover
+			d.message = d.diagnostic
+			if msg.content != "" {
+				if d.message != "" {
+					d.message += "\n\nDocumentation:\n"
+				}
+				d.message += msg.content
+			}
+		}
+	case signatureResult:
+		if msg.token == m.signatureToken && msg.session.ctx.Err() == nil {
+			e.signature = msg.hint
+		}
 	case languageReady:
 		if int(msg) == e.languageToken {
 			e.refreshLanguage()
@@ -135,9 +164,9 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if expiry := e.surroundFlash.until; expiry != flash {
 		timer := tea.Tick(time.Until(expiry), func(time.Time) tea.Msg { return flashExpired{} })
-		return m, tea.Batch(next, timer)
+		next = tea.Batch(next, timer)
 	}
-	return m, next
+	return m, tea.Batch(next, m.scheduleSignature(), m.scheduleHover())
 }
 
 func (m *terminalModel) View() tea.View {
@@ -145,7 +174,7 @@ func (m *terminalModel) View() tea.View {
 	m.view.draw(m.editor)
 	view := tea.NewView(f.Render())
 	view.AltScreen = true
-	view.MouseMode = tea.MouseModeCellMotion
+	view.MouseMode = tea.MouseModeAllMotion
 	if f.cursorVisible {
 		view.Cursor = tea.NewCursor(f.cursorX, f.cursorY)
 		view.Cursor.Blink = false

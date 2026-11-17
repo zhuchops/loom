@@ -190,12 +190,13 @@ type textEdit struct {
 	NewText string    `json:"newText"`
 }
 type completionItem struct {
-	Label            string     `json:"label"`
-	Detail           string     `json:"detail"`
-	InsertText       string     `json:"insertText"`
-	InsertTextFormat int        `json:"insertTextFormat"`
-	TextEdit         *textEdit  `json:"textEdit"`
-	Additional       []textEdit `json:"additionalTextEdits"`
+	Label            string          `json:"label"`
+	Detail           string          `json:"detail"`
+	Documentation    json.RawMessage `json:"documentation"`
+	InsertText       string          `json:"insertText"`
+	InsertTextFormat int             `json:"insertTextFormat"`
+	TextEdit         *textEdit       `json:"textEdit"`
+	Additional       []textEdit      `json:"additionalTextEdits"`
 }
 type document struct {
 	path, language, text string
@@ -218,6 +219,8 @@ type languageSession struct {
 	save                             bool
 	saveText                         bool
 	triggers                         []string
+	supportsSignatureHelp            bool
+	signatureTriggers                []string
 }
 
 func fileURI(path string) string {
@@ -248,8 +251,12 @@ func (s *languageSession) connect() error {
 				Legend struct{ TokenTypes, TokenModifiers []string }
 				Full   json.RawMessage
 			} `json:"semanticTokensProvider"`
-			PositionEncoding   string          `json:"positionEncoding"`
-			TextDocumentSync   json.RawMessage `json:"textDocumentSync"`
+			PositionEncoding string          `json:"positionEncoding"`
+			TextDocumentSync json.RawMessage `json:"textDocumentSync"`
+			SignatureHelp    *struct {
+				TriggerCharacters   []string `json:"triggerCharacters"`
+				RetriggerCharacters []string `json:"retriggerCharacters"`
+			} `json:"signatureHelpProvider"`
 			CompletionProvider struct {
 				TriggerCharacters []string `json:"triggerCharacters"`
 			} `json:"completionProvider"`
@@ -266,7 +273,10 @@ func (s *languageSession) connect() error {
 					"codeActionLiteralSupport": map[string]any{"codeActionKind": map[string]any{"valueSet": []string{"", "quickfix", "refactor", "refactor.extract", "refactor.inline", "refactor.rewrite", "source", "source.organizeImports", "source.fixAll"}}},
 					"dataSupport":              true, "resolveSupport": map[string]any{"properties": []string{"edit"}}, "disabledSupport": true,
 				},
-				"completion":         map[string]any{"completionItem": map[string]bool{"snippetSupport": false, "insertReplaceSupport": true}},
+				"completion": map[string]any{"completionItem": map[string]bool{"snippetSupport": false, "insertReplaceSupport": true}},
+				"signatureHelp": map[string]any{"contextSupport": true, "signatureInformation": map[string]any{
+					"parameterInformation": map[string]bool{"labelOffsetSupport": true}, "activeParameterSupport": true,
+				}},
 				"semanticTokens":     map[string]any{"requests": map[string]bool{"full": true}, "tokenTypes": tokenTypes, "tokenModifiers": tokenModifiers, "formats": []string{"relative"}},
 				"publishDiagnostics": map[string]bool{"versionSupport": true},
 				"hover":              map[string]any{"contentFormat": []string{"plaintext", "markdown"}},
@@ -308,6 +318,11 @@ func (s *languageSession) connect() error {
 		return err
 	}
 	s.client, s.opened, s.triggers = c, make(map[string]document), cap.CompletionProvider.TriggerCharacters
+	s.supportsSignatureHelp = cap.SignatureHelp != nil
+	s.signatureTriggers = nil
+	if cap.SignatureHelp != nil {
+		s.signatureTriggers = append(cap.SignatureHelp.TriggerCharacters, cap.SignatureHelp.RetriggerCharacters...)
+	}
 	return nil
 }
 

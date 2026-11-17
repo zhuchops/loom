@@ -66,6 +66,7 @@ type editor struct {
 	query                       string
 	quit                        bool
 	completion                  completionState
+	signature                   signatureHint
 	sessions                    map[string]*languageSession
 	async                       chan func()
 	completionWake              chan uint64
@@ -106,6 +107,7 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 func (e *editor) add(id, title string, fn func(*editor)) { e.commands[id] = command{title, fn} }
 
 func (e *editor) registerCommands() {
+	e.add("toggle-comment", "Toggle Line Comment", func(e *editor) { e.toggleComment() })
 	e.add("files", "Go to File", func(e *editor) { e.openFiles() })
 	e.add("explorer", "Focus Explorer", func(e *editor) { e.showTree(false) })
 	e.add("palette", "Command Palette", func(e *editor) { e.openPalette() })
@@ -113,7 +115,6 @@ func (e *editor) registerCommands() {
 	e.add("save", "Save File", func(e *editor) { e.save() })
 	e.add("quit", "Quit", func(e *editor) { e.tryQuit(false) })
 	e.add("profile-vim", "Use Vim Profile", func(e *editor) { e.profile("vim") })
-	e.add("profile-helix", "Use Helix Profile", func(e *editor) { e.profile("helix") })
 	e.add("keybindings", "Show Keybindings", func(e *editor) { e.showKeys() })
 	e.add("messages", "Notification History", func(e *editor) { e.openNotifications() })
 	e.add("complete", "Trigger Completion", func(e *editor) { e.requestCompletion(1, "") })
@@ -173,7 +174,6 @@ func (e *editor) registerCommands() {
 	e.add("paste-before", "Paste Before", func(e *editor) { e.paste(false) })
 	e.add("macro-record", "Record Vim Macro", func(e *editor) { e.pending = pending{kind: "record"} })
 	e.add("macro-play", "Play Vim Macro", func(e *editor) { e.pending = pending{kind: "play"} })
-	e.add("macro-toggle", "Toggle Helix Macro Recording", func(e *editor) { e.startMacro(".") })
 	e.add("macro-last", "Play Last Macro", func(e *editor) { e.playMacro(e.lastMacro) })
 	e.add("surround-selection", "Add Surrounding Delimiters", func(e *editor) { e.pending = pending{kind: "surround"} })
 	e.add("surround-delete", "Delete Surrounding Delimiters", func(e *editor) { e.pending = pending{kind: "unsurround"} })
@@ -192,21 +192,8 @@ func (e *editor) registerCommands() {
 	for _, name := range []string{"left", "right", "up", "down", "home", "first-nonblank", "end", "top", "bottom", "word", "back-word", "word-end"} {
 		e.add(name, "", func(e *editor) {
 			b := e.b
-			start := b.cursor
-			helixWord := e.cfg.Profile == "helix" && e.mode == "normal" && name == "word"
 			n := e.count
 			for i := e.takeCount(); i > 0; i-- {
-				if helixWord && b.anchor >= 0 && b.cursor >= b.anchor && b.cursor < len(b.text) {
-					b.cursor++
-				}
-				if helixWord {
-					for b.cursor < len(b.text) && wordClass(b.text[b.cursor]) == 0 {
-						b.cursor++
-					}
-					if b.cursor < len(b.text) {
-						start = b.cursor
-					}
-				}
 				b.cursor = motion(b, name, b.cursor)
 			}
 			if e.cfg.Profile == "vim" && (name == "top" || name == "bottom") {
@@ -220,18 +207,7 @@ func (e *editor) registerCommands() {
 				}
 				b.cursor = motion(b, "first-nonblank", b.lines[min(row, last)])
 			}
-			if e.cfg.Profile == "helix" && e.mode == "normal" {
-				b.anchor = -1
-				if name == "word" || name == "word-end" || name == "back-word" {
-					b.anchor = start
-					if name == "word" && b.cursor > start {
-						b.cursor--
-						for b.cursor > start && wordClass(b.text[b.cursor]) == 0 {
-							b.cursor--
-						}
-					}
-				}
-			}
+
 		})
 	}
 	for _, name := range []string{"left", "right", "up", "down"} {
@@ -824,6 +800,9 @@ func (e *editor) openLoaded(b *buffer) {
 			return
 		}
 	}
+	if ds := e.problems[b.path]; len(ds) > 0 {
+		b.diagnostics = slices.Clone(ds)
+	}
 	if len(e.buffers) == 1 && e.b.path == "" && !e.b.dashboard && !e.b.dirty() && e.layout == e.activePane {
 		e.buffers[0] = b
 	} else {
@@ -1041,7 +1020,7 @@ func (e *editor) ex(line string) {
 		} else {
 			e.openFiles()
 		}
-	case "vim", "helix":
+	case "vim":
 		e.profile(id)
 	default:
 		if c, ok := e.commands[id]; ok && arg == "" {

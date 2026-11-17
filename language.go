@@ -352,9 +352,15 @@ func (e *editor) restartLanguageServer() {
 
 func (e *editor) languageAction(action string) {
 	b := e.b
+	var hoverMenu *menu
+	if action == "hover" {
+		hoverMenu = e.openDiagnosticHover(b, b.cursor)
+	}
 	s := e.session(b, true)
 	if s == nil {
-		e.notify("No language server for this buffer")
+		if hoverMenu == nil {
+			e.notify("No language server for this buffer")
+		}
 		return
 	}
 	doc := e.document(b)
@@ -379,15 +385,24 @@ func (e *editor) languageAction(action string) {
 		}
 		s.mu.Unlock()
 		e.async <- func() {
-			if s.ctx.Err() != nil || e.b != b || b.version != doc.version || b.path != doc.path || b.cursor != cursor || e.menu != nil || e.tree.focused || e.directory != nil {
+			if s.ctx.Err() != nil || e.b != b || b.version != doc.version || b.path != doc.path || b.cursor != cursor || (e.menu != nil && e.menu != hoverMenu) || e.tree.focused || e.directory != nil || (hoverMenu != nil && e.menu != hoverMenu) {
 				return
 			}
 			if err != nil {
-				e.notify("LSP: " + err.Error())
+				if hoverMenu == nil {
+					e.notify("LSP: " + err.Error())
+				}
 				return
 			}
 			if action == "hover" {
-				e.showHover(raw)
+				if hoverMenu != nil {
+					if content := hoverContent(raw); content != "" {
+						e.addHoverOption(hoverMenu, "Documentation", content)
+						hoverMenu.filter()
+					}
+				} else {
+					e.showHover(raw)
+				}
 				return
 			}
 			e.showLocations(action, raw)
@@ -420,7 +435,7 @@ func (e *editor) showLocations(action string, raw json.RawMessage) {
 		if label == "" || strings.HasPrefix(label, "..") {
 			label = path
 		}
-		m.options = append(m.options, option{fmt.Sprintf("%s:%d:%d", label, p.Line+1, p.Character+1), "", func() { e.jumpTo(path, p.Line, p.Character, true) }})
+		m.options = append(m.options, option{fmt.Sprintf("%s:%d:%d", label, p.Line+1, p.Character+1), "", func() { e.jumpTo(path, p.Line, p.Character, true) }, e.filePreview(path, p.Line, p.Character, true, nil)})
 	}
 	if len(m.options) == 0 {
 		e.notify("No " + action + " results")
@@ -434,7 +449,7 @@ func (e *editor) showLocations(action string, raw json.RawMessage) {
 	e.openMenu(m)
 }
 
-func (e *editor) showHover(raw json.RawMessage) {
+func hoverContent(raw json.RawMessage) string {
 	var result struct{ Contents json.RawMessage }
 	_ = json.Unmarshal(raw, &result)
 	var content string
@@ -456,15 +471,41 @@ func (e *editor) showHover(raw json.RawMessage) {
 			}
 		}
 	}
-	if strings.TrimSpace(content) == "" {
+	return strings.TrimSpace(content)
+}
+
+func (e *editor) showHover(raw json.RawMessage) {
+	content := hoverContent(raw)
+	if content == "" {
 		e.notify("No hover information")
 		return
 	}
-	m := &menu{title: "Hover Documentation"}
-	for _, line := range strings.Split(strings.TrimSpace(content), "\n") {
-		m.options = append(m.options, option{line, "", func() {}})
+	m := &menu{title: "Hover Documentation", details: true}
+	e.addHoverOption(m, "Documentation", content)
+	e.openMenu(m)
+}
+
+func (e *editor) addHoverOption(m *menu, title, content string) {
+	m.options = append(m.options, option{title, "", func() {
+		e.showDetails(m, title, content, nil)
+	}, func() itemPreview { return itemPreview{title: title, message: content} }})
+}
+
+func (e *editor) openDiagnosticHover(b *buffer, at int) *menu {
+	m := &menu{title: "Hover Documentation", details: true}
+	for _, d := range b.diagnostics {
+		start, okStart := b.offset(d.Range.Start)
+		end, okEnd := b.offset(d.Range.End)
+		if !okStart || !okEnd || start > end || at < start || at >= max(start+1, end) {
+			continue
+		}
+		e.addHoverOption(m, humanize(severityName(d.Severity)), d.Message)
+	}
+	if len(m.options) == 0 {
+		return nil
 	}
 	e.openMenu(m)
+	return m
 }
 
 type problemEntry struct {
@@ -495,8 +536,10 @@ func (e *editor) showProblemList(title string, entries []problemEntry) {
 		if r, err := filepath.Rel(e.root, entry.path); err == nil && within(e.root, entry.path) {
 			rel = r
 		}
-		label := fmt.Sprintf("%s:%d  %s", rel, p.Line+1, strings.Join(strings.Fields(entry.diag.Message), " "))
-		m.options = append(m.options, option{label, severityName(entry.diag.Severity), func() { e.jumpTo(entry.path, p.Line, p.Character, true) }})
+		label := fmt.Sprintf("%s:%d:%d  %s", rel, p.Line+1, p.Character+1, strings.Join(strings.Fields(entry.diag.Message), " "))
+		m.options = append(m.options, option{label, severityName(entry.diag.Severity), func() {
+			e.jumpTo(entry.path, p.Line, p.Character, true)
+		}, e.filePreview(entry.path, p.Line, p.Character, true, &entry.diag)})
 	}
 	e.openMenu(m)
 }

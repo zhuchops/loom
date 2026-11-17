@@ -31,8 +31,11 @@ type tabBox struct {
 	close int
 }
 type renderer struct {
+	diagnosticHover                             diagnosticHover
+	diagnosticBox                               hitBox
 	screen                                      *terminalFrame
 	treeBox, menuBox, completeBox, directoryBox hitBox
+	previewBox                                  hitBox
 	panes                                       []paneBox
 	tabs                                        []tabBox
 	divider                                     int
@@ -48,6 +51,7 @@ func (v *renderer) draw(e *editor) {
 	v.screen.Fill(' ', baseStyle)
 	v.screen.HideCursor()
 	v.treeBox, v.menuBox, v.completeBox, v.directoryBox = hitBox{}, hitBox{}, hitBox{}, hitBox{}
+	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
 	v.divider = -1
@@ -111,12 +115,18 @@ func (v *renderer) draw(e *editor) {
 	} else if e.menu != nil {
 		v.dim(w, h-1)
 		v.drawMenu(e.menu, w, h)
-	} else if v.screen.cursorVisible && e.mode == "insert" && len(e.completion.items) > 0 {
+	} else if v.screen.cursorVisible && e.mode == "insert" && (len(e.completion.items) > 0 || e.signature.label != "") {
 		top := 1 // Keep the tab bar and status line visible.
 		if e.zen {
 			top = 0
 		}
-		v.drawCompletion(e.completion, top, h-1)
+		hasSignature := e.signature.label != ""
+		if len(e.completion.items) > 0 {
+			v.drawCompletion(e.completion, top, h-1, hasSignature)
+		}
+		if hasSignature {
+			v.drawSignature(e.signature, top, h-1)
+		}
 	} else {
 		doc := e
 		if e.directory != nil {
@@ -126,6 +136,7 @@ func (v *renderer) draw(e *editor) {
 			v.drawWhichKey(doc, w, h)
 		}
 	}
+	v.drawDiagnosticHover(e)
 }
 
 func (v *renderer) drawTabs(e *editor, left, width int) {
@@ -276,14 +287,9 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	first := b.lines[b.top]
 	lexIndex, semIndex := seekHighlight(b.lexical, first), seekHighlight(semantic, first)
 
-	problems := map[int]int{}
-	for _, d := range b.diagnostics {
-		row := d.Range.Start.Line
-		if previous := problems[row]; previous == 0 || d.Severity < previous {
-			problems[row] = max(1, d.Severity)
-		}
-	}
-	for i := b.top; i < min(len(b.lines), b.top+box.h); i++ {
+	last := min(len(b.lines), b.top+box.h)
+	problems := diagnosticRows(b, b.top, last)
+	for i := b.top; i < last; i++ {
 		y := box.y + i - b.top
 		bg := rgb(0x2d353b)
 		if i == row && focused {
@@ -303,12 +309,8 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			lineNumber = absInt(i - row)
 		}
 		v.write(box.x+1, y, gutter-2, fmt.Sprintf("%*d", gutter-2, lineNumber), number)
-		if problems[i] > 0 {
-			c := rgb(0xdbbc7f)
-			if problems[i] == 1 {
-				c = rgb(0xe67e80)
-			}
-			v.write(box.x, y, 1, "●", number.Foreground(c))
+		if severity := diagnosticAt(problems[i], b.lines[i], b.lineEnd(i)+1); severity != 0 {
+			v.write(box.x, y, 1, "●", number.Foreground(diagnosticColor(severity)))
 		} else if mark := e.git.lines[i]; e.git.path == b.path && e.git.version == b.version && mark != 0 {
 			v.write(box.x, y, 1, "▎", number.Foreground(gitColor(mark)))
 		}
@@ -362,6 +364,7 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			if flashing && (offset < flash.inner.start && next > flash.outer.start || offset < flash.outer.end && next > flash.inner.end) {
 				s = s.Background(rgb(0x696146))
 			}
+			s = markDiagnostic(s, problems[i], offset, next)
 			x := box.x + gutter + column - b.left
 			if x >= box.x+gutter && x+width <= box.x+box.w {
 				v.write(x, y, width, g, s)
@@ -370,6 +373,15 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			offset = next
 			if x >= box.x+box.w {
 				break
+			}
+		}
+		end := b.lineEnd(i)
+		if offset == end {
+			x := box.x + gutter + column - b.left
+			if x >= box.x+gutter && x < box.x+box.w {
+				if s := markDiagnostic(baseStyle.Background(bg), problems[i], end, end+1); s.underline != 0 {
+					v.screen.Put(x, y, " ", 1, s)
+				}
 			}
 		}
 	}

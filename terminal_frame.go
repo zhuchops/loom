@@ -21,8 +21,9 @@ func (c terminalColor) RGBA() (r, g, b, a uint32) {
 }
 
 type cellStyle struct {
-	fg, bg terminalColor
-	bold   bool
+	fg, bg    terminalColor
+	bold      bool
+	underline terminalColor
 }
 
 func (s cellStyle) Foreground(c terminalColor) cellStyle { s.fg = c; return s }
@@ -35,6 +36,9 @@ func (s cellStyle) uvStyle() uv.Style {
 	style := uv.Style{Fg: s.fg, Bg: s.bg}
 	if s.bold {
 		style.Attrs = uv.AttrBold
+	}
+	if s.underline != 0 {
+		style.Underline, style.UnderlineColor = uv.UnderlineCurly, s.underline
 	}
 	return style
 }
@@ -87,7 +91,11 @@ func (f *terminalFrame) Get(x, y int) (string, cellStyle, int) {
 		return "", cellStyle{}, 0
 	}
 	s := cell.Style
-	return cell.Content, cellStyle{frameColor(s.Fg), frameColor(s.Bg), s.Attrs&uv.AttrBold != 0}, cell.Width
+	style := cellStyle{fg: frameColor(s.Fg), bg: frameColor(s.Bg), bold: s.Attrs&uv.AttrBold != 0}
+	if s.Underline != uv.UnderlineNone {
+		style.underline = frameColor(s.UnderlineColor)
+	}
+	return cell.Content, style, cell.Width
 }
 
 func (f *terminalFrame) ShowCursor(x, y int) {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +56,9 @@ func (v *renderer) dim(w, h int) {
 			if s == "" {
 				s = " "
 			}
+			if style.underline != 0 {
+				style.underline = darken(style.underline)
+			}
 			v.screen.Put(x, y, s, max(1, width), style.Foreground(darken(style.fg)).Background(darken(style.bg)))
 			x += max(1, width)
 		}
@@ -65,13 +69,39 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 	visible := min(12, max(0, h-5), len(m.matches))
 	empty := visible == 0 && m.empty != ""
 	height := visible + 3
-	if empty {
+	width := min(78, w-2)
+	hasPreview := !m.hidePreview && (len(m.matches) != 0 || m.input != "")
+	previewRows := 0
+	sideBySide := hasPreview && width >= 68
+	if sideBySide {
+		height = h - 2
+		visible = min(len(m.matches), height-3)
+	} else if hasPreview && h >= 9 && width >= 14 {
+		visible = min(visible, min(6, h/3), h-8)
+		height = h - 2
+		previewRows = height - visible - 3
+	}
+	if empty && height < h-2 {
 		height++
 	}
-	box := centerBox(w, h, min(78, w-2), height)
+	box := centerBox(w, h, width, height)
 	v.frame(box, m.title)
+	contentWidth := box.w - 4
+	if sideBySide {
+		contentWidth = (box.w - 5) / 2
+		edge := box.x + contentWidth + 2
+		v.screen.FillArea(edge, box.y+1, 1, box.h-2, '│', mutedStyle.Background(menuStyle.bg))
+		v.previewBox = hitBox{x: edge + 2, y: box.y + 1, w: box.x + box.w - edge - 4, h: box.h - 2}
+	} else if previewRows > 0 {
+		edge := box.y + 2 + visible
+		if empty {
+			edge++
+		}
+		v.screen.FillArea(box.x+1, edge, box.w-2, 1, '─', mutedStyle.Background(menuStyle.bg))
+		v.previewBox = hitBox{x: box.x + 2, y: edge + 1, w: contentWidth, h: box.y + box.h - edge - 2}
+	}
 	input := m.input
-	for cellWidth(input) > max(0, box.w-6) && input != "" {
+	for cellWidth(input) > max(0, contentWidth-2) && input != "" {
 		_, n := utf8.DecodeRuneInString(input)
 		input = input[n:]
 	}
@@ -80,14 +110,14 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 		prompt = ": "
 	}
 	if m.confirmation {
-		v.write(box.x+2, box.y+1, box.w-4, "Enter Apply   Esc Cancel", mutedStyle.Background(menuStyle.GetBackground()))
+		v.write(box.x+2, box.y+1, contentWidth, "Enter Apply   Esc Cancel", mutedStyle.Background(menuStyle.GetBackground()))
 	} else {
-		v.write(box.x+2, box.y+1, box.w-4, prompt+input, activeStyle)
+		v.write(box.x+2, box.y+1, contentWidth, prompt+input, activeStyle)
 	}
 	start := max(0, m.selected-visible+1)
-	v.menuBox = hitBox{box.x + 1, box.y + 2, box.w - 2, visible, start}
+	v.menuBox = hitBox{box.x + 1, box.y + 2, contentWidth + 1, visible, start}
 	if empty {
-		v.write(box.x+2, box.y+2, box.w-4, m.empty, menuStyle)
+		v.write(box.x+2, box.y+2, contentWidth, m.empty, menuStyle)
 	}
 	for i := start; i < start+visible; i++ {
 		o := m.matches[i]
@@ -96,15 +126,25 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 			style = activeStyle
 		}
 		y := box.y + 2 + i - start
-		v.screen.FillArea(box.x+1, y, box.w-2, 1, ' ', style)
-		v.writeOption(box.x+2, y, box.w-4, o, style)
+		v.screen.FillArea(box.x+1, y, v.menuBox.w, 1, ' ', style)
+		v.writeOption(box.x+2, y, contentWidth, o, style)
+	}
+	if v.previewBox.h > 0 {
+		p := m.selectedPreview()
+		if m.details && m.hovering {
+			p.source = nil
+		}
+		v.drawItemPreview(p, v.previewBox, &m.previewScroll)
+	}
+	if m.details {
+		v.write(box.x+2, box.y+box.h-1, box.w-4, " Enter Details · Esc Close ", menuStyle)
 	}
 	if m.confirmation {
 		v.screen.HideCursor()
 		return
 	}
 	v.screen.SetCursorStyle(cursorBar)
-	v.screen.ShowCursor(min(box.x+box.w-2, box.x+4+cellWidth(input)), box.y+1)
+	v.screen.ShowCursor(min(box.x+contentWidth+1, box.x+4+cellWidth(input)), box.y+1)
 }
 
 // writeOption draws the label on the left and the hint right-aligned in a muted color.
@@ -214,11 +254,19 @@ func (v *renderer) drawWhichKey(e *editor, w, h int) {
 	v.screen.HideCursor()
 }
 
-func (v *renderer) drawCompletion(c completionState, top, bottom int) {
+func (v *renderer) drawCompletion(c completionState, top, bottom int, signature bool) {
 	w := v.screen.Width()
 	x, y := v.screen.cursorX, v.screen.cursorY
 	rows := min(8, len(c.items))
 	below, above := bottom-y-1, y-top
+	lowerGap, upperGap := 0, 0
+	if signature && above == 0 {
+		lowerGap = 1
+		below--
+	} else if signature && below == 0 {
+		upperGap = 1
+		above--
+	}
 	flip := below < rows+2 && above > below
 	space := below
 	if flip {
@@ -241,15 +289,21 @@ func (v *renderer) drawCompletion(c completionState, top, bottom int) {
 		}
 	}
 	height := rows + 2*border
-	box := hitBox{x: max(0, min(x-border-1, w-width)), y: y + 1, w: width, h: height}
+	box := hitBox{x: max(0, min(x-border-1, w-width)), y: y + 1 + lowerGap, w: width, h: height}
 	if flip {
-		box.y = y - height
+		box.y = y - height - upperGap
 	}
 	if border != 0 {
 		v.frame(box, "Completion")
 	}
 	first := max(0, c.selected-rows+1)
 	v.completeBox = hitBox{box.x + border, box.y + border, box.w - 2*border, rows, first}
+	if flip {
+		bottom = y - upperGap
+	} else {
+		top = y + 1 + lowerGap
+	}
+	v.drawCompletionPreview(c.items[c.selected], box, top, bottom)
 	for i := range rows {
 		item := c.items[first+i]
 		style := menuStyle
@@ -259,6 +313,49 @@ func (v *renderer) drawCompletion(c completionState, top, bottom int) {
 		row := v.completeBox.y + i
 		v.screen.FillArea(v.completeBox.x, row, v.completeBox.w, 1, ' ', style)
 		v.write(v.completeBox.x+1, row, v.completeBox.w-2, item.Label+"  "+item.Detail, style)
+	}
+}
+
+func (v *renderer) drawCompletionPreview(item completionItem, list hitBox, top, bottom int) {
+	var docs string
+	if json.Unmarshal(item.Documentation, &docs) != nil {
+		var markup struct{ Value string }
+		_ = json.Unmarshal(item.Documentation, &markup)
+		docs = markup.Value
+	}
+	detail := strings.TrimSpace(item.Detail + "\n" + docs)
+	if detail == "" {
+		detail = item.InsertText
+		if item.TextEdit != nil {
+			detail = item.TextEdit.NewText
+		}
+		if detail == "" || detail == item.Label {
+			return
+		}
+	}
+	left, right := list.x, v.screen.Width()-(list.x+list.w)
+	available := max(left, right)
+	var box hitBox
+	if available >= 22 && bottom-top >= 4 {
+		width := min(48, available)
+		x := list.x + list.w
+		if left > right {
+			x = list.x - width
+		}
+		height := min(3+len(wrapNotification(detail, width-4)), bottom-top)
+		panel := hitBox{x: x, y: min(list.y, bottom-height), w: width, h: height}
+		v.frame(panel, "")
+		box = hitBox{x: x + 2, y: panel.y + 1, w: width - 4, h: panel.h - 2}
+	} else if v.completeBox.w >= 30 && v.completeBox.h >= 2 {
+		in := v.completeBox
+		v.completeBox.w = in.w / 2
+		x := in.x + v.completeBox.w
+		v.screen.FillArea(x, in.y, 1, in.h, '│', mutedStyle.Background(menuStyle.bg))
+		box = hitBox{x: x + 2, y: in.y, w: in.w - v.completeBox.w - 3, h: in.h}
+	}
+	if box.w > 0 {
+		scroll := 0
+		v.drawItemPreview(itemPreview{title: item.Label, message: detail}, box, &scroll)
 	}
 }
 

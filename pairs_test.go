@@ -25,7 +25,7 @@ func TestAutoPairs(t *testing.T) {
 			}
 		})
 	}
-	e := testEditor(t, "helix", "")
+	e := testEditor(t, "vim", "")
 	e.handle(keyInput{paste: "{"})
 	e.cfg.AutoPairs = false
 	press(e, "[")

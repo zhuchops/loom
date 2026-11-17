@@ -107,6 +107,7 @@ func defaultConfig() config {
 			"insert": {"ctrl+space": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
 				"backspace": "backspace", "delete": "delete-forward", "enter": "newline", "tab": "insert-tab", "esc": "normal"},
 			"modal": {"h": "left", "j": "down", "k": "up", "l": "right", "left": "left", "down": "down", "up": "up", "right": "right",
+				"f": "find-char-f", "F": "find-char-F", "t": "find-char-t", "T": "find-char-T", ";": "find-char-next", ",": "find-char-prev",
 				"w": "word", "b": "back-word", "e": "word-end", "0": "home", "$": "end", "g g": "top", "G": "bottom",
 				"space f": "files", "space /": "project-search", "space e": "explorer", "space x": "explorer-popup",
 				"space p": "palette", "space s": "toggle-sidebar", "space S": "close-explorer",
@@ -126,18 +127,14 @@ func defaultConfig() config {
 				"v": "select", "u": "undo", "ctrl+r": "redo", "x": "delete-forward", "p": "paste-after", "P": "paste-before",
 				"/": "search", ".": "repeat", "] d": "next-problem", "[ d": "prev-problem", "n": "next-match", "N": "prev-match", ":": "ex", "esc": "normal"},
 			"vim.normal": {"d": "delete-op", "c": "change-op", "y": "yank-op", "q": "macro-record", "@": "macro-play",
-				"V": "select-line", "^": "first-nonblank", "D": "delete-to-end", "C": "change-to-end", "Y": "yank-line",
+				"g c c": "toggle-comment",
+				"V":     "select-line", "^": "first-nonblank", "D": "delete-to-end", "C": "change-to-end", "Y": "yank-line",
 				"r": "replace-character", "J": "join-lines", "%": "match-bracket",
-				"f": "find-char-f", "F": "find-char-F", "t": "find-char-t", "T": "find-char-T", ";": "find-char-next", ",": "find-char-prev",
 				"s a": "mini-add-motion", "s d": "mini-delete", "s r": "mini-replace", "s f": "mini-find", "s F": "mini-find-back", "s h": "mini-highlight"},
 			"vim.select": {"d": "delete-selection", "c": "change-selection", "y": "yank-selection", "S": "surround-selection", "i": "inner-object", "a": "around-object",
-				"V": "select-line", "o": "select-other-end", "ctrl+c": "normal", "^": "first-nonblank", "x": "delete-selection", "J": "join-lines", "%": "match-bracket", "p": "visual-paste", "P": "visual-paste-keep",
-				"f": "find-char-f", "F": "find-char-F", "t": "find-char-t", "T": "find-char-T", ";": "find-char-next", ",": "find-char-prev",
+				"g c": "toggle-comment",
+				"V":   "select-line", "o": "select-other-end", "ctrl+c": "normal", "^": "first-nonblank", "x": "delete-selection", "J": "join-lines", "%": "match-bracket", "p": "visual-paste", "P": "visual-paste-keep",
 				"s a": "mini-add-selection"},
-			"helix.normal": {"d": "delete-selection", "c": "change-selection", "y": "yank-selection", "Q": "macro-toggle", "q": "macro-last",
-				"m s": "surround-selection", "m d": "surround-delete", "m r": "surround-replace", "m i": "inner-object", "m a": "around-object"},
-			"helix.select": {"d": "delete-selection", "c": "change-selection", "y": "yank-selection", "m s": "surround-selection",
-				"m d": "surround-delete", "m r": "surround-replace", "m i": "inner-object", "m a": "around-object"},
 		},
 	}
 }
@@ -242,8 +239,8 @@ func scopes(profile, mode string) []string {
 }
 
 func compileKeys(cfg config, commands map[string]command) (map[string]map[string]string, error) {
-	if cfg.Profile != "vim" && cfg.Profile != "helix" {
-		return nil, fmt.Errorf("profile must be vim or helix")
+	if cfg.Profile != "vim" {
+		return nil, fmt.Errorf("profile must be vim")
 	}
 	for scope, keys := range cfg.Bindings {
 		for key, id := range keys {
@@ -253,7 +250,7 @@ func compileKeys(cfg config, commands map[string]command) (map[string]map[string
 		}
 	}
 	result := make(map[string]map[string]string)
-	for _, profile := range []string{"vim", "helix"} {
+	for _, profile := range []string{"vim"} {
 		for _, mode := range []string{"normal", "insert", "select"} {
 			keys := make(map[string]string)
 			for _, scope := range scopes(profile, mode) {

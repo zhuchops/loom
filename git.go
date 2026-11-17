@@ -363,7 +363,7 @@ func (e *editor) openBranchPicker() {
 		if name == current {
 			hint = "current"
 		}
-		m.options = append(m.options, option{name, hint, func() { e.switchBranch(dir, name) }})
+		m.options = append(m.options, option{name, hint, func() { e.switchBranch(dir, name) }, nil})
 	}
 	e.openMenu(m)
 }

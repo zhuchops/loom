@@ -32,7 +32,7 @@ func press(e *editor, keys string) {
 }
 
 func TestSharedBindingsInEveryMode(t *testing.T) {
-	for _, profile := range []string{"vim", "helix"} {
+	for _, profile := range []string{"vim"} {
 		for _, mode := range []string{"normal", "select"} {
 			t.Run(profile+"/"+mode, func(t *testing.T) {
 				e := testEditor(t, profile, "hello")
@@ -75,22 +75,6 @@ func TestVimSurroundAndMacro(t *testing.T) {
 	}
 	press(e, "q a A ! esc q @ a")
 	if got := string(e.b.text); got != "hello world!!" {
-		t.Fatalf("macro: %q", got)
-	}
-}
-
-func TestHelixSelectionSurroundAndMacro(t *testing.T) {
-	e := testEditor(t, "helix", "one two three")
-	press(e, "w w m s )")
-	if got := string(e.b.text); got != "one (two) three" {
-		t.Fatalf("surround: %q", got)
-	}
-	press(e, "m r ) ] m d ]")
-	if got := string(e.b.text); got != "one two three" {
-		t.Fatalf("change/delete: %q", got)
-	}
-	press(e, "Q A ! esc Q q")
-	if got := string(e.b.text); got != "one two three!!" {
 		t.Fatalf("macro: %q", got)
 	}
 }

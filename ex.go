@@ -53,7 +53,7 @@ func (e *editor) paletteExact(line string) bool {
 	switch id {
 	case "w", "write", "e", "edit", "cd", "split", "sp", "vsplit", "vs", "tabnext", "tabprev", "tabn", "tabp", "tabfirst", "tablast", "tabmove", "tabclose", "set", "only", "close", "ExploreClose":
 		return true
-	case "q", "quit", "q!", "quit!", "wq", "qa", "qall", "qa!", "qall!", "noh", "nohlsearch", "vim", "helix":
+	case "q", "quit", "q!", "quit!", "wq", "qa", "qall", "qa!", "qall!", "noh", "nohlsearch", "vim":
 		return strings.TrimSpace(arg) == ""
 	}
 	return e.commands[id].run != nil && arg == ""

@@ -401,11 +401,11 @@ func (e *editor) writeDirectory() {
 		to, _ := filepath.Rel(e.root, c.to)
 		switch {
 		case c.from == "":
-			m.options = append(m.options, option{"Create " + to, "", func() {}})
+			m.options = append(m.options, option{"Create " + to, "", func() {}, nil})
 		case c.to == "":
-			m.options = append(m.options, option{"Trash " + from, "", func() {}})
+			m.options = append(m.options, option{"Trash " + from, "", func() {}, nil})
 		default:
-			m.options = append(m.options, option{from + " → " + to, "", func() {}})
+			m.options = append(m.options, option{from + " → " + to, "", func() {}, nil})
 		}
 	}
 	// Enter applies the displayed plan; Esc returns to the directory buffer.
@@ -586,7 +586,7 @@ func (e *editor) directoryEx(line string) bool {
 		e.closeDirectory(true)
 	case "noh", "nohlsearch":
 		d.doc.searchVisible = false
-	case "vim", "helix":
+	case "vim":
 		e.profile(line)
 		d.doc.normal()
 		d.doc.cfg.Profile = line
@@ -668,7 +668,7 @@ func (e *editor) directoryPicker() {
 	}}
 	m.options = append(m.options, option{"Enter a path", "absolute, relative, or ~/…", func() {
 		e.openMenu(&menu{title: "Directory Path", submit: e.goDirectory})
-	}})
+	}, nil})
 	base := e.root
 	if e.directory != nil {
 		base = e.directory.dir
@@ -676,7 +676,7 @@ func (e *editor) directoryPicker() {
 	for _, path := range []string{filepath.Dir(base), base, e.root} {
 		found := slices.ContainsFunc(m.options, func(o option) bool { return o.hint == path })
 		if !found {
-			m.options = append(m.options, option{filepath.Base(path) + "/", path, func() { e.openDirectory(path) }})
+			m.options = append(m.options, option{filepath.Base(path) + "/", path, func() { e.openDirectory(path) }, func() itemPreview { return directoryPreview(path) }})
 		}
 	}
 	e.openMenu(m)
@@ -690,7 +690,7 @@ func (e *editor) directoryPicker() {
 				return fs.SkipDir
 			}
 			rel, _ := filepath.Rel(base, path)
-			options = append(options, option{rel + "/", path, func() { e.openDirectory(path) }})
+			options = append(options, option{rel + "/", path, func() { e.openDirectory(path) }, func() itemPreview { return directoryPreview(path) }})
 			if len(options) >= 2500 {
 				return fs.SkipAll
 			}
