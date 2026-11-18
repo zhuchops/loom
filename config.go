@@ -128,7 +128,7 @@ func defaultConfig() config {
 		Languages: defaultLanguages(),
 		Bindings: map[string]map[string]string{
 			"global": {"ctrl+p": "files", "ctrl+s": "save"},
-			"insert": {"ctrl+space": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
+			"insert": {"ctrl+space": "complete", "ctrl+n": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
 				"backspace": "backspace", "delete": "delete-forward", "enter": "newline", "tab": "insert-tab", "esc": "normal"},
 			"modal": {"h": "left", "j": "down", "k": "up", "l": "right", "left": "left", "down": "down", "up": "up", "right": "right",
 				"f": "find-char-f", "F": "find-char-F", "t": "find-char-t", "T": "find-char-T", ";": "find-char-next", ",": "find-char-prev",

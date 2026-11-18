@@ -96,3 +96,21 @@ func TestCompletionParensCanBeTypedOver(t *testing.T) {
 		t.Fatalf("got %q cursor %d", got, e.b.cursor)
 	}
 }
+
+func TestCompletionVimKeys(t *testing.T) {
+	e := testEditor(t, "vim", "Pr")
+	e.mode = "insert"
+	e.b.cursor = 2
+	e.completion.items = []completionItem{{Label: "Print"}, {Label: "Printf"}, {Label: "Println"}}
+	e.completion.start = 0
+	e.handle(keyInput{key: "ctrl+n"})
+	e.handle(keyInput{key: "ctrl+n"})
+	e.handle(keyInput{key: "ctrl+p"})
+	if e.completion.selected != 1 {
+		t.Fatalf("selected %d", e.completion.selected)
+	}
+	e.handle(keyInput{key: "ctrl+y"})
+	if string(e.b.text) != "Printf" {
+		t.Fatalf("got %q", e.b.text)
+	}
+}

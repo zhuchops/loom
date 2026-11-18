@@ -294,11 +294,11 @@ func (e *editor) completionInput(key string) bool {
 		return false
 	}
 	switch key {
-	case "down":
+	case "down", "ctrl+n":
 		c.selected = (c.selected + 1) % len(c.items)
-	case "up":
+	case "up", "ctrl+p":
 		c.selected = (c.selected + len(c.items) - 1) % len(c.items)
-	case "tab", "enter":
+	case "tab", "enter", "ctrl+y":
 		item, at := c.items[c.selected], c.start
 		if at < 0 || at > e.b.cursor || e.b.rowAt(at) != e.b.rowAt(e.b.cursor) {
 			at = wordStartAt(e.b, e.b.cursor)
