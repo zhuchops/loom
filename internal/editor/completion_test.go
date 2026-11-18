@@ -114,3 +114,26 @@ func TestCompletionVimKeys(t *testing.T) {
 		t.Fatalf("got %q", e.b.text)
 	}
 }
+
+func TestCompletionNoArgumentsPutsCursorAfterBrackets(t *testing.T) {
+	cases := []struct {
+		detail string
+		cursor int // in "run()"
+	}{
+		{"func() string", 5},
+		{"func(name string) string", 4},
+		{"(method) Foo.run(): void", 5},
+		{"(method) Foo.run(x: number): void", 4},
+		{"", 4}, // no signature: assume arguments
+	}
+	for _, c := range cases {
+		b := &buffer{anchor: -1, text: []rune("run"), cursor: 3}
+		b.indexLines()
+		if err := applyCompletion(b, completionItem{Label: "run", Kind: 3, Detail: c.detail}); err != nil {
+			t.Fatal(err)
+		}
+		if string(b.text) != "run()" || b.cursor != c.cursor {
+			t.Errorf("%q: got %q cursor %d, want %d", c.detail, b.text, b.cursor, c.cursor)
+		}
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -365,9 +366,12 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 	if callable {
 		primary.text += "()"
 	}
+	// With no parameters the cursor goes after the brackets, since there is
+	// nothing to type between them.
+	between := callable && takesArguments(item)
 	edits := []edit{primary}
 	cursor := primary.start + len([]rune(primary.text))
-	if callable {
+	if between {
 		cursor--
 	}
 	for _, add := range item.Additional {
@@ -387,7 +391,7 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 		}
 	}
 	b.replaceAll(edits, cursor)
-	if callable {
+	if between {
 		// Typing the closer afterwards steps over it, like an auto-paired one.
 		if b.pairs == nil {
 			b.pairs = make(map[int]int)
@@ -395,4 +399,17 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 		b.pairs[cursor] = cursor - 1
 	}
 	return nil
+}
+
+var detailTag = regexp.MustCompile(`^\((?:method|function|local function|constructor|alias|property)\)\s*`)
+
+// takesArguments reports whether the item's signature has parameters. When the
+// server gives no signature it assumes it does, so the cursor lands inside.
+func takesArguments(item completionItem) bool {
+	detail := detailTag.ReplaceAllString(strings.TrimSpace(item.Detail), "")
+	open := strings.IndexByte(detail, '(')
+	if open < 0 {
+		return true
+	}
+	return !strings.HasPrefix(strings.TrimSpace(detail[open+1:]), ")")
 }
