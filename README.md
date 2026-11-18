@@ -155,6 +155,14 @@ In Insert mode, typing `(`, `[`, `{`, a single or double quote, or a backtick ca
 
 Press Enter between adjacent braces to put the closing brace on its own line and place the cursor on a blank line inside. Loom adds one tab in Go or in a tab-indented block, and four spaces elsewhere.
 
+## Markdown preview
+
+`Space m` (or **Toggle Markdown Preview** in the palette) opens a rendered preview in a split beside a Markdown file. It redraws as you type and scrolls to follow your cursor; the block under the cursor gets an accent bar. The wheel scrolls it by hand until the cursor moves again. The preview never takes focus, and `Space m` again closes it. It renders headings, emphasis, inline code, links, lists with task boxes, quotes, tables, rules and highlighted code fences.
+
+## Languages
+
+Built-in language entries, with a language server and formatter used only when they are on `PATH`: Go, TypeScript, JavaScript, Python, Rust, C, C++, Java (`jdtls`), Kotlin, Scala, Swift, C#, PHP, Dart, Zig, Haskell, Elixir, OCaml, Ruby, Perl, R, Lua, assembly (`.asm`, `.s`, `.nasm`, `.inc`; `asm-lsp`), Dockerfile, Makefile, CMake, Protobuf, GraphQL, Terraform, XML, shell, SQL, JSON, YAML, TOML, CSS, HTML and Markdown. Every one gets syntax colors and `gcc` comment toggling even without a server. Add or override entries under `languages` in your config.
+
 ## Color themes
 
 Run **Color Theme** from the command palette to switch themes. Your choice is remembered next time. Built in: everforest (default), gruvbox, nord, dracula, tokyo-night, catppuccin, one-dark, monokai, solarized-dark, solarized-light, and terminal. The `terminal` theme draws with your terminal's own background and 16 ANSI colors, so it follows whatever palette the terminal uses. Set `"theme": "nord"` in your config to pin one.
@@ -188,7 +196,7 @@ The sidebar has its own navigation and file actions:
 | R / ? | Refresh / show help |
 | Esc / q | Return to the editor |
 
-Click a tab or explorer entry to open it. Click in the editor to place the cursor, drag to select, or double-click to select a word. The wheel scrolls the pane or explorer under the pointer. Drag the sidebar divider to resize it. Right-click for editor or file actions. Completion and picker rows are clickable.
+Drag a tab onto a pane to move it. Near the left, right, top or bottom edge a highlight shows the split it will make, and the middle opens the tab in that pane. Drag a tab along the tab bar to reorder it. Click a tab or explorer entry to open it. Click in the editor to place the cursor, drag to select, or double-click to select a word. The wheel scrolls the pane or explorer under the pointer. Drag the sidebar divider to resize it. Right-click for editor or file actions. Completion and picker rows are clickable.
 
 ## Command palette
 

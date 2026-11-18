@@ -63,14 +63,37 @@ func defaultLanguages() map[string]languageConfig {
 		"css":             {Extensions: []string{"css"}, Format: prettier},
 		"html":            {Extensions: []string{"html", "htm"}, Format: prettier},
 		"sql":             {Extensions: []string{"sql"}},
+		"java":            {Extensions: []string{"java"}, Server: []string{"jdtls"}, Format: []string{"google-java-format", "-"}},
+		"kotlin":          {Extensions: []string{"kt", "kts"}, Server: []string{"kotlin-language-server"}},
+		"scala":           {Extensions: []string{"scala", "sc", "sbt"}, Server: []string{"metals"}},
+		"swift":           {Extensions: []string{"swift"}, Server: []string{"sourcekit-lsp"}, Format: []string{"swift-format"}},
+		"csharp":          {Extensions: []string{"cs"}, Server: []string{"csharp-ls"}},
+		"php":             {Extensions: []string{"php"}, Server: []string{"intelephense", "--stdio"}},
+		"dart":            {Extensions: []string{"dart"}, Server: []string{"dart", "language-server"}, Format: []string{"dart", "format"}},
+		"zig":             {Extensions: []string{"zig"}, Server: []string{"zls"}, Format: []string{"zig", "fmt", "--stdin"}},
+		"haskell":         {Extensions: []string{"hs"}, Server: []string{"haskell-language-server-wrapper", "--lsp"}},
+		"elixir":          {Extensions: []string{"ex", "exs"}, Server: []string{"elixir-ls"}},
+		"ocaml":           {Extensions: []string{"ml", "mli"}, Server: []string{"ocamllsp"}},
+		"perl":            {Extensions: []string{"pl", "pm"}},
+		"r":               {Extensions: []string{"r"}, Server: []string{"R", "--slave", "-e", "languageserver::run()"}},
+		"asm":             {Extensions: []string{"asm", "s", "nasm", "inc"}, Server: []string{"asm-lsp"}},
+		"dockerfile":      {Extensions: []string{"dockerfile"}, Server: []string{"docker-langserver", "--stdio"}},
+		"makefile":        {Extensions: []string{"makefile", "mk", "gnumakefile"}},
+		"cmake":           {Extensions: []string{"cmake", "cmakelists.txt"}, Server: []string{"cmake-language-server"}},
+		"proto":           {Extensions: []string{"proto"}},
+		"graphql":         {Extensions: []string{"graphql", "gql"}},
+		"terraform":       {Extensions: []string{"tf", "tfvars"}, Server: []string{"terraform-ls", "serve"}},
+		"xml":             {Extensions: []string{"xml", "xsd", "svg", "plist"}},
 	}
 }
 
 // languageFor returns the language name for a path. Unknown extensions name themselves.
 func (c config) languageFor(path string) string {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
+	base := strings.ToLower(filepath.Base(path))
 	for _, name := range sortedKeys(c.Languages) {
-		if slices.Contains(c.Languages[name].Extensions, ext) {
+		// A whole file name such as Makefile counts like an extension.
+		if slices.Contains(c.Languages[name].Extensions, ext) || slices.Contains(c.Languages[name].Extensions, base) {
 			return name
 		}
 	}
@@ -120,7 +143,7 @@ func defaultConfig() config {
 				"space t 6": "tab-6", "space t 7": "tab-7", "space t 8": "tab-8", "space t 9": "tab-9",
 				"space z": "zen", "space n": "relative-numbers", "space q": "close-split",
 				"space g g": "git-panel", "space g d": "git-diff", "space g b": "git-branch",
-				"space o": "symbols", "space O": "workspace-symbols",
+				"space m": "markdown-preview", "space o": "symbols", "space O": "workspace-symbols",
 				"ctrl+w v": "split", "ctrl+w s": "split-below", "ctrl+w h": "pane-h", "ctrl+w j": "pane-j", "ctrl+w k": "pane-k", "ctrl+w l": "pane-l",
 				"ctrl+w left": "pane-h", "ctrl+w down": "pane-j", "ctrl+w up": "pane-k", "ctrl+w right": "pane-l",
 				"ctrl+w w": "focus-pane", "ctrl+w ctrl+w": "focus-pane", "ctrl+w c": "close-split", "ctrl+w o": "only-pane",

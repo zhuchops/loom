@@ -25,6 +25,10 @@ type paneBox struct {
 	gutter int
 	leaf   *pane
 }
+type previewBox struct {
+	hitBox
+	p *pane
+}
 type tabBox struct {
 	hitBox
 	b     *buffer
@@ -37,6 +41,11 @@ type renderer struct {
 	treeBox, menuBox, completeBox, directoryBox hitBox
 	previewBox                                  hitBox
 	panes                                       []paneBox
+	previews                                    []previewBox
+	tabDrag, tabPrev                            *buffer // Tab being dragged, and the tab that was active before the press.
+	tabStartX, tabStartY                        int
+	tabMoving                                   bool
+	drop                                        dropZone
 	tabs                                        []tabBox
 	divider                                     int
 	leftDown, resize, dragging                  bool
@@ -54,6 +63,7 @@ func (v *renderer) draw(e *editor) {
 	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
+	v.previews = v.previews[:0]
 	v.divider = -1
 	if w < 4 || h < 5 {
 		return
@@ -80,6 +90,9 @@ func (v *renderer) draw(e *editor) {
 		e.drawLayout(v, editorBox)
 	}
 	v.drawStatus(e, w, h)
+	if v.tabMoving && v.drop.leaf != nil {
+		v.drawDrop()
+	}
 	if e.directory != nil {
 		v.dim(w, h-1)
 		box := centerBox(w, h, min(78, w-2), min(27, h-2))

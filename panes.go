@@ -14,6 +14,58 @@ type pane struct {
 	b                 *buffer
 	cursor, top, left int
 	dashboardPrevious *pane // File view covered by the dashboard in this leaf.
+
+	// A preview leaf renders b as Markdown instead of editing it. It never
+	// takes focus, and redraws from the buffer so it tracks every keystroke.
+	preview            bool
+	md                 []mdLine
+	mdVersion, mdWidth int
+	mdTop, mdRow       int
+	mdManual           bool
+}
+
+func (e *editor) editableLeaves() []*pane {
+	var out []*pane
+	for _, p := range e.layout.leaves() {
+		if !p.preview {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// dropPreviews removes preview leaves of b, or of every buffer when b is nil.
+func (e *editor) dropPreviews(b *buffer) {
+	for _, p := range e.layout.leaves() {
+		if p.preview && (b == nil || p.b == b) && len(e.layout.leaves()) > 1 {
+			e.layout = prunePane(e.layout, p)
+		}
+	}
+}
+
+func (e *editor) toggleMarkdownPreview() {
+	if e.directory != nil || e.b.dashboard || e.b.tags != nil {
+		return
+	}
+	if e.cfg.languageFor(e.b.path) != "markdown" {
+		e.notify("Preview works on Markdown files")
+		return
+	}
+	for _, p := range e.layout.leaves() {
+		if p.preview && p.b == e.b {
+			e.dropPreviews(e.b)
+			return
+		}
+	}
+	if len(e.layout.leaves()) >= 32 {
+		e.notify("Pane limit reached")
+		return
+	}
+	e.rememberPane()
+	p := e.activePane
+	first := *p
+	*p = pane{first: &first, second: &pane{b: e.b, preview: true, mdRow: -1}, vertical: true}
+	e.activePane = &first
 }
 
 func (p *pane) leaves() []*pane {
@@ -34,7 +86,7 @@ func (e *editor) rememberPane() {
 }
 
 func (e *editor) focusPane(p *pane) {
-	if p == nil || p == e.activePane {
+	if p == nil || p == e.activePane || p.preview {
 		return
 	}
 	e.normal()
@@ -109,7 +161,13 @@ func (e *editor) closePane(only bool) {
 		e.closeBuffer(e.b)
 		return
 	}
-	leaves := e.layout.leaves()
+	leaves := e.editableLeaves()
+	if len(leaves) < 2 {
+		// Only previews would be left, so close the buffer and its previews.
+		e.dropPreviews(nil)
+		e.closeBuffer(e.b)
+		return
+	}
 	at := slices.Index(leaves, p)
 	next := leaves[max(0, at-1)]
 	if at == 0 {
@@ -176,6 +234,9 @@ func (e *editor) focusDirection(dir string) {
 	var target *pane
 	bestGap, bestOffset := 1<<30, 1<<30
 	for _, candidate := range placements {
+		if candidate.p.preview {
+			continue
+		}
 		n := candidate.box
 		gap, offset := 0, 0
 		switch dir {
@@ -210,7 +271,7 @@ func (e *editor) focusDirection(dir string) {
 func absInt(n int) int { return max(n, -n) }
 
 func (e *editor) cyclePane() {
-	leaves := e.layout.leaves()
+	leaves := e.editableLeaves()
 	if len(leaves) > 1 {
 		e.focusPane(leaves[(slices.Index(leaves, e.activePane)+1)%len(leaves)])
 	}
@@ -256,6 +317,7 @@ func (e *editor) layoutCommands() {
 		title := []string{"Focus Pane Left", "Focus Pane Below", "Focus Pane Above", "Focus Pane Right"}[i]
 		e.add("pane-"+key, title, func(e *editor) { e.focusDirection(key) })
 	}
+	e.add("markdown-preview", "Toggle Markdown Preview", func(e *editor) { e.toggleMarkdownPreview() })
 	e.add("zen", "Toggle Zen Mode", func(e *editor) { e.zen = !e.zen; e.tree.focused = false; e.tree.popup = false })
 	e.add("relative-numbers", "Toggle Relative Line Numbers", func(e *editor) { e.relativeNumbers = !e.relativeNumbers })
 	e.add("close-explorer", "Close Explorer", func(e *editor) { e.hideExplorer() })
@@ -301,6 +363,10 @@ func (e *editor) drawLayout(v *renderer, box hitBox) {
 	for _, item := range leaves {
 		p := item.p
 		b := p.b
+		if p.preview {
+			v.drawPreview(e, p, item.box)
+			continue
+		}
 		focused := p == e.activePane
 		cursor, top, left := b.cursor, b.top, b.left
 		if !focused {
@@ -344,6 +410,9 @@ func savePaneLayout(p, active *pane) *savedPane {
 		return nil
 	}
 	if p.b != nil {
+		if p.preview {
+			return nil
+		}
 		if p.b.dashboard {
 			if p.dashboardPrevious == nil {
 				return nil

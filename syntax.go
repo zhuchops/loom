@@ -6,7 +6,6 @@ import (
 	"go/scanner"
 	"go/token"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -17,7 +16,8 @@ func highlightSyntax(b *buffer, lang string) []highlight {
 	switch lang {
 	case "go":
 		return highlightGo(b)
-	case "typescript", "typescriptreact", "javascript", "javascriptreact", "rust", "python", "json", "toml", "yaml", "shellscript", "css", "html", "lua", "sql", "markdown":
+	}
+	if _, ok := syntaxSpecs[lang]; ok {
 		return highlightGeneric(b.text, lang)
 	}
 	return nil
@@ -147,87 +147,4 @@ func highlightGo(b *buffer) []highlight {
 		result = append(result, syntaxHighlight(start, end, hex))
 		lastByte, lastRune = endByte, end
 	}
-}
-
-func highlightGeneric(r []rune, lang string) []highlight {
-	var result []highlight
-	keywords := "|fn|func|function|const|let|var|interface|type|enum|struct|return|if|else|for|while|match|case|switch|class|def|from|import|use|pub|export|async|await|new|try|catch|except|throw|yield|select|where|insert|update|delete|package|public|private|static|mut|impl|mod|trait|extends|implements|"
-	hashComment := strings.Contains("|python|yaml|toml|shellscript|", "|"+lang+"|")
-	dashComment := lang == "sql" || lang == "lua"
-	isWord := func(ch rune) bool {
-		return ch == '_' || unicode.IsLetter(ch) || unicode.IsDigit(ch) || unicode.IsMark(ch)
-	}
-	var previous string
-	for i := 0; i < len(r); {
-		start := i
-		ch := r[i]
-		i++
-		var kind string
-		pair := func(a, b rune) bool { return ch == a && i < len(r) && r[i] == b }
-		switch {
-		case hashComment && ch == '#' || pair('/', '/') || dashComment && pair('-', '-'):
-			kind = "comment"
-			for i < len(r) && r[i] != '\n' {
-				i++
-			}
-		case pair('/', '*'):
-			kind = "comment"
-			i++
-			for i+1 < len(r) && (r[i] != '*' || r[i+1] != '/') {
-				i++
-			}
-			i = min(len(r), i+2)
-		case ch == '"' || ch == '\'' || ch == 96:
-			kind = "string"
-			for i < len(r) {
-				if r[i] == '\\' {
-					i = min(len(r), i+2)
-					continue
-				}
-				end := r[i] == ch
-				i++
-				if end {
-					break
-				}
-			}
-			if i < len(r) && r[i] == ':' && lang == "json" {
-				kind = "property"
-			}
-		case isWord(ch):
-			for i < len(r) && isWord(r[i]) {
-				i++
-			}
-			word := string(r[start:i])
-			next := i
-			for next < len(r) && (r[next] == ' ' || r[next] == '\t') {
-				next++
-			}
-			switch {
-			case unicode.IsDigit(ch):
-				kind = "number"
-			case strings.Contains("|true|false|null|none|nil|undefined|", "|"+strings.ToLower(word)+"|"):
-				kind = "constant"
-			case strings.Contains(keywords, "|"+strings.ToLower(word)+"|"):
-				kind = "keyword"
-			case strings.Contains("|class|type|interface|struct|enum|trait|", "|"+previous+"|"):
-				kind = "type"
-			case next < len(r) && r[next] == '(':
-				kind = "function"
-			case next < len(r) && (r[next] == ':' || r[next] == '=') && (lang == "yaml" || lang == "toml" || lang == "css"):
-				kind = "property"
-			case unicode.IsUpper(ch):
-				kind = "type"
-			}
-			previous = word
-		case lang == "markdown" && ch == '#' && (start == 0 || r[start-1] == '\n'):
-			kind = "function"
-			for i < len(r) && r[i] != '\n' {
-				i++
-			}
-		}
-		if hex := semanticColor(kind); hex != 0 {
-			result = append(result, syntaxHighlight(start, i, hex))
-		}
-	}
-	return result
 }

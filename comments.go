@@ -9,19 +9,8 @@ func (e *editor) toggleComment() {
 		e.notify("Comments are unavailable in the directory editor")
 		return
 	}
-	var open, close string
-	switch e.cfg.languageFor(b.path) {
-	case "go", "typescript", "typescriptreact", "javascript", "javascriptreact", "rust", "c", "cpp":
-		open = "//"
-	case "python", "ruby", "shellscript", "yaml", "toml":
-		open = "#"
-	case "lua", "sql":
-		open = "--"
-	case "css":
-		open, close = "/*", "*/"
-	case "html", "markdown":
-		open, close = "<!--", "-->"
-	default:
+	open, close, ok := commentSyntax(e.cfg.languageFor(b.path))
+	if !ok {
 		e.notify("No comment syntax for this file")
 		return
 	}

@@ -43,6 +43,10 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		return
 	}
 	if !down {
+		if v.tabMoving {
+			v.dropTab(e)
+		}
+		v.tabDrag, v.tabMoving, v.drop = nil, false, dropZone{}
 		v.resize, v.dragging, v.drag = false, false, nil
 	}
 	if e.notificationDetail != nil {
@@ -116,6 +120,10 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		v.panes, v.treeBox, v.divider = panes, tree, divider
 		return
 	}
+	if v.tabDrag != nil && down && !press {
+		v.dragTab(e, x, y)
+		return
+	}
 	if v.resize {
 		e.tree.width = max(16, x)
 		return
@@ -154,9 +162,19 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		if (press && x == tab.close) || button == mouseMiddle {
 			e.closeBuffer(tab.b)
 		} else if press {
+			v.tabPrev = e.b
 			e.switchBuffer(tab.b)
+			v.tabDrag, v.tabStartX, v.tabStartY = tab.b, x, y
 		}
 		return
+	}
+	for _, pv := range v.previews {
+		if pv.contains(x, y) {
+			if wheel != 0 {
+				v.previewWheel(pv.p, wheel)
+			}
+			return
+		}
 	}
 	for _, pane := range v.panes {
 		if !pane.contains(x, y) && !(v.dragging && v.drag == pane.b && (pane.leaf == nil || pane.leaf == e.activePane)) {

@@ -58,6 +58,7 @@ func (e *editor) closeBuffer(b *buffer) {
 	if b == e.b {
 		e.normal()
 	}
+	e.dropPreviews(b)
 	e.buffers = slices.Delete(e.buffers, at, at+1)
 	if len(e.buffers) == 0 {
 		blank, _ := loadBuffer("")
