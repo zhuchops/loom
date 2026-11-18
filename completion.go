@@ -386,5 +386,12 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 		}
 	}
 	b.replaceAll(edits, cursor)
+	if callable {
+		// Typing the closer afterwards steps over it, like an auto-paired one.
+		if b.pairs == nil {
+			b.pairs = make(map[int]int)
+		}
+		b.pairs[cursor] = cursor - 1
+	}
 	return nil
 }

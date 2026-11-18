@@ -85,3 +85,14 @@ func TestCompletionFunctionGetsParens(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestCompletionParensCanBeTypedOver(t *testing.T) {
+	e := testEditor(t, "vim", "fmt.Prin")
+	e.mode = "insert"
+	e.b.cursor = 8
+	applyCompletion(e.b, completionItem{Label: "Println", Kind: 3})
+	e.typeRune(')')
+	if got := string(e.b.text); got != "fmt.Println()" || e.b.cursor != 13 {
+		t.Fatalf("got %q cursor %d", got, e.b.cursor)
+	}
+}
