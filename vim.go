@@ -24,6 +24,10 @@ func (e *editor) vimCommands() {
 	e.add("replace-character", "Replace Character", func(e *editor) { e.pending = pending{kind: "replace-character"} })
 	e.add("join-lines", "Join Lines", func(e *editor) { e.joinLines() })
 	e.add("match-bracket", "Jump to Matching Bracket", func(e *editor) { e.matchBracket("") })
+	for _, op := range []string{"indent", "outdent"} {
+		e.add(op+"-op", "", func(e *editor) { e.pending = pending{kind: "operator", op: op} })
+		e.add(op+"-selection", op+" selection", func(e *editor) { e.shiftRows(op, e.b.selection(), e.takeCount()) })
+	}
 	e.add("visual-paste", "Replace Selection with Register", func(e *editor) { e.visualPaste(true) })
 	e.add("visual-paste-keep", "Replace Selection and Keep Register", func(e *editor) { e.visualPaste(false) })
 	for _, key := range []string{"f", "F", "t", "T"} {
@@ -51,6 +55,85 @@ func (e *editor) selectMode(linewise bool) {
 		row := min(len(b.lines)-1, b.rowAt(b.cursor)+e.takeCount()-1)
 		b.cursor = motion(b, "first-nonblank", b.lines[row])
 	}
+}
+
+// shiftRows indents or outdents every row touched by s, like Vim's > and <.
+// In Select mode the selection survives the shift; only Esc removes it.
+// Normal mode leaves the cursor on the first nonblank of the first row.
+func (e *editor) shiftRows(op string, s span, times int) {
+	b := e.b
+	first := b.rowAt(s.start)
+	last := b.rowAt(max(s.start, s.end-1))
+	selecting := e.mode == "select" && b.anchor >= 0
+	anchor, visualLine := b.anchor, b.visualLine
+	var edits []edit
+	for row := first; row <= last; row++ {
+		start, end := b.lines[row], b.lineEnd(row)
+		if start == end {
+			continue
+		}
+		if op == "indent" {
+			leading := start
+			for leading < end && (b.text[leading] == ' ' || b.text[leading] == '\t') {
+				leading++
+			}
+			unit := strings.Repeat(e.indentUnit(string(b.text[start:leading])), times)
+			edits = append(edits, edit{span{start, start}, unit})
+			continue
+		}
+		n := 0
+		for range times {
+			k := outdentWidth(b.text[start+n : end])
+			if k == 0 {
+				break
+			}
+			n += k
+		}
+		if n > 0 {
+			edits = append(edits, edit{span{start, start + n}, ""})
+		}
+	}
+	if len(edits) > 0 {
+		cursor := shiftOffset(b.cursor, edits)
+		if anchor >= 0 {
+			anchor = shiftOffset(anchor, edits)
+		}
+		b.replaceAll(edits, cursor)
+		// restore clears the selection, so put back what the user still has.
+		b.anchor, b.visualLine = anchor, visualLine
+	}
+	if selecting {
+		return
+	}
+	e.normal()
+	b.cursor = motion(b, "first-nonblank", b.lines[first])
+}
+
+// outdentWidth is how many leading runes one outdent step removes: a tab, or up to four spaces.
+func outdentWidth(line []rune) int {
+	if len(line) > 0 && line[0] == '\t' {
+		return 1
+	}
+	n := 0
+	for n < len(line) && n < 4 && line[n] == ' ' {
+		n++
+	}
+	return n
+}
+
+// shiftOffset maps an offset in the old text to the new text after edits, which are in document order.
+func shiftOffset(at int, edits []edit) int {
+	shift := 0
+	for _, ed := range edits {
+		if ed.start > at {
+			break
+		}
+		if at < ed.end {
+			return ed.start + shift
+		}
+		shift += len([]rune(ed.text)) - (ed.end - ed.start)
+	}
+	return at + shift
 }
 
 func (e *editor) visualPaste(saveSelection bool) {

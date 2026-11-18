@@ -191,6 +191,7 @@ type textEdit struct {
 }
 type completionItem struct {
 	Label            string          `json:"label"`
+	FilterText       string          `json:"filterText"`
 	Detail           string          `json:"detail"`
 	Documentation    json.RawMessage `json:"documentation"`
 	InsertText       string          `json:"insertText"`

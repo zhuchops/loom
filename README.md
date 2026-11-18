@@ -75,6 +75,13 @@ Vim supports counts, text objects, macros, and a single selection. A typing burs
 | `v` / `V` in Visual mode | Switch selection type or exit when the type already matches. |
 | `o` in Visual mode | Move the cursor to the other end of the selection. |
 | `p` / `P` in Visual mode | Replace the selected text. `P` preserves the unnamed register. |
+| `>>` / `<<`, `>` / `<` + motion | Indent or outdent lines. Counts work, as in `3>>`. |
+| `>` / `<` in Visual mode | Indent or outdent the selected lines. The selection stays active until you press Esc. `3>` shifts three times. |
+| `za` / `zc` / `zo` | Toggle, close, or open the fold at the cursor. Folds follow indentation, and a closing `}` joins its block. `j` and `k` skip folded lines. |
+| `zM` / `zR` | Close or open every fold in the file. Folds reset when lines are added or removed. |
+| `g i` | Go to implementations. A single result jumps straight there. |
+| `space o` / `space O` | Pick a symbol in this file, or in the whole workspace. Workspace results update as you type. |
+| Typing `./`, `../`, `/`, or `~/` inside a string | Complete file and folder names from disk. Folders come first and end with `/`. |
 | `^`, `3gg`, `3G` | Move to the first nonblank character of the current line or line 3. |
 | `f` / `F`, `t` / `T`, `;` / `,` | Find a character on the current line, stop just before it, or repeat the last find in either direction. |
 | `%`, `50%` | Jump between matching parentheses, brackets, or braces, or jump to a percentage of the file with a count. |

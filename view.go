@@ -263,6 +263,9 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 		b.lexical = highlightSyntax(b, e.cfg.languageFor(b.path))
 
 	}
+	if focused {
+		b.revealCursorRow()
+	}
 	row := b.rowAt(b.cursor)
 	col := cellWidth(string(b.text[b.lines[row]:b.cursor]))
 	if focused && !e.scrollLock {
@@ -289,8 +292,16 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 
 	last := min(len(b.lines), b.top+box.h)
 	problems := diagnosticRows(b, b.top, last)
-	for i := b.top; i < last; i++ {
-		y := box.y + i - b.top
+	hidden := b.hiddenRows()
+	foldable := b.foldEnds()
+	// screenY counts screen rows, so rows hidden by closed folds take no space.
+	screenY := box.y - 1
+	for i := b.top; i < len(b.lines) && screenY+1 < box.y+box.h; i++ {
+		if hidden != nil && hidden[i] {
+			continue
+		}
+		screenY++
+		y := screenY
 		bg := rgb(0x2d353b)
 		if i == row && focused {
 			bg = lineStyle
@@ -309,6 +320,15 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			lineNumber = absInt(i - row)
 		}
 		v.write(box.x+1, y, gutter-2, fmt.Sprintf("%*d", gutter-2, lineNumber), number)
+		// The blank column between the number and the text shows fold state:
+		// ▾ for a fold that is open, ▸ for one that is closed.
+		if _, ok := foldable[i]; ok && gutter >= 3 {
+			glyph := "▾"
+			if b.folds.closed[i] {
+				glyph = "▸"
+			}
+			v.write(box.x+gutter-1, y, 1, glyph, number.Foreground(rgb(0xa7c080)))
+		}
 		if severity := diagnosticAt(problems[i], b.lines[i], b.lineEnd(i)+1); severity != 0 {
 			v.write(box.x, y, 1, "●", number.Foreground(diagnosticColor(severity)))
 		} else if mark := e.git.lines[i]; e.git.path == b.path && e.git.version == b.version && mark != 0 {
@@ -375,6 +395,11 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 				break
 			}
 		}
+		if size, ok := b.closedFoldSize(i); ok {
+			if x := box.x + gutter + column - b.left + 1; x < box.x+box.w {
+				v.write(x, y, box.x+box.w-x, fmt.Sprintf("⋯ %d lines", size), mutedStyle.Background(bg))
+			}
+		}
 		end := b.lineEnd(i)
 		if offset == end {
 			x := box.x + gutter + column - b.left
@@ -388,7 +413,7 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	if !focused || e.tree.focused || e.menu != nil {
 		return
 	}
-	x, y := box.x+gutter+col-b.left, box.y+row-b.top
+	x, y := box.x+gutter+col-b.left, box.y+visibleOffset(hidden, b.top, row)
 	if !box.contains(x, y) || x < box.x+gutter {
 		return
 	}

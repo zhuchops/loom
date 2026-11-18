@@ -45,6 +45,11 @@ type buffer struct {
 	saved      string
 	undo, redo []snapshot
 	top, left  int
+	folds      foldState
+	// wantCol is the column vertical moves aim for. It is only valid while the
+	// cursor still sits at wantAt, where the last vertical move left it.
+	wantCol, wantAt int
+	wantSet         bool
 }
 
 func loadBuffer(path string) (*buffer, error) {
@@ -277,12 +282,16 @@ func motion(b *buffer, name string, at int) int {
 	case "right":
 		return min(last, at+1)
 	case "up", "down":
-		target := max(0, row-1)
+		target := b.visibleStep(row, -1)
 		if name == "down" {
-			target = min(len(b.lines)-1, row+1)
+			target = b.visibleStep(row, 1)
+		}
+		col := at - start
+		if b.wantSet && b.wantAt == at {
+			col = b.wantCol
 		}
 		first := b.lines[target]
-		return min(first+at-start, max(first, b.lineEnd(target)-1))
+		return min(first+col, max(first, b.lineEnd(target)-1))
 	case "home":
 		return start
 	case "first-nonblank":

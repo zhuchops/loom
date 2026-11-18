@@ -8,7 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
+	"unicode"
 )
 
 type completionState struct {
@@ -20,6 +22,10 @@ type completionState struct {
 	items         []completionItem
 	selected      int
 	trigger       string
+	// all is the server's list for the word starting at start. Typing more
+	// letters filters all of it locally instead of asking the server again.
+	all   []completionItem
+	start int
 }
 
 func (e *editor) invalidateCompletion() {
@@ -31,7 +37,98 @@ func (e *editor) invalidateCompletion() {
 	c.token++
 	c.queued = false
 	c.items = nil
+	c.all = nil
 	c.selected = 0
+}
+
+// autoTriggerAt reports whether a letter sits before the cursor. Only then may
+// the popup open on its own; punctuation such as { , ( never opens it.
+func autoTriggerAt(b *buffer) bool {
+	return b.cursor > 0 && unicode.IsLetter(b.text[b.cursor-1])
+}
+
+// wordStartAt is where the identifier ending at cursor begins.
+func wordStartAt(b *buffer, cursor int) int {
+	at := cursor
+	for at > 0 && wordClass(b.text[at-1]) == 1 {
+		at--
+	}
+	return at
+}
+
+// refreshCompletion keeps the open list while the user types more letters of
+// the same word. It returns false when a fresh server request is needed.
+func (e *editor) refreshCompletion(key string, cursorBefore int) bool {
+	c := &e.completion
+	r, ok := inputRune(key)
+	b := e.b
+	if !ok || wordClass(r) != 1 || len(c.all) == 0 || e.menu != nil || b.cursor != cursorBefore+1 {
+		return false
+	}
+	if c.start < 0 || c.start >= b.cursor || b.rowAt(c.start) != b.rowAt(b.cursor) {
+		return false
+	}
+	items := filterCompletion(c.all, string(b.text[c.start:b.cursor]))
+	if len(items) == 0 {
+		return false
+	}
+	// Bumping the token drops any request still in flight for the old prefix.
+	c.token++
+	c.queued = false
+	if c.timer != nil {
+		c.timer.Stop()
+		c.timer = nil
+	}
+	c.items, c.selected = items, 0
+	return true
+}
+
+// filterCompletion keeps the items that match query as a case-insensitive
+// subsequence. Prefix matches rank first; ties keep the server's order.
+func filterCompletion(all []completionItem, query string) []completionItem {
+	type scored struct {
+		item  completionItem
+		score int
+	}
+	q := []rune(strings.ToLower(query))
+	var out []scored
+	for _, item := range all {
+		text := item.FilterText
+		if text == "" {
+			text = item.Label
+		}
+		if score, ok := fuzzyScore(q, []rune(strings.ToLower(text))); ok {
+			out = append(out, scored{item, score})
+		}
+	}
+	slices.SortStableFunc(out, func(a, b scored) int { return b.score - a.score })
+	items := make([]completionItem, len(out))
+	for i, s := range out {
+		items[i] = s.item
+	}
+	return items
+}
+
+func fuzzyScore(q, text []rune) (int, bool) {
+	if len(q) == 0 {
+		return 0, true // keep the source order when nothing is typed yet
+	}
+	if len(q) <= len(text) && slices.Equal(q, text[:len(q)]) {
+		return 1000 - len(text), true
+	}
+	score, at := 0, 0
+	for _, r := range q {
+		i := slices.Index(text[at:], r)
+		if i < 0 {
+			return 0, false
+		}
+		if i == 0 && at > 0 {
+			score += 5 // consecutive characters
+		}
+		score += 10 - min(i, 9)
+		at += i + 1
+	}
+	return score, true
 }
 
 func (e *editor) scheduleCompletion(key string) {
@@ -39,14 +136,10 @@ func (e *editor) scheduleCompletion(key string) {
 	if _, ok := inputRune(key); !ok && key != "backspace" {
 		return
 	}
-	if e.b.cursor == 0 || e.b.path == "" {
+	if e.b.path == "" || !autoTriggerAt(e.b) {
 		return
 	}
-	r := e.b.text[e.b.cursor-1]
-	if wordClass(r) == 0 {
-		return
-	}
-	c.trigger = string(r)
+	c.trigger = string(e.b.text[e.b.cursor-1])
 	token := c.token
 	c.timer = time.AfterFunc(140*time.Millisecond, func() {
 		select {
@@ -143,6 +236,13 @@ func (e *editor) requestCompletion(trigger int, char string) {
 	if e.mode != "insert" || e.menu != nil {
 		return
 	}
+	// char is set only for automatic requests, which must follow a letter.
+	if char != "" && !autoTriggerAt(e.b) {
+		return
+	}
+	if char == "" && e.pathCompletion() {
+		return
+	}
 	s := e.session(e.b, true)
 	if s == nil {
 		if char == "" {
@@ -158,6 +258,7 @@ func (e *editor) requestCompletion(trigger int, char string) {
 	token := e.completion.token
 	e.completion.running = true
 	doc := e.document(e.b)
+	cursor := e.b.cursor
 	go func() {
 		items, err := s.complete(doc, trigger, char)
 		e.async <- func() {
@@ -168,7 +269,7 @@ func (e *editor) requestCompletion(trigger int, char string) {
 				e.requestCompletion(1, queued)
 				return
 			}
-			if token != e.completion.token || e.mode != "insert" || e.menu != nil {
+			if token != e.completion.token || e.mode != "insert" || e.menu != nil || e.b.cursor != cursor || (char != "" && !autoTriggerAt(e.b)) {
 				return
 			}
 			if err != nil {
@@ -177,7 +278,9 @@ func (e *editor) requestCompletion(trigger int, char string) {
 				}
 				return
 			}
-			e.completion.items = items
+			start := wordStartAt(e.b, cursor)
+			e.completion.all, e.completion.start = items, start
+			e.completion.items = filterCompletion(items, string(e.b.text[start:cursor]))
 			if len(items) == 0 && char == "" {
 				e.notify("No completion results")
 			}
@@ -196,9 +299,12 @@ func (e *editor) completionInput(key string) bool {
 	case "up":
 		c.selected = (c.selected + len(c.items) - 1) % len(c.items)
 	case "tab", "enter":
-		item := c.items[c.selected]
+		item, at := c.items[c.selected], c.start
+		if at < 0 || at > e.b.cursor || e.b.rowAt(at) != e.b.rowAt(e.b.cursor) {
+			at = wordStartAt(e.b, e.b.cursor)
+		}
 		e.invalidateCompletion()
-		if err := applyCompletion(e.b, item); err != nil {
+		if err := applyCompletionAt(e.b, item, at); err != nil {
 			e.notify(err.Error())
 		}
 	case "esc":
@@ -210,6 +316,11 @@ func (e *editor) completionInput(key string) bool {
 }
 
 func applyCompletion(b *buffer, item completionItem) error {
+	return applyCompletionAt(b, item, wordStartAt(b, b.cursor))
+}
+
+// applyCompletionAt replaces the text from at to the cursor with the item.
+func applyCompletionAt(b *buffer, item completionItem, at int) error {
 	makeEdit := func(in textEdit) (edit, error) {
 		r := in.Range
 		if r == nil {
@@ -225,21 +336,26 @@ func applyCompletion(b *buffer, item completionItem) error {
 		}
 		return edit{span{start, end}, in.NewText}, nil
 	}
-	at := b.cursor
-	for at > 0 && wordClass(b.text[at-1]) == 1 {
-		at--
-	}
 	value := item.InsertText
 	if value == "" {
 		value = item.Label
 	}
 	primary := edit{span{at, b.cursor}, value}
 	if item.TextEdit != nil {
-		var err error
-		primary, err = makeEdit(*item.TextEdit)
-		if err != nil {
-			return err
+		// Like VS Code, accepting replaces from the word start to the cursor,
+		// even when the list was filtered after the server computed its range.
+		r := item.TextEdit.Range
+		if r == nil {
+			r = item.TextEdit.Insert
 		}
+		if r == nil {
+			return fmt.Errorf("completion edit has no range")
+		}
+		start, ok := b.offset(r.Start)
+		if !ok || start > b.cursor {
+			start = at
+		}
+		primary = edit{span{start, b.cursor}, item.TextEdit.NewText}
 	}
 	edits := []edit{primary}
 	cursor := primary.start + len([]rune(primary.text))

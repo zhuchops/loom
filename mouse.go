@@ -198,7 +198,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			if v.dragging && y >= pane.y+pane.h {
 				b.top = min(len(b.lines)-1, b.top+1)
 			}
-			row := max(0, min(len(b.lines)-1, b.top+max(0, min(pane.h-1, y-pane.y))))
+			row := b.rowAtScreen(b.top, max(0, min(pane.h-1, y-pane.y)))
 			at := cellOffset(b, row, x-pane.x-pane.gutter+b.left)
 			if press {
 				now := time.Now()
@@ -242,7 +242,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 				e.focusPane(pane.leaf)
 			}
 			if b.anchor < 0 {
-				row := min(len(b.lines)-1, b.top+y-pane.y)
+				row := b.rowAtScreen(b.top, max(0, y-pane.y))
 				b.cursor = cellOffset(b, row, x-pane.x-pane.gutter+b.left)
 				e.clampModalCursor()
 			}

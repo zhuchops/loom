@@ -185,6 +185,7 @@ func (e *editor) registerCommands() {
 	e.add("prev-match", "Find Previous", func(e *editor) { e.find(true) })
 	e.add("ex", "", func(e *editor) { e.openPalette() })
 	e.vimCommands()
+	e.foldCommands()
 	for _, op := range []string{"delete", "change", "yank"} {
 		e.add(op+"-op", "", func(e *editor) { e.pending = pending{kind: "operator", op: op} })
 		e.add(op+"-selection", op+" selection", func(e *editor) { e.operate(op, e.b.selection(), e.b.visualLine) })
@@ -318,6 +319,10 @@ func (e *editor) insertMove(name string) {
 }
 
 func (e *editor) operate(op string, s span, linewise bool) {
+	if op == "indent" || op == "outdent" {
+		e.shiftRows(op, s, 1)
+		return
+	}
 	if e.b.tags != nil && linewise && op == "change" && s.end > s.start && e.b.text[s.end-1] == '\n' {
 		s.end--
 		linewise = false
@@ -473,6 +478,13 @@ func (e *editor) handle(in keyInput) {
 		}
 	}()
 	previousPrefix := e.prefix
+	idle := e.prefix == "" && e.pending.kind == "" && in.paste == ""
+	vertical := idle && (keys[key] == "up" || keys[key] == "down")
+	counting := idle && len(key) == 1 && key[0] >= '0' && key[0] <= '9' && (key != "0" || e.count > 0)
+	endKey := idle && keys[key] == "end"
+	if vertical && !(b.wantSet && b.wantAt == b.cursor) {
+		b.wantCol, b.wantSet = b.cursor-b.lines[b.rowAt(b.cursor)], true
+	}
 	if in.paste != "" {
 		e.pending, e.prefix, e.count = pending{}, "", 0
 		if e.mode != "insert" {
@@ -488,11 +500,22 @@ func (e *editor) handle(in keyInput) {
 	} else {
 		e.dispatchKey(keys, key)
 	}
-	if e.b != b || version != b.version || cursor != b.cursor || e.mode != "insert" || previousPrefix != e.prefix {
+	switch {
+	case vertical || counting:
+		b.wantAt = b.cursor
+	case endKey:
+		b.wantCol, b.wantSet, b.wantAt = wantEnd, true, b.cursor
+	default:
+		b.wantSet = false
+	}
+	refreshed := e.b == b && version != b.version && e.mode == "insert" && e.refreshCompletion(key, cursor)
+	if !refreshed && (e.b != b || version != b.version || cursor != b.cursor || e.mode != "insert" || previousPrefix != e.prefix) {
 		e.invalidateCompletion()
 	}
-	if e.b == b && version != b.version && e.mode == "insert" && e.cfg.AutoComplete && e.menu == nil && !e.replaying {
-		e.scheduleCompletion(key)
+	if !refreshed && e.b == b && version != b.version && e.mode == "insert" && e.cfg.AutoComplete && e.menu == nil && !e.replaying {
+		if !e.pathCompletion() {
+			e.scheduleCompletion(key)
+		}
 	}
 }
 
@@ -694,7 +717,7 @@ func (e *editor) operatorKey(p pending, key string) {
 	}
 	count := e.count
 	n := e.takeCount()
-	repeat := map[string]string{"delete": "d", "change": "c", "yank": "y"}
+	repeat := map[string]string{"delete": "d", "change": "c", "yank": "y", "indent": ">", "outdent": "<"}
 	if key != "" && (key == repeat[op] || op == "mini-add" && key == "_") {
 		row := b.rowAt(b.cursor)
 		last := min(len(b.lines), row+n)

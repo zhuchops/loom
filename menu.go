@@ -170,6 +170,7 @@ var keyOnlyCommands = map[string]bool{
 	"insert-line": true, "open-below": true, "open-above": true, "newline": true, "insert-tab": true,
 	"backspace": true, "delete-forward": true, "paste-after": true, "paste-before": true,
 	"delete-selection": true, "change-selection": true, "yank-selection": true,
+	"indent-selection": true, "outdent-selection": true,
 	"macro-record": true, "macro-play": true, "macro-toggle": true, "macro-last": true,
 	"surround-selection": true, "surround-delete": true, "surround-replace": true,
 	"inner-object": true, "around-object": true, "next-match": true, "prev-match": true,

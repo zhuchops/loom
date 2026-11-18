@@ -277,6 +277,9 @@ func (e *editor) languageCommands() {
 	e.add("rename-symbol", "Rename Symbol", func(e *editor) { e.renameSymbol() })
 	e.add("definition", "Go to Definition", func(e *editor) { e.languageAction("definition") })
 	e.add("references", "Find References", func(e *editor) { e.languageAction("references") })
+	e.add("implementation", "Go to Implementation", func(e *editor) { e.languageAction("implementation") })
+	e.add("symbols", "Go to Symbol in File", func(e *editor) { e.documentSymbols() })
+	e.add("workspace-symbols", "Go to Symbol in Workspace", func(e *editor) { e.workspaceSymbols() })
 	e.add("hover", "Show Hover Documentation", func(e *editor) { e.languageAction("hover") })
 	e.add("problems", "Project Problems", func(e *editor) { e.showProjectProblems() })
 	e.add("file-problems", "File Problems", func(e *editor) { e.showFileProblems() })
@@ -419,8 +422,11 @@ func (e *editor) showLocations(action string, raw json.RawMessage) {
 		}
 	}
 	m := &menu{title: "References"}
-	if action == "definition" {
+	switch action {
+	case "definition":
 		m.title = "Definitions"
+	case "implementation":
+		m.title = "Implementations"
 	}
 	for _, loc := range locations {
 		if loc.TargetURI != "" {
@@ -442,7 +448,7 @@ func (e *editor) showLocations(action string, raw json.RawMessage) {
 		return
 	}
 	e.message = ""
-	if action == "definition" && len(m.options) == 1 {
+	if (action == "definition" || action == "implementation") && len(m.options) == 1 {
 		m.options[0].run()
 		return
 	}
