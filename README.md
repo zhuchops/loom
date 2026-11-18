@@ -1,6 +1,6 @@
-# Loom 0.5
+# Loom 0.8
 
-Loom is a Go terminal editor with a Zed-inspired workspace, Everforest colors, Vim-style editing, and language-server integration.
+Loom is a Go terminal editor with a Zed-inspired workspace, Vim-style editing, language-server integration, a live Markdown preview, and eleven color themes (Everforest by default).
 
 ## Run it
 
@@ -54,12 +54,15 @@ On the Dashboard, use `j`/`k` or the arrow keys and Enter, or click an action. R
 | Switch open buffer | Space b |
 | Save | Ctrl+S |
 | Manual completion | Ctrl+Space in Insert |
-| Choose a completion | ↑ / ↓ |
-| Accept or dismiss a completion | Tab or Enter / Esc |
-
-Completion opens below the cursor and moves above it when more room is available there and the list would otherwise be clipped.
+| Choose a completion | ↑ / ↓ or Ctrl+N / Ctrl+P |
+| Accept or dismiss a completion | Tab, Enter or Ctrl+Y / Esc |
 | Search the current buffer | /, then n or N to repeat |
 | Undo / redo / repeat edit | u / Ctrl+R / . |
+| Markdown preview | Space m |
+| Symbols in file / in workspace | Space o / Space O |
+| Fold / unfold, go to implementation | z a / z c / z o, g i |
+
+Completion opens below the cursor and moves above it when more room is available there and the list would otherwise be clipped. It opens only after you type a letter, not after punctuation such as `{` or `,`, and the list narrows as you keep typing, matching letters in order like VS Code. Accepting a function, method or constructor adds `()` and leaves the cursor between them. Typing `)` then steps over it. In Insert mode `Ctrl+N` also opens the list, and inside a string that starts with `./`, `../`, `/` or `~/` it completes file names. `Ctrl+P` still opens Go to File when no list is showing.
 
 The defaults use no Option, Command, function keys, or Ctrl+Shift chords. Space, g, and Ctrl+W start chords in Normal and Select modes. Ctrl+P and Ctrl+S work in every mode. Ctrl+Space starts completion in Insert. Press Esc to leave Insert before using a Space chord. Inside a picker, type to filter, use ↑/↓ to navigate, and press Enter or Esc. Search for **Show Keybindings** in the command palette to inspect the active mode.
 
@@ -82,6 +85,7 @@ Vim supports counts, text objects, macros, and a single selection. A typing burs
 | `g i` | Go to implementations. A single result jumps straight there. |
 | `space o` / `space O` | Pick a symbol in this file, or in the whole workspace. Workspace results update as you type. |
 | Typing `./`, `../`, `/`, or `~/` inside a string | Complete file and folder names from disk. Folders come first and end with `/`. |
+| `j` / `k` |  Keep the wanted column across short lines. After `$` they stay at the end of every line, including empty ones. |
 | `^`, `3gg`, `3G` | Move to the first nonblank character of the current line or line 3. |
 | `f` / `F`, `t` / `T`, `;` / `,` | Find a character on the current line, stop just before it, or repeat the last find in either direction. |
 | `%`, `50%` | Jump between matching parentheses, brackets, or braces, or jump to a percentage of the file with a count. |
@@ -119,6 +123,9 @@ Both editing profiles use the same leaders. Press Space, g, or Ctrl+W to see con
 | g d / g r / g h | Definition / references / hover |
 | Ctrl+O / g ] | Previous / next jump |
 | gg | Top of file |
+| Space m | Toggle Markdown preview |
+| Space o / Space O | Symbols in this file / workspace |
+| g i | Go to implementation |
 
 Definition jumps, reference results, project search results, and Ex line addresses enter jump history. Taking a new jump clears the forward history.
 
@@ -161,7 +168,7 @@ Press Enter between adjacent braces to put the closing brace on its own line and
 
 ## Languages
 
-Built-in language entries, with a language server and formatter used only when they are on `PATH`: Go, TypeScript, JavaScript, Python, Rust, C, C++, Java (`jdtls`), Kotlin, Scala, Swift, C#, PHP, Dart, Zig, Haskell, Elixir, OCaml, Ruby, Perl, R, Lua, assembly (`.asm`, `.s`, `.nasm`, `.inc`; `asm-lsp`), Dockerfile, Makefile, CMake, Protobuf, GraphQL, Terraform, XML, shell, SQL, JSON, YAML, TOML, CSS, HTML and Markdown. Every one gets syntax colors and `gcc` comment toggling even without a server. Add or override entries under `languages` in your config.
+Built-in language entries, with a language server and formatter used only when they are on `PATH`: Go, TypeScript, JavaScript, Python, Rust, C, C++, Java (`jdtls`), Kotlin, Scala, Swift, C#, PHP, Dart, Zig, Haskell, Elixir, OCaml, Ruby, Perl, R, Lua, assembly (`.asm`, `.s`, `.nasm`, `.inc`; `asm-lsp`), Dockerfile, Makefile, CMake, Protobuf, GraphQL, Terraform, XML, shell, SQL, JSON, YAML, TOML, CSS, HTML and Markdown. Files such as `Dockerfile` and `Makefile` are recognised by name. Every language gets syntax colors and `gcc` comment toggling even without a server. Add or override entries under `languages` in your config.
 
 ## Color themes
 
@@ -202,7 +209,7 @@ Drag a tab onto a pane to move it. Near the left, right, top or bottom edge a hi
 
 Press `:` or `Space p` to open the same searchable palette. Type an exact Ex command or filter by the command name. Each entry shows its shortcut on the right, followed by the matching Ex command when there is one. Use `:42` or `:goto 42` to jump to a line, `:$` for the last line, `:noh` to hide search highlights, and `:e path` to open a file. `n` and `N` continue the last search after `:noh`.
 
-Popups are centered and use Everforest borders. Modal prompts dim the workspace behind them. Start a chord such as Space, g, or Ctrl+W to see available continuations. The status bar shows the active mode and file, unsaved edits, diagnostics, cursor position, and file format.
+Popups are centered and take their colors from the active theme. Modal prompts dim the workspace behind them. Start a chord such as Space, g, or Ctrl+W to see available continuations. The status bar shows the active mode and file, unsaved edits, diagnostics, cursor position, and file format.
 
 ## Git
 
@@ -238,9 +245,9 @@ Formatting runs on save when `format_on_save` is on, which is the default. Go us
 
 ## Code colors and language tools
 
-Loom reads languages from the `languages` table in your config. Each entry names a language by its LSP language ID and sets its file extensions, language server, formatter, and project root markers. The built-in table covers Go, TypeScript, JavaScript, Python, Rust, C, C++, Ruby, Lua, shell, JSON, YAML, TOML, Markdown, CSS, HTML, and SQL. Run `loom -dump-config` to see every default.
+Loom reads languages from the `languages` table in your config. Each entry names a language by its LSP language ID and sets its file extensions, language server, formatter, and project root markers. The built-in table is listed under Languages above. Run `loom -dump-config` to see every default.
 
-A language server or formatter is used only when its command is on `PATH`. Missing tools are skipped without an error. Go gets the full set: gopls, syntax colors, and gofmt or goimports. For other languages, the language server adds completion, hover, definition, references, diagnostics, rename, and code actions, and it also provides semantic colors. Syntax colors without a server are built in for TypeScript, JavaScript, Rust, Python, JSON, TOML, YAML, shell, CSS, HTML, Lua, SQL, and Markdown. Completion inserts plain text.
+A language server or formatter is used only when its command is on `PATH`. Missing tools are skipped without an error. Go gets the full set: gopls, syntax colors, and gofmt or goimports. For other languages, the language server adds completion, hover, definition, references, diagnostics, rename, and code actions, and it also provides semantic colors. Syntax colors without a server are built in for every language listed above. Completion inserts plain text, apart from the `()` added after functions.
 
 Use **Restart Language Server** in the command palette or run `:lsp-restart` from a file tab. Loom restarts that file's language server for its workspace and sends the current contents of its open buffers, including unsaved changes.
 
@@ -256,18 +263,18 @@ Picker previews grow with the terminal. Use Page Up and Page Down or scroll over
 
 File, buffer, search, and reference pickers preview source as you move. The Command Palette and Code Actions picker use compact lists. Selecting a code action that edits files opens a confirmation with the proposed changes. Completion shows details and documentation when there is room.
 
-To add a language, or change one, list only what differs. Set `extensions` to claim file types, `server` for the language server, `format` for the formatter, and `roots` for extra project markers. The `{path}` placeholder is replaced with the file path. This example adds Zig and changes the Python formatter:
+To add a language, or change one, list only what differs. Set `extensions` to claim file types, `server` for the language server, `format` for the formatter, and `roots` for extra project markers. The `{path}` placeholder is replaced with the file path. This example adds Nim and changes the Python formatter:
 
 ```json
 {
   "profile": "vim",
   "auto_complete": true,
   "languages": {
-    "zig": {
-      "extensions": ["zig"],
-      "server": ["zls"],
-      "format": ["zig", "fmt", "--stdin"],
-      "roots": ["build.zig"]
+    "nim": {
+      "extensions": ["nim"],
+      "server": ["nimlangserver"],
+      "format": ["nimpretty", "{path}"],
+      "roots": ["nim.cfg"]
     },
     "python": {
       "format": ["black", "-q", "-"]
@@ -355,7 +362,6 @@ Reply with a message, edits, or both:
 Positions are zero-based UTF-16 offsets within a line and range ends are exclusive. `selection` is omitted when there is no explicit selection. All ranges refer to the input snapshot. Edits apply together as one undo step if the buffer is still current. Plugins have eight seconds to reply and run with your account permissions.
 
 
-
 ## Maintaining Loom
 
 The root holds only `main.go`, which calls `editor.Main()`, so `go install github.com/zhuchops/loom@latest` still works. Everything else is under `internal/`:
@@ -376,6 +382,8 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `directory.go` runs the modal engine on a scratch listing. Newline tags associate edited rows with original entries, and a reserved tag identifies the parent row. A write first validates the plan, then stages sources and rolls back failed filesystem moves. Navigation checks for unapplied edits.
 - `language.go`, `lsp.go`, and `actions.go` handle LSP transport and edits. Worker goroutines send callbacks to the editor event loop. Workspace edits validate versions and disk content before applying edits.
 - `disk.go` and `recovery.go` implement conflict review and per-session snapshots. The editor event loop is the owner of UI state.
+- `theme.go` applies a theme from `internal/theme` to the renderer's styles and saves the choice. `mdpreview.go` draws the Markdown preview pane, which `panes.go` stores as a leaf that never takes focus. `tabdrag.go` handles dragging a tab into a split.
+- `fold.go` computes indentation folds, `symbols.go` the symbol pickers, `pathcomplete.go` file-name completion, and `tree.go` the explorer, including its filter and sort.
 - `notifications.go` keeps the full text of status messages and draws their detail view. `pairs.go` tracks generated delimiters through buffer edits and undo.
 
 Every change gets a README update and a version bump in `internal/editor/main.go`, committed as `vX.Y.Z`. Run `go test -race ./...` from this directory. Set `LOOM_TEST_GOPLS=1` to enable the tests against `gopls` on PATH. Renderer tests inspect the in-memory frame, and terminal adapter tests send Bubble Tea messages directly.
