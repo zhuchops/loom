@@ -54,6 +54,9 @@ func run() error {
 		}
 		target = ""
 	}
+	if err := loadTheme(cfg); err != nil {
+		return err
+	}
 	b, err := loadBuffer(target)
 	if err != nil {
 		return err

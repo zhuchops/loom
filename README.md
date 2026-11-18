@@ -155,6 +155,10 @@ In Insert mode, typing `(`, `[`, `{`, a single or double quote, or a backtick ca
 
 Press Enter between adjacent braces to put the closing brace on its own line and place the cursor on a blank line inside. Loom adds one tab in Go or in a tab-indented block, and four spaces elsewhere.
 
+## Color themes
+
+Run **Color Theme** from the command palette to switch themes. Your choice is remembered next time. Built in: everforest (default), gruvbox, nord, dracula, tokyo-night, catppuccin, one-dark, monokai, solarized-dark, solarized-light, and terminal. The `terminal` theme draws with your terminal's own background and 16 ANSI colors, so it follows whatever palette the terminal uses. Set `"theme": "nord"` in your config to pin one.
+
 ## File explorer and mouse
 
 The sidebar is a collapsible project tree. Each row shows a folder or file-type icon from Material Design Icons in Nerd Font, so the terminal needs a Nerd Font Mono variant. `Space e` focuses the sidebar. `Space x` opens an editable directory buffer in a centered popup. It starts beside the active file, or at the project root for an untitled buffer.
@@ -179,6 +183,8 @@ The sidebar has its own navigation and file actions:
 | m | Move to a project-relative path. An existing directory keeps the current name |
 | x, then p | Cut the selected entry, navigate to a destination, then move it there |
 | d | Move to Trash after typing yes |
+| / | Filter every file in the project by name, including collapsed folders. Enter keeps the filter, Esc clears it |
+| s | Cycle the sort order: name, modified, size, type. Folders stay first |
 | R / ? | Refresh / show help |
 | Esc / q | Return to the editor |
 

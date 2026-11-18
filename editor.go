@@ -111,6 +111,7 @@ func (e *editor) registerCommands() {
 	e.add("files", "Go to File", func(e *editor) { e.openFiles() })
 	e.add("explorer", "Focus Explorer", func(e *editor) { e.showTree(false) })
 	e.add("palette", "Command Palette", func(e *editor) { e.openPalette() })
+	e.add("theme", "Color Theme", func(e *editor) { e.themeMenu() })
 	e.add("buffers", "Switch Buffer", func(e *editor) { e.openBuffers() })
 	e.add("save", "Save File", func(e *editor) { e.save() })
 	e.add("quit", "Quit", func(e *editor) { e.tryQuit(false) })
@@ -414,6 +415,10 @@ func (e *editor) handle(in keyInput) {
 	}
 	if e.menu == nil && e.directory != nil {
 		e.directoryInput(in)
+		return
+	}
+	if e.menu == nil && e.tree.focused && e.tree.filtering {
+		e.filterInput(in.key)
 		return
 	}
 	if e.menu == nil && e.tree.focused {

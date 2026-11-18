@@ -4,6 +4,7 @@ import (
 	"image/color"
 
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Keep theme colors concrete and comparable so rendering and tests can look
@@ -13,6 +14,12 @@ type terminalColor uint32
 func rgb(hex int32) terminalColor  { return terminalColor(hex) }
 func (c terminalColor) Hex() int32 { return int32(c) }
 func (c terminalColor) RGB() (int32, int32, int32) {
+	if c&ansiFlag != 0 {
+		return ansiRGB(int(c & 0xff))
+	}
+	if c&defaultFlag != 0 {
+		return 0, 0, 0
+	}
 	return int32(c>>16) & 255, int32(c>>8) & 255, int32(c) & 255
 }
 func (c terminalColor) RGBA() (r, g, b, a uint32) {
@@ -32,20 +39,46 @@ func (s cellStyle) Bold(on bool) cellStyle               { s.bold = on; return s
 func (s cellStyle) GetForeground() terminalColor         { return s.fg }
 func (s cellStyle) GetBackground() terminalColor         { return s.bg }
 
+// uvColor maps palette and default colors to the terminal's own.
+func (c terminalColor) uvColor() color.Color {
+	switch {
+	case c&defaultFlag != 0:
+		return nil
+	case c&ansiFlag != 0:
+		return ansi.BasicColor(c & 0xff)
+	}
+	return c
+}
+
+// ansiRGB approximates a palette color, for dimming and blending only.
+func ansiRGB(n int) (int32, int32, int32) {
+	table := [16]int32{0x000000, 0xcd3131, 0x0dbc79, 0xe5e510, 0x2472c8, 0xbc3fbc, 0x11a8cd, 0xe5e5e5,
+		0x666666, 0xf14c4c, 0x23d18b, 0xf5f543, 0x3b8eea, 0xd670d6, 0x29b8db, 0xffffff}
+	c := table[n&15]
+	return c >> 16 & 255, c >> 8 & 255, c & 255
+}
+
 func (s cellStyle) uvStyle() uv.Style {
-	style := uv.Style{Fg: s.fg, Bg: s.bg}
+	style := uv.Style{Fg: s.fg.uvColor(), Bg: s.bg.uvColor()}
 	if s.bold {
 		style.Attrs = uv.AttrBold
 	}
 	if s.underline != 0 {
-		style.Underline, style.UnderlineColor = uv.UnderlineCurly, s.underline
+		style.Underline, style.UnderlineColor = uv.UnderlineCurly, s.underline.uvColor()
 	}
 	return style
 }
 
 func frameColor(c color.Color) terminalColor {
-	if value, ok := c.(terminalColor); ok {
+	switch value := c.(type) {
+	case terminalColor:
 		return value
+	case ansi.BasicColor:
+		return ansiColor(int(value))
+	case nil:
+		if th.terminal {
+			return defaultFlag
+		}
 	}
 	return rgb(0x202629)
 }

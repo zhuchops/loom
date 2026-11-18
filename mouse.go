@@ -272,7 +272,7 @@ func cellOffset(b *buffer, row, col int) int {
 
 func (e *editor) treeContext() {
 	m := &menu{title: "Explorer Actions"}
-	for _, action := range []struct{ label, key string }{{"Open", "enter"}, {"New File", "a"}, {"New Folder", "A"}, {"Rename", "r"}, {"Move", "m"}, {"Cut", "x"}, {"Paste", "p"}, {"Move to Trash", "d"}} {
+	for _, action := range []struct{ label, key string }{{"Open", "enter"}, {"Filter", "/"}, {"Sort", "s"}, {"New File", "a"}, {"New Folder", "A"}, {"Rename", "r"}, {"Move", "m"}, {"Cut", "x"}, {"Paste", "p"}, {"Move to Trash", "d"}} {
 		m.options = append(m.options, option{action.label, formatKey(action.key), func() { e.treeInput(action.key) }, nil})
 	}
 	e.openMenu(m)

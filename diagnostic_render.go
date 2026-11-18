@@ -48,11 +48,11 @@ func diagnosticAt(marks []diagnosticMark, start, end int) int {
 func diagnosticColor(severity int) terminalColor {
 	switch severity {
 	case 1:
-		return rgb(0xe67e80)
+		return th.red
 	case 2:
-		return rgb(0xdbbc7f)
+		return th.yellow
 	default:
-		return rgb(0x7fbbb3)
+		return th.aqua
 	}
 }
 

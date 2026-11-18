@@ -214,7 +214,7 @@ func decodeSemantic(b *buffer, data []int, types, modifiers []string) []highligh
 		mask := data[i+4]
 		for j, m := range modifiers {
 			if j < 31 && mask&(1<<j) != 0 && m == "readonly" && types[kind] == "variable" {
-				hex = 0xd699b6
+				hex = int32(th.purple)
 			}
 		}
 		if hex != 0 {
@@ -227,25 +227,25 @@ func decodeSemantic(b *buffer, data []int, types, modifiers []string) []highligh
 func semanticColor(kind string) int32 {
 	switch kind {
 	case "type", "class", "struct", "interface", "enum", "typeParameter":
-		return 0x83c092
+		return int32(th.typ)
 	case "function", "method", "macro":
-		return 0xa7c080
+		return int32(th.accent)
 	case "parameter":
-		return 0xe69875
+		return int32(th.orange)
 	case "property", "namespace":
-		return 0x7fbbb3
+		return int32(th.aqua)
 	case "enumMember", "number", "constant":
-		return 0xd699b6
+		return int32(th.purple)
 	case "string", "regexp":
-		return 0xdbbc7f
+		return int32(th.yellow)
 	case "keyword", "modifier":
-		return 0xe67e80
+		return int32(th.red)
 	case "comment":
-		return 0x9da9a0
+		return int32(th.comment)
 	case "operator":
-		return 0x9da9a0
+		return int32(th.comment)
 	case "decorator", "label":
-		return 0xd699b6
+		return int32(th.purple)
 	}
 	return 0
 }

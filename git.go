@@ -543,7 +543,7 @@ func (v *renderer) drawSourceControl(e *editor, w, h int) {
 		row := rows[i]
 		y := box.y + 1 + i - p.scroll
 		if row.header != "" {
-			v.write(box.x+2, y, box.w-4, row.header, menuStyle.Foreground(rgb(0xa7c080)).Bold(true))
+			v.write(box.x+2, y, box.w-4, row.header, menuStyle.Foreground(th.accent).Bold(true))
 			continue
 		}
 		style := menuStyle
@@ -588,16 +588,16 @@ func (v *renderer) drawDiff(e *editor, w, h int) {
 	}
 	for i := d.scroll; i < min(len(d.lines), d.scroll+height); i++ {
 		line := d.lines[i]
-		fg := rgb(0xd3c6aa)
+		fg := th.fg
 		switch {
 		case strings.HasPrefix(line, "@@"):
-			fg = rgb(0x7fbbb3)
+			fg = th.aqua
 		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---") || strings.HasPrefix(line, "diff ") || strings.HasPrefix(line, "index "):
-			fg = rgb(0x89968b)
+			fg = th.muted
 		case strings.HasPrefix(line, "+"):
-			fg = rgb(0xa7c080)
+			fg = th.accent
 		case strings.HasPrefix(line, "-"):
-			fg = rgb(0xe67e80)
+			fg = th.red
 		}
 		y := box.y + 1 + i - d.scroll
 		style := menuStyle.Foreground(fg)

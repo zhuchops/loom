@@ -48,7 +48,7 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 		mode = "PROMPT"
 	}
 	badge := " " + strings.ToUpper(doc.cfg.Profile) + " " + mode + " "
-	badgeStyle := baseStyle.Background(rgb(0xa7c080)).Foreground(rgb(0x232a2e)).Bold(true)
+	badgeStyle := baseStyle.Background(th.accent).Foreground(th.badge).Bold(true)
 	row := b.rowAt(b.cursor)
 	right := fmt.Sprintf(" %d:%d  %d%% ", row+1, b.cursor-b.lines[row]+1, (row+1)*100/len(b.lines))
 	if w >= 78 {
@@ -118,8 +118,8 @@ func (v *renderer) drawProblems(e *editor, b *buffer, x, y, limit int) int {
 		}
 		return headingStyle.Background(background).Foreground(fg)
 	}
-	errorColor := rgb(0xe67e80)
-	warningColor := rgb(0xdbbc7f)
+	errorColor := th.red
+	warningColor := th.yellow
 	file := countProblems(b.diagnostics)
 	project := e.projectProblems()
 	parts := []struct {

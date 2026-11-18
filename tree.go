@@ -22,6 +22,99 @@ type fileTree struct {
 	sidebar, popup, focused, jump, manualScroll, reveal bool
 	width                                               int
 	cut                                                 string
+	sortMode                                            int
+	filter                                              string
+	filtering                                           bool
+}
+
+var treeSorts = []string{"name", "modified", "size", "type"}
+
+// sortTreeEntries keeps folders first, then orders by the chosen mode.
+func sortTreeEntries(entries []os.DirEntry, mode int) {
+	info := func(e os.DirEntry) os.FileInfo {
+		i, _ := e.Info()
+		return i
+	}
+	byName := func(a, b os.DirEntry) int {
+		return strings.Compare(strings.ToLower(a.Name()), strings.ToLower(b.Name()))
+	}
+	slices.SortStableFunc(entries, func(a, b os.DirEntry) int {
+		if a.IsDir() != b.IsDir() {
+			if a.IsDir() {
+				return -1
+			}
+			return 1
+		}
+		if !a.IsDir() || mode == 0 {
+			switch mode {
+			case 1:
+				ia, ib := info(a), info(b)
+				if ia != nil && ib != nil && !ia.ModTime().Equal(ib.ModTime()) {
+					return ib.ModTime().Compare(ia.ModTime())
+				}
+			case 2:
+				ia, ib := info(a), info(b)
+				if ia != nil && ib != nil && ia.Size() != ib.Size() {
+					return int(max(-1, min(1, ib.Size()-ia.Size())))
+				}
+			case 3:
+				if c := strings.Compare(strings.ToLower(filepath.Ext(a.Name())), strings.ToLower(filepath.Ext(b.Name()))); c != 0 {
+					return c
+				}
+			}
+		}
+		return byName(a, b)
+	})
+}
+
+func treeMatches(query []rune, name string) bool {
+	_, ok := fuzzyScore(query, []rune(strings.ToLower(name)))
+	return ok
+}
+
+func (t *fileTree) status() string {
+	text := "Explorer · " + treeSorts[t.sortMode]
+	if t.filtering {
+		return "Explorer /" + t.filter + "▏"
+	}
+	if t.filter != "" {
+		text += " · /" + t.filter
+	}
+	return text
+}
+
+// filterInput handles keys while the filter prompt is open.
+func (e *editor) filterInput(key string) bool {
+	t := &e.tree
+	switch key {
+	case "enter":
+		t.filtering = false
+	case "esc":
+		t.filtering, t.filter = false, ""
+	case "backspace":
+		if r := []rune(t.filter); len(r) > 0 {
+			t.filter = string(r[:len(r)-1])
+		}
+	case "space":
+		t.filter += " "
+	default:
+		r, ok := inputRune(key)
+		if !ok {
+			return true
+		}
+		t.filter += string(r)
+	}
+	e.refreshTree("")
+	if t.filter != "" {
+		for i, row := range t.rows {
+			if !row.dir {
+				t.selected = i
+				break
+			}
+		}
+	}
+	e.revealTreeSelection()
+	return true
 }
 
 func (e *editor) refreshTree(target string) {
@@ -33,33 +126,45 @@ func (e *editor) refreshTree(target string) {
 		target = t.rows[t.selected].path
 	}
 	t.rows = []treeEntry{{e.root, 0, true}}
+	filtering := t.filter != ""
+	query := []rune(strings.ToLower(t.filter))
+	visited := 0
 	var walk func(string, int)
 	walk = func(dir string, depth int) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return
 		}
-		slices.SortStableFunc(entries, func(a, b os.DirEntry) int {
-			if a.IsDir() != b.IsDir() {
-				if a.IsDir() {
-					return -1
-				}
-				return 1
-			}
-			return strings.Compare(strings.ToLower(a.Name()), strings.ToLower(b.Name()))
-		})
+		sortTreeEntries(entries, t.sortMode)
 		for _, entry := range entries {
-			if entry.Name() == ".git" || len(t.rows) >= 10000 {
+			name := entry.Name()
+			if name == ".git" || len(t.rows) >= 10000 || visited >= 100000 {
 				continue
 			}
-			path := filepath.Join(dir, entry.Name())
-			t.rows = append(t.rows, treeEntry{path, depth, entry.IsDir()})
-			if entry.IsDir() && t.expanded[path] {
+			visited++
+			path := filepath.Join(dir, name)
+			if !entry.IsDir() {
+				if !filtering || treeMatches(query, name) {
+					t.rows = append(t.rows, treeEntry{path, depth, false})
+				}
+				continue
+			}
+			if filtering && name == "node_modules" {
+				continue
+			}
+			mark := len(t.rows)
+			t.rows = append(t.rows, treeEntry{path, depth, true})
+			if filtering {
+				walk(path, depth+1)
+				if len(t.rows) == mark+1 && !treeMatches(query, name) {
+					t.rows = t.rows[:mark]
+				}
+			} else if t.expanded[path] {
 				walk(path, depth+1)
 			}
 		}
 	}
-	if t.expanded[e.root] {
+	if t.expanded[e.root] || filtering {
 		walk(e.root, 1)
 	}
 	t.selected = min(t.selected, len(t.rows)-1)
@@ -112,7 +217,19 @@ func (e *editor) treeInput(key string) bool {
 	case "q":
 		e.hideExplorer()
 	case "esc":
+		if t.filter != "" {
+			t.filter = ""
+			e.refreshTree(row.path)
+			break
+		}
 		t.popup, t.focused, t.jump = false, false, false
+	case "/":
+		t.filtering = true
+		return true
+	case "s":
+		t.sortMode = (t.sortMode + 1) % len(treeSorts)
+		e.refreshTree(row.path)
+		e.notify("Explorer sorted by " + treeSorts[t.sortMode])
 	case "j", "down":
 		t.selected = min(len(t.rows)-1, t.selected+1)
 	case "k", "up":
@@ -248,7 +365,7 @@ func (e *editor) treeInput(key string) bool {
 		e.refreshTree(row.path)
 		e.refreshGit()
 	case "?":
-		e.notify("j/k move · h/l collapse/open · a/A new · r rename · m move · x/p cut/paste · d trash · R refresh")
+		e.notify("j/k move · h/l collapse/open · / filter · s sort · a/A new · r rename · m move · x/p cut/paste · d trash · R refresh")
 	default:
 		return false
 	}

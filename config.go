@@ -36,6 +36,7 @@ type config struct {
 	Plugins      []pluginConfig               `json:"plugins"`
 	AutoComplete bool                         `json:"auto_complete"`
 	AutoPairs    bool                         `json:"auto_pairs"`
+	Theme        string                       `json:"theme"`
 }
 
 // Language servers and formatters are used only when their command is on PATH.
@@ -163,6 +164,7 @@ func readConfig(path string, explicit bool) (config, error) {
 		Plugins      []pluginConfig               `json:"plugins"`
 		AutoComplete *bool                        `json:"auto_complete"`
 		AutoPairs    *bool                        `json:"auto_pairs"`
+		Theme        *string                      `json:"theme"`
 
 		// Older configs set only the server command for a language.
 		LanguageServers map[string][]string `json:"language_servers"`
@@ -189,6 +191,9 @@ func readConfig(path string, explicit bool) (config, error) {
 	}
 	if overlay.AutoComplete != nil {
 		cfg.AutoComplete = *overlay.AutoComplete
+	}
+	if overlay.Theme != nil {
+		cfg.Theme = *overlay.Theme
 	}
 	if overlay.AutoPairs != nil {
 		cfg.AutoPairs = *overlay.AutoPairs

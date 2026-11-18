@@ -206,7 +206,7 @@ func (v *renderer) drawSignature(hint signatureHint, top, bottom int) {
 		return
 	}
 	const padding = 2
-	bold := menuStyle.Bold(true).Foreground(rgb(0xdbbc7f))
+	bold := menuStyle.Bold(true).Foreground(th.yellow)
 	// Scroll long overloads horizontally so the active parameter remains visible.
 	before := strings.Map(signatureDisplayRune, hint.label[:hint.start])
 	active := strings.Map(signatureDisplayRune, hint.label[hint.start:hint.end])

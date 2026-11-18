@@ -11,9 +11,9 @@ import (
 	"github.com/rivo/uniseg"
 )
 
-var panelStyle = baseStyle.Background(rgb(0x272e33))
-var lineStyle = rgb(0x343f44)
-var borderStyle = panelStyle.Foreground(rgb(0x475258))
+var panelStyle cellStyle
+var lineStyle terminalColor
+var borderStyle cellStyle
 
 type hitBox struct{ x, y, w, h, start int }
 
@@ -182,7 +182,7 @@ func (v *renderer) drawTree(e *editor, box hitBox) {
 		style = menuStyle
 	}
 	v.screen.FillArea(box.x, box.y, box.w, box.h, ' ', style)
-	v.write(box.x+1, box.y, box.w-2, "Explorer", headingStyle.Background(styleBackground(t.popup)))
+	v.write(box.x+1, box.y, box.w-2, t.status(), headingStyle.Background(styleBackground(t.popup)))
 	footer := 1
 	if t.popup {
 		footer = 2
@@ -201,7 +201,7 @@ func (v *renderer) drawTree(e *editor, box hitBox) {
 		y := box.y + 1 + i - t.scroll
 		s := style
 		if row.path == e.b.path {
-			s = s.Foreground(rgb(0xa7c080))
+			s = s.Foreground(th.accent)
 		}
 		if i == t.selected && t.focused {
 			s = activeStyle
@@ -210,7 +210,7 @@ func (v *renderer) drawTree(e *editor, box hitBox) {
 		chevron := " "
 		if row.dir {
 			chevron = "›"
-			if t.expanded[row.path] {
+			if t.expanded[row.path] || t.filter != "" {
 				chevron = "⌄"
 			}
 		}
@@ -224,7 +224,7 @@ func (v *renderer) drawTree(e *editor, box hitBox) {
 		}
 	}
 	if t.popup {
-		v.write(box.x+1, box.y+box.h-2, box.w-2, "j/k Move   h/l Fold   Enter Open   ? Help", style)
+		v.write(box.x+1, box.y+box.h-2, box.w-2, "j/k Move   h/l Fold   Enter Open   / Filter   s Sort", style)
 		v.write(box.x+1, box.y+box.h-1, box.w-2, "a/A New   r Rename   m Move   x/p Cut/Paste   d Trash", style)
 	}
 	v.treeBox = hitBox{box.x, box.y + 1, box.w, height, t.scroll}
@@ -232,19 +232,19 @@ func (v *renderer) drawTree(e *editor, box hitBox) {
 
 func styleBackground(popup bool) terminalColor {
 	if popup {
-		return rgb(0x343f44)
+		return th.menu
 	}
-	return rgb(0x272e33)
+	return th.panel
 }
 
 func gitColor(mark byte) terminalColor {
 	switch mark {
 	case '+', 'A', '?':
-		return rgb(0xa7c080)
+		return th.accent
 	case '-', 'D':
-		return rgb(0xe67e80)
+		return th.red
 	}
-	return rgb(0xdbbc7f)
+	return th.yellow
 }
 
 func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
@@ -302,7 +302,7 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 		}
 		screenY++
 		y := screenY
-		bg := rgb(0x2d353b)
+		bg := th.bg
 		if i == row && focused {
 			bg = lineStyle
 			v.screen.FillArea(box.x, y, box.w, 1, ' ', baseStyle.Background(bg))
@@ -313,7 +313,7 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 		}
 		number := mutedStyle.Background(bg)
 		if i == row && focused {
-			number = number.Foreground(rgb(0xd3c6aa))
+			number = number.Foreground(th.fg)
 		}
 		lineNumber := i + 1
 		if e.relativeNumbers && i != row {
@@ -327,7 +327,7 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			if b.folds.closed[i] {
 				glyph = "▸"
 			}
-			v.write(box.x+gutter-1, y, 1, glyph, number.Foreground(rgb(0xa7c080)))
+			v.write(box.x+gutter-1, y, 1, glyph, number.Foreground(th.accent))
 		}
 		if severity := diagnosticAt(problems[i], b.lines[i], b.lineEnd(i)+1); severity != 0 {
 			v.write(box.x, y, 1, "●", number.Foreground(diagnosticColor(severity)))
@@ -375,14 +375,14 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 				matches = matches[1:]
 			}
 			if len(matches) > 0 && matches[0].start <= offset {
-				s = s.Background(rgb(0x514d39))
+				s = s.Background(th.match)
 			}
 			next := offset + utf8.RuneCountInString(graphemes.Str())
 			if offset < selected.end && next > selected.start {
 				s = s.Background(selectStyle)
 			}
 			if flashing && (offset < flash.inner.start && next > flash.outer.start || offset < flash.outer.end && next > flash.inner.end) {
-				s = s.Background(rgb(0x696146))
+				s = s.Background(th.flash)
 			}
 			s = markDiagnostic(s, problems[i], offset, next)
 			x := box.x + gutter + column - b.left

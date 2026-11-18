@@ -12,12 +12,8 @@ import (
 )
 
 var (
-	baseStyle    = cellStyle{}.Background(rgb(0x2d353b)).Foreground(rgb(0xd3c6aa))
-	mutedStyle   = baseStyle.Foreground(rgb(0x89968b))
-	headingStyle = baseStyle.Foreground(rgb(0xa7c080)).Bold(true)
-	menuStyle    = baseStyle.Background(rgb(0x343f44)).Foreground(rgb(0xd3c6aa))
-	activeStyle  = menuStyle.Background(rgb(0x4b5558)).Bold(true)
-	selectStyle  = rgb(0x543a48)
+	baseStyle, mutedStyle, headingStyle, menuStyle, activeStyle cellStyle
+	selectStyle                                                 terminalColor
 )
 
 type highlight struct {
@@ -31,7 +27,7 @@ func centerBox(w, h, width, height int) hitBox {
 
 func (v *renderer) frame(box hitBox, title string) {
 	v.screen.FillArea(box.x, box.y, box.w, box.h, ' ', menuStyle)
-	edge := menuStyle.Foreground(rgb(0xa7c080))
+	edge := menuStyle.Foreground(th.accent)
 	v.screen.FillArea(box.x, box.y, box.w, 1, '─', edge)
 	v.screen.FillArea(box.x, box.y+box.h-1, box.w, 1, '─', edge)
 	v.screen.FillArea(box.x, box.y, 1, box.h, '│', edge)
@@ -50,9 +46,16 @@ func (v *renderer) dim(w, h int) {
 		r, g, b := c.RGB()
 		return rgb(r*55/100<<16 | g*55/100<<8 | b*55/100)
 	}
+	// The terminal's own colors are unknown, so assume gray text on near black.
 	for y := range h {
 		for x := 0; x < w; {
 			s, style, width := v.screen.Get(x, y)
+			if style.fg&defaultFlag != 0 {
+				style.fg = rgb(0x808080)
+			}
+			if style.bg&defaultFlag != 0 {
+				style.bg = rgb(0x181818)
+			}
 			if s == "" {
 				s = " "
 			}
@@ -159,7 +162,7 @@ func (v *renderer) writeOption(x, y, width int, o option, style cellStyle) {
 	}
 	v.write(x, y, labelWidth, o.label, style)
 	if hintWidth > 0 {
-		v.write(x+width-hintWidth, y, hintWidth, o.hint, style.Bold(false).Foreground(rgb(0x89968b)))
+		v.write(x+width-hintWidth, y, hintWidth, o.hint, style.Bold(false).Foreground(th.muted))
 	}
 }
 
@@ -244,7 +247,7 @@ func (v *renderer) drawWhichKey(e *editor, w, h int) {
 	width := min(w-4, columns*cell+(columns-1)*gap+4)
 	box := centerBox(w, h, width, rows+2)
 	v.frame(box, chordTitle(e.prefix))
-	keyStyle := menuStyle.Foreground(rgb(0xa7c080)).Bold(true)
+	keyStyle := menuStyle.Foreground(th.accent).Bold(true)
 	for i, en := range entries[:shown] {
 		x := box.x + 2 + (i/rows)*(cell+gap)
 		y := box.y + 1 + i%rows
