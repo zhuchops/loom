@@ -62,3 +62,26 @@ func labels(items []completionItem) string {
 	}
 	return out
 }
+
+func TestCompletionFunctionGetsParens(t *testing.T) {
+	b := &buffer{anchor: -1, text: []rune("fmt.Prin"), cursor: 8}
+	b.indexLines()
+	if err := applyCompletion(b, completionItem{Label: "Println", Kind: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(b.text); got != "fmt.Println()" || b.cursor != 12 {
+		t.Fatalf("got %q cursor %d", got, b.cursor)
+	}
+	b = &buffer{anchor: -1, text: []rune("Prin(x)"), cursor: 4}
+	b.indexLines()
+	applyCompletion(b, completionItem{Label: "Println", Kind: 3})
+	if got := string(b.text); got != "Println(x)" {
+		t.Fatalf("got %q", got)
+	}
+	b = &buffer{anchor: -1, text: []rune("Na"), cursor: 2}
+	b.indexLines()
+	applyCompletion(b, completionItem{Label: "Name", Kind: 5})
+	if got := string(b.text); got != "Name" {
+		t.Fatalf("got %q", got)
+	}
+}

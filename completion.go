@@ -357,8 +357,18 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 		}
 		primary = edit{span{start, b.cursor}, item.TextEdit.NewText}
 	}
+	callable := (item.Kind == 2 || item.Kind == 3 || item.Kind == 4) && !strings.Contains(primary.text, "(")
+	if callable && primary.end < len(b.text) && b.text[primary.end] == '(' {
+		callable = false
+	}
+	if callable {
+		primary.text += "()"
+	}
 	edits := []edit{primary}
 	cursor := primary.start + len([]rune(primary.text))
+	if callable {
+		cursor--
+	}
 	for _, add := range item.Additional {
 		next, err := makeEdit(add)
 		if err != nil {
