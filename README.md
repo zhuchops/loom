@@ -358,6 +358,16 @@ Positions are zero-based UTF-16 offsets within a line and range ends are exclusi
 
 ## Maintaining Loom
 
+The root holds only `main.go`, which calls `editor.Main()`, so `go install github.com/zhuchops/loom@latest` still works. Everything else is under `internal/`:
+
+- `internal/editor` is the editor: buffers, panes, rendering, Vim input, git, completion and the language-server session. The files named below live here.
+- `internal/syntax` holds the language table, the highlighters and comment delimiters. It returns token kinds, not colors.
+- `internal/markdown` turns Markdown into wrapped rows of styled cells for the preview. It returns roles, not colors.
+- `internal/theme` holds the built-in themes as plain data.
+- `internal/jsonrpc` is the JSON-RPC client that talks to language servers.
+
+Those four packages never import the editor. To add a language, edit `internal/syntax` and `defaultLanguages` in `config.go`. To add a theme, add a line to `internal/theme`.
+
 Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. `terminal.go` translates Bubble Tea messages into Loom input and delivers asynchronous editor updates on the same event loop. `terminal_frame.go` draws into an Ultraviolet cell buffer so split geometry, popup placement, dimming, and mouse coordinates can share the existing renderer. The text-editing commands and language-server requests do not depend on Bubble Tea.
 
 - `editor.go` owns modal input and the active buffer. `config.go` merges and validates named command bindings. The palette and which-key read from the same command registry.
@@ -368,4 +378,4 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `disk.go` and `recovery.go` implement conflict review and per-session snapshots. The editor event loop is the owner of UI state.
 - `notifications.go` keeps the full text of status messages and draws their detail view. `pairs.go` tracks generated delimiters through buffer edits and undo.
 
-Run `go test -race ./...` from this directory. Set `LOOM_TEST_GOPLS=1` to enable the tests against `gopls` on PATH. Renderer tests inspect the in-memory frame, and terminal adapter tests send Bubble Tea messages directly.
+Every change gets a README update and a version bump in `internal/editor/main.go`, committed as `vX.Y.Z`. Run `go test -race ./...` from this directory. Set `LOOM_TEST_GOPLS=1` to enable the tests against `gopls` on PATH. Renderer tests inspect the in-memory frame, and terminal adapter tests send Bubble Tea messages directly.
