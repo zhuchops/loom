@@ -87,6 +87,16 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 	if e.diff != nil || e.panel != nil {
 		return
 	}
+	if e.bar != nil && e.directory == nil {
+		for _, h := range v.barHits {
+			if h.contains(x, y) {
+				if press {
+					e.barAction(h.action)
+				}
+				return
+			}
+		}
+	}
 	if v.completeBox.contains(x, y) && len(e.completion.items) > 0 {
 		if wheel != 0 {
 			e.completion.selected = max(0, min(len(e.completion.items)-1, e.completion.selected+wheel))

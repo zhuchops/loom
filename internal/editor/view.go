@@ -42,6 +42,7 @@ type renderer struct {
 	previewBox                                  hitBox
 	panes                                       []paneBox
 	previews                                    []previewBox
+	barHits                                     []barHit
 	tabDrag, tabPrev                            *buffer // Tab being dragged, and the tab that was active before the press.
 	tabStartX, tabStartY                        int
 	tabMoving                                   bool
@@ -92,6 +93,10 @@ func (v *renderer) draw(e *editor) {
 	v.drawStatus(e, w, h)
 	if v.tabMoving && v.drop.leaf != nil {
 		v.drawDrop()
+	}
+	v.barHits = v.barHits[:0]
+	if e.bar != nil && e.directory == nil {
+		v.drawFindBar(e)
 	}
 	if e.directory != nil {
 		v.dim(w, h-1)
@@ -305,6 +310,11 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 
 	last := min(len(b.lines), b.top+box.h)
 	problems := diagnosticRows(b, b.top, last)
+	var searchSpans *searchResult
+	if e.searchVisible && e.query != "" {
+		res := e.matches(b)
+		searchSpans = &res
+	}
 	hidden := b.hiddenRows()
 	foldable := b.foldEnds()
 	// screenY counts screen rows, so rows hidden by closed folds take no space.
@@ -348,21 +358,9 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			v.write(box.x, y, 1, "▎", number.Foreground(gitColor(mark)))
 		}
 		column, offset := 0, b.lines[i]
-		line := string(b.text[offset:b.lineEnd(i)])
 		var matches []span
-		if e.searchVisible && e.query != "" {
-			start := offset
-			for {
-				at := strings.Index(line, e.query)
-				if at < 0 {
-					break
-				}
-				start += utf8.RuneCountInString(line[:at])
-				end := start + utf8.RuneCountInString(e.query)
-				matches = append(matches, span{start, end})
-				line = line[at+len(e.query):]
-				start = end
-			}
+		if searchSpans != nil {
+			matches = searchSpans.matchRange(offset, b.lineEnd(i))
 		}
 		graphemes := uniseg.NewGraphemes(string(b.text[offset:b.lineEnd(i)]))
 		for graphemes.Next() {
@@ -389,6 +387,9 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			}
 			if len(matches) > 0 && matches[0].start <= offset {
 				s = s.Background(th.match)
+				if focused && matches[0].start == b.cursor {
+					s = s.Background(th.flash)
+				}
 			}
 			next := offset + utf8.RuneCountInString(graphemes.Str())
 			if offset < selected.end && next > selected.start {

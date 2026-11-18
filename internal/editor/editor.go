@@ -30,6 +30,9 @@ type editor struct {
 	jumps                           jumpHistory
 	directory                       *directoryEditor
 	searchVisible                   bool
+	bar                             *findBar
+	searchOpts                      searchOptions
+	searchCache                     searchCache
 	gitTimer                        *time.Timer
 	gitWake                         chan struct{}
 	tree                            fileTree
@@ -181,7 +184,8 @@ func (e *editor) registerCommands() {
 	e.add("surround-replace", "Replace Surrounding Delimiters", func(e *editor) { e.pending = pending{kind: "replace-old"} })
 	e.add("inner-object", "Select Inside Text Object", func(e *editor) { e.pending = pending{kind: "object"} })
 	e.add("around-object", "Select Around Text Object", func(e *editor) { e.pending = pending{kind: "object", around: true} })
-	e.add("search", "Find in Buffer", func(e *editor) { e.openSearch() })
+	e.add("search", "Find in Buffer", func(e *editor) { e.openFindBar(false) })
+	e.add("replace", "Find and Replace", func(e *editor) { e.openFindBar(true) })
 	e.add("next-match", "Find Next", func(e *editor) { e.find(false) })
 	e.add("prev-match", "Find Previous", func(e *editor) { e.find(true) })
 	e.add("ex", "", func(e *editor) { e.openPalette() })
@@ -415,6 +419,9 @@ func (e *editor) handle(in keyInput) {
 	}
 	if e.menu == nil && e.directory != nil {
 		e.directoryInput(in)
+		return
+	}
+	if e.menu == nil && e.bar != nil && e.directory == nil && e.findInput(in) {
 		return
 	}
 	if e.menu == nil && e.tree.focused && e.tree.filtering {

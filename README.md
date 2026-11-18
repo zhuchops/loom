@@ -57,6 +57,7 @@ On the Dashboard, use `j`/`k` or the arrow keys and Enter, or click an action. R
 | Choose a completion | ↑ / ↓ or Ctrl+N / Ctrl+P |
 | Accept or dismiss a completion | Tab, Enter or Ctrl+Y / Esc |
 | Search the current buffer | /, then n or N to repeat |
+| Find and replace | Space h |
 | Undo / redo / repeat edit | u / Ctrl+R / . |
 | Markdown preview | Space m |
 | Symbols in file / in workspace | Space o / Space O |
@@ -92,7 +93,7 @@ Vim supports counts, text objects, macros, and a single selection. A typing burs
 | `D` / `C` / `Y` | Delete to end of line, change to end of line, or yank whole lines. |
 | `r`, `J` | Replace a character or join lines. |
 
-Vim features still missing include blockwise Visual mode (`Ctrl+V`), `gv`, named registers and marks, Replace mode (`R`), `W`/`B`/`E` WORD motions, paragraph motions, regex search and substitution, Ex ranges, and Vimscript.
+Vim features still missing include blockwise Visual mode (`Ctrl+V`), `gv`, named registers and marks, Replace mode (`R`), `W`/`B`/`E` WORD motions, paragraph motions, the `:s` substitute command, Ex ranges, and Vimscript.
 
 ### Surround
 
@@ -161,6 +162,23 @@ Press **Space N**, run `:messages`, or click the status bar to open **Notificati
 In Insert mode, typing `(`, `[`, `{`, a single or double quote, or a backtick can insert its matching closer and leave the cursor between the two characters. Type the generated closer to move past it, or press Backspace inside an empty generated pair to remove both characters. In Select mode, type an opening delimiter to wrap the selection. Paste inserts its original text. Set `"auto_pairs": false` in your config to turn this off.
 
 Press Enter between adjacent braces to put the closing brace on its own line and place the cursor on a blank line inside. Loom adds one tab in Go or in a tab-indented block, and four spaces elsewhere.
+
+## Find and replace
+
+`/` opens a find panel at the top right of the pane, and `Space h` (or **Find and Replace** in the palette) opens it with the replace row. Matches highlight as you type, the current one brighter, and the cursor jumps to the nearest match. The panel shows `3 of 12`, `No results`, or `Invalid` for a bad regex. Selected text, or for `Space h` the word under the cursor, is prefilled and the first keystroke replaces it.
+
+| Key | Action |
+| --- | --- |
+| Enter | Next match. After `/`, Enter keeps the first match, closes the panel and leaves `n` / `N` working. In the replace field it replaces the current match and moves to the next |
+| Down / Ctrl+N, Up / Ctrl+P | Next / previous match |
+| Tab | Switch between the find and replace fields |
+| Ctrl+T / Ctrl+O / Ctrl+E | Match case / whole word / regular expression |
+| Ctrl+A | Replace all, as one undo step |
+| Ctrl+R | Show or hide the replace row |
+| Ctrl+U / Ctrl+W | Clear the field / delete the last word |
+| Esc | Close the panel and clear the highlights |
+
+Search ignores case until you turn on match case. In regex mode `^` and `$` match at every line, and the replacement can use `$1` or `${name}` groups. The buttons in the panel (`Aa`, `ab`, `.*`, arrows, Replace, All, `×`) work with the mouse too.
 
 ## Markdown preview
 
@@ -384,6 +402,7 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `disk.go` and `recovery.go` implement conflict review and per-session snapshots. The editor event loop is the owner of UI state.
 - `theme.go` applies a theme from `internal/theme` to the renderer's styles and saves the choice. `mdpreview.go` draws the Markdown preview pane, which `panes.go` stores as a leaf that never takes focus. `tabdrag.go` handles dragging a tab into a split.
 - `fold.go` computes indentation folds, `symbols.go` the symbol pickers, `pathcomplete.go` file-name completion, and `tree.go` the explorer, including its filter and sort.
+- `search.go` finds matches (plain, whole word, regex) and caches them per buffer version. `findbar.go` and `findbar_draw.go` are the find and replace panel: its input, its replace actions and its drawing.
 - `notifications.go` keeps the full text of status messages and draws their detail view. `pairs.go` tracks generated delimiters through buffer edits and undo.
 
 Every change gets a README update and a version bump in `internal/editor/main.go`, committed as `vX.Y.Z`. Run `go test -race ./...` from this directory. Set `LOOM_TEST_GOPLS=1` to enable the tests against `gopls` on PATH. Renderer tests inspect the in-memory frame, and terminal adapter tests send Bubble Tea messages directly.

@@ -143,7 +143,7 @@ func defaultConfig() config {
 				"space t 6": "tab-6", "space t 7": "tab-7", "space t 8": "tab-8", "space t 9": "tab-9",
 				"space z": "zen", "space n": "relative-numbers", "space q": "close-split",
 				"space g g": "git-panel", "space g d": "git-diff", "space g b": "git-branch",
-				"space m": "markdown-preview", "space o": "symbols", "space O": "workspace-symbols",
+				"space m": "markdown-preview", "space h": "replace", "space o": "symbols", "space O": "workspace-symbols",
 				"ctrl+w v": "split", "ctrl+w s": "split-below", "ctrl+w h": "pane-h", "ctrl+w j": "pane-j", "ctrl+w k": "pane-k", "ctrl+w l": "pane-l",
 				"ctrl+w left": "pane-h", "ctrl+w down": "pane-j", "ctrl+w up": "pane-k", "ctrl+w right": "pane-l",
 				"ctrl+w w": "focus-pane", "ctrl+w ctrl+w": "focus-pane", "ctrl+w c": "close-split", "ctrl+w o": "only-pane",
