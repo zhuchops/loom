@@ -19,6 +19,7 @@ type pane struct {
 
 	// A preview leaf renders b as Markdown instead of editing it. It never
 	// takes focus, and redraws from the buffer so it tracks every keystroke.
+	ratio              int // share of the first child in permille; 0 means half
 	preview            bool
 	md                 []markdown.Line
 	mdVersion, mdWidth int
@@ -186,6 +187,35 @@ type panePlacement struct {
 type paneDivider struct {
 	box      hitBox
 	vertical bool
+	node     *pane  // the split this divider belongs to
+	whole    hitBox // the area the split divides
+}
+
+const (
+	minPaneWidth  = 8
+	minPaneHeight = 3
+	resizeStep    = 50 // permille moved by one keypress
+)
+
+// splitSize is the width or height given to the first child of a split.
+func splitSize(total, ratio int, vertical bool) int {
+	if ratio <= 0 {
+		ratio = 500
+	}
+	minimum := minPaneHeight
+	if vertical {
+		minimum = minPaneWidth
+	}
+	room := total - 1
+	if room < 2*minimum {
+		return room / 2
+	}
+	return max(minimum, min(room-minimum, room*ratio/1000))
+}
+
+// ratioFor converts a first-child size back to permille for a split of total cells.
+func ratioFor(size, total int) int {
+	return max(1, min(999, size*1000/max(1, total-1)))
 }
 
 // Layout and keyboard focus use the same tree geometry; tiny terminals show
@@ -209,17 +239,72 @@ func placePanes(p *pane, box hitBox, active *pane, leaves *[]panePlacement, divi
 	a, b := box, box
 	edge := box
 	if p.vertical {
-		a.w = (box.w - 1) / 2
+		a.w = splitSize(box.w, p.ratio, true)
 		b.x, b.w = box.x+a.w+1, box.w-a.w-1
 		edge.x, edge.w = box.x+a.w, 1
 	} else {
-		a.h = (box.h - 1) / 2
+		a.h = splitSize(box.h, p.ratio, false)
 		b.y, b.h = box.y+a.h+1, box.h-a.h-1
 		edge.y, edge.h = box.y+a.h, 1
 	}
-	*dividers = append(*dividers, paneDivider{edge, p.vertical})
+	*dividers = append(*dividers, paneDivider{edge, p.vertical, p, box})
 	placePanes(p.first, a, active, leaves, dividers)
 	placePanes(p.second, b, active, leaves, dividers)
+}
+
+// ancestors returns the splits from the root down to the one holding target.
+func ancestors(node, target *pane, path []*pane) []*pane {
+	if node == nil || node == target {
+		return path
+	}
+	if node.b != nil {
+		return nil
+	}
+	path = append(path, node)
+	if found := ancestors(node.first, target, path); found != nil || node.first == target {
+		return found
+	}
+	return ancestors(node.second, target, path)
+}
+
+// resizePane grows (positive) or shrinks the active pane along one axis.
+func (e *editor) resizePane(vertical bool, steps int) {
+	p := e.activePane
+	if p == nil || p.b == nil {
+		return
+	}
+	path := ancestors(e.layout, p, nil)
+	for i := len(path) - 1; i >= 0; i-- {
+		node := path[i]
+		if node.vertical != vertical {
+			continue
+		}
+		ratio := node.ratio
+		if ratio == 0 {
+			ratio = 500
+		}
+		if slices.Contains(node.first.leaves(), p) {
+			ratio += steps * resizeStep
+		} else {
+			ratio -= steps * resizeStep
+		}
+		node.ratio = max(50, min(950, ratio))
+		return
+	}
+	e.notify("No split to resize in that direction")
+}
+
+func (e *editor) equalizePanes() {
+	var walk func(*pane)
+	walk = func(p *pane) {
+		if p == nil || p.b != nil {
+			return
+		}
+		p.ratio = 0
+		walk(p.first)
+		walk(p.second)
+	}
+	walk(e.layout)
 }
 
 func (e *editor) focusDirection(dir string) {
@@ -320,6 +405,11 @@ func (e *editor) layoutCommands() {
 		e.add("pane-"+key, title, func(e *editor) { e.focusDirection(key) })
 	}
 	e.add("markdown-preview", "Toggle Markdown Preview", func(e *editor) { e.toggleMarkdownPreview() })
+	e.add("pane-wider", "Make Pane Wider", func(e *editor) { e.resizePane(true, e.takeCount()) })
+	e.add("pane-narrower", "Make Pane Narrower", func(e *editor) { e.resizePane(true, -e.takeCount()) })
+	e.add("pane-taller", "Make Pane Taller", func(e *editor) { e.resizePane(false, e.takeCount()) })
+	e.add("pane-shorter", "Make Pane Shorter", func(e *editor) { e.resizePane(false, -e.takeCount()) })
+	e.add("pane-equalize", "Equalize Pane Sizes", func(e *editor) { e.equalizePanes() })
 	e.add("zen", "Toggle Zen Mode", func(e *editor) { e.zen = !e.zen; e.tree.focused = false; e.tree.popup = false })
 	e.add("relative-numbers", "Toggle Relative Line Numbers", func(e *editor) { e.relativeNumbers = !e.relativeNumbers })
 	e.add("close-explorer", "Close Explorer", func(e *editor) { e.hideExplorer() })
@@ -355,6 +445,7 @@ func (e *editor) drawLayout(v *renderer, box hitBox) {
 	var leaves []panePlacement
 	var dividers []paneDivider
 	placePanes(e.layout, box, e.activePane, &leaves, &dividers)
+	v.paneDividers = append(v.paneDividers[:0], dividers...)
 	for _, d := range dividers {
 		mark := '─'
 		if d.vertical {
@@ -405,6 +496,7 @@ type savedPane struct {
 	Path              string
 	Vertical, Active  bool
 	Cursor, Top, Left int
+	Ratio             int `json:",omitempty"`
 }
 
 func savePaneLayout(p, active *pane) *savedPane {
@@ -426,7 +518,7 @@ func savePaneLayout(p, active *pane) *savedPane {
 		}
 		return &savedPane{Path: p.b.path, Active: p == active, Cursor: p.cursor, Top: p.top, Left: p.left}
 	}
-	return &savedPane{First: savePaneLayout(p.first, active), Second: savePaneLayout(p.second, active), Vertical: p.vertical}
+	return &savedPane{First: savePaneLayout(p.first, active), Second: savePaneLayout(p.second, active), Vertical: p.vertical, Ratio: p.ratio}
 }
 
 func restorePaneLayout(saved *savedPane, buffers map[string]*buffer, depth int) (root, active *pane) {
@@ -455,5 +547,5 @@ func restorePaneLayout(saved *savedPane, buffers map[string]*buffer, depth int) 
 	if activeA == nil {
 		activeA = activeB
 	}
-	return &pane{first: a, second: b, vertical: saved.Vertical}, activeA
+	return &pane{first: a, second: b, vertical: saved.Vertical, ratio: max(0, min(999, saved.Ratio))}, activeA
 }

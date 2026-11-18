@@ -47,6 +47,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			v.dropTab(e)
 		}
 		v.tabDrag, v.tabMoving, v.drop = nil, false, dropZone{}
+		v.paneDrag = nil
 		v.resize, v.dragging, v.drag = false, false, nil
 	}
 	if e.notificationDetail != nil {
@@ -129,6 +130,29 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		v.mouse(doc, event)
 		v.panes, v.treeBox, v.divider = panes, tree, divider
 		return
+	}
+	if v.paneDrag != nil && down {
+		d := v.paneDrag
+		if d.vertical {
+			d.node.ratio = ratioFor(x-d.whole.x, d.whole.w)
+		} else {
+			d.node.ratio = ratioFor(y-d.whole.y, d.whole.h)
+		}
+		return
+	}
+	if press && v.tabDrag == nil {
+		for i := range v.paneDividers {
+			if d := v.paneDividers[i]; d.box.contains(x, y) {
+				now := time.Now()
+				if now.Sub(v.lastClick) < 350*time.Millisecond && x == v.lastX && y == v.lastY {
+					d.node.ratio = 0 // double-click evens the split out
+				} else {
+					v.paneDrag = &d
+				}
+				v.lastClick, v.lastX, v.lastY = now, x, y
+				return
+			}
+		}
 	}
 	if v.tabDrag != nil && down && !press {
 		v.dragTab(e, x, y)

@@ -43,7 +43,9 @@ type renderer struct {
 	panes                                       []paneBox
 	previews                                    []previewBox
 	barHits                                     []barHit
-	tabDrag, tabPrev                            *buffer // Tab being dragged, and the tab that was active before the press.
+	paneDividers                                []paneDivider
+	paneDrag                                    *paneDivider // Divider being dragged, with the area it splits.
+	tabDrag, tabPrev                            *buffer      // Tab being dragged, and the tab that was active before the press.
 	tabStartX, tabStartY                        int
 	tabMoving                                   bool
 	drop                                        dropZone
@@ -64,6 +66,7 @@ func (v *renderer) draw(e *editor) {
 	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
+	v.paneDividers = v.paneDividers[:0]
 	v.previews = v.previews[:0]
 	v.divider = -1
 	if w < 4 || h < 5 {

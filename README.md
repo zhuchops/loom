@@ -144,10 +144,15 @@ Tabs are numbered in the tab bar. A split opens another view of the current buff
 | `Ctrl+W v` / `Ctrl+W s` | Split right / below |
 | `Ctrl+W h/j/k/l` or arrow keys | Focus a pane by direction |
 | `Ctrl+W w` | Cycle panes |
+| `Ctrl+W >` / `Ctrl+W <` | Make the active pane wider / narrower. A count works, as in `3 Ctrl+W >` |
+| `Ctrl+W +` / `Ctrl+W -` | Make the active pane taller / shorter |
+| `Ctrl+W =` | Make every split even again |
 | `Ctrl+W c` / `Ctrl+W o` | Close active pane / keep only active pane |
 | `Space z` | Toggle Zen mode |
 | `Space n` | Toggle relative line numbers |
 | `Space q` | Close active pane |
+
+Drag the divider between two panes with the mouse to resize them, and double-click it to even the split out. Panes keep a minimum size, and sizes are saved with the session.
 
 Ex commands include `:split [file]`, `:vsplit [file]`, `:close`, `:only`, `:tabnext [number]`, `:tabprev`, `:tabfirst`, `:tablast`, `:tabmove [+/-]N`, and `:tabclose`. **Close Pane** (`:close`) closes the active tab when only one pane is open. **Close Tab** (`:tabclose` or `:close tab`) closes the active buffer tab. A bare `:tabmove` moves the tab to the end. An unsigned position is zero-based. `:q` closes the active pane when several are open. `:qa` quits the editor. Set line numbers with `:set rnu`, `:set nornu`, or `:set rnu!`. Relative numbering keeps the current line's absolute number visible.
 
@@ -395,7 +400,7 @@ Those four packages never import the editor. To add a language, edit `internal/s
 Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. `terminal.go` translates Bubble Tea messages into Loom input and delivers asynchronous editor updates on the same event loop. `terminal_frame.go` draws into an Ultraviolet cell buffer so split geometry, popup placement, dimming, and mouse coordinates can share the existing renderer. The text-editing commands and language-server requests do not depend on Bubble Tea.
 
 - `editor.go` owns modal input and the active buffer. `config.go` merges and validates named command bindings. The palette and which-key read from the same command registry.
-- `panes.go` owns the split tree. Leaves hold independent viewport state and refer to shared buffers. Only the active leaf projects its cursor and scroll fields into the buffer for the editing engine. Rendering an inactive leaf temporarily projects that leaf's view and restores the active projection afterward.
+- `panes.go` owns the split tree, including each split's size ratio, the resize commands and divider geometry; dragging a divider is handled in `mouse.go`. Leaves hold independent viewport state and refer to shared buffers. Only the active leaf projects its cursor and scroll fields into the buffer for the editing engine. Rendering an inactive leaf temporarily projects that leaf's view and restores the active projection afterward.
 - `workspace.go` owns the ordered buffer tabs and session persistence. Closing a pane leaves its buffer open. Closing a tab replaces that buffer in every pane that was showing it. Session loading accepts the older two-pane format and prunes missing files.
 - `directory.go` runs the modal engine on a scratch listing. Newline tags associate edited rows with original entries, and a reserved tag identifies the parent row. A write first validates the plan, then stages sources and rolls back failed filesystem moves. Navigation checks for unapplied edits.
 - `language.go`, `lsp.go`, and `actions.go` handle LSP transport and edits. Worker goroutines send callbacks to the editor event loop. Workspace edits validate versions and disk content before applying edits.
