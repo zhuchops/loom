@@ -166,6 +166,10 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		timer := tea.Tick(time.Until(expiry), func(time.Time) tea.Msg { return flashExpired{} })
 		next = tea.Batch(next, timer)
 	}
+	if e.clipboardSet {
+		e.clipboardSet = false
+		next = tea.Batch(next, tea.SetClipboard(e.clipboardOut))
+	}
 	return m, tea.Batch(next, m.scheduleSignature(), m.scheduleHover())
 }
 

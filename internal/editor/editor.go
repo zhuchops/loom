@@ -58,6 +58,8 @@ type editor struct {
 	register                    string
 	linewise                    bool
 	registerTags                []int
+	clipboardOut                string
+	clipboardSet                bool
 	recording                   string
 	macros                      map[string][]keyInput
 	lastMacro                   string
@@ -332,14 +334,15 @@ func (e *editor) operate(op string, s span, linewise bool) {
 		s.end--
 		linewise = false
 	}
-	e.register, e.linewise = string(e.b.text[s.start:s.end]), linewise
-	if linewise && !strings.HasSuffix(e.register, "\n") {
-		e.register += e.b.newline()
+	text := string(e.b.text[s.start:s.end])
+	if linewise && !strings.HasSuffix(text, "\n") {
+		text += e.b.newline()
 	}
-	e.registerTags = nil
+	var tags []int
 	if e.b.tags != nil && linewise {
-		e.registerTags = slices.Clone(e.b.tags[s.start:s.end])
+		tags = slices.Clone(e.b.tags[s.start:s.end])
 	}
+	e.setRegister(text, linewise, tags)
 	if op != "yank" && (s.start != s.end || op == "change") {
 		value := ""
 		if linewise && op == "change" && s.end > s.start && e.b.text[s.end-1] == '\n' {
@@ -356,6 +359,7 @@ func (e *editor) operate(op string, s span, linewise bool) {
 }
 
 func (e *editor) paste(after bool) {
+	e.syncRegister()
 	if e.register == "" {
 		return
 	}

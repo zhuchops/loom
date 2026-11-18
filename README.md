@@ -185,6 +185,10 @@ Press Enter between adjacent braces to put the closing brace on its own line and
 
 Search ignores case until you turn on match case. In regex mode `^` and `$` match at every line, and the replacement can use `$1` or `${name}` groups. The buttons in the panel (`Aa`, `ab`, `.*`, arrows, Replace, All, `×`) work with the mouse too.
 
+## System clipboard
+
+Yank, delete and change copy to the system clipboard, and paste reads it, so text moves freely between Loom and other applications. Loom uses `pbcopy`/`pbpaste` on macOS, `wl-copy`/`wl-paste`, `xclip` or `xsel` on Linux, and `clip.exe` on Windows. It also sends an OSC 52 sequence, which reaches your local clipboard over SSH in terminals that allow it. Text copied elsewhere pastes as plain characters; text you yanked in Loom keeps its line-wise behaviour. Pasting from another application with the terminal's own paste shortcut works as before.
+
 ## Markdown preview
 
 `Space m` (or **Toggle Markdown Preview** in the palette) opens a rendered preview in a split beside a Markdown file. It redraws as you type and scrolls to follow your cursor; the block under the cursor gets an accent bar. The wheel scrolls it by hand until the cursor moves again. The preview never takes focus, and `Space m` again closes it. It renders headings, emphasis, inline code, links, lists with task boxes, quotes, tables, rules and highlighted code fences.

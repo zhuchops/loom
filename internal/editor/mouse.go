@@ -284,9 +284,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			if pane.leaf != nil {
 				e.focusPane(pane.leaf)
 			}
-			if e.register != "" {
-				e.paste(false)
-			}
+			e.paste(false)
 			return
 		}
 		if button == mouseRight {

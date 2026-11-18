@@ -138,6 +138,7 @@ func shiftOffset(at int, edits []edit) int {
 
 func (e *editor) visualPaste(saveSelection bool) {
 	b := e.b
+	e.syncRegister()
 	if e.register == "" || b.anchor < 0 {
 		return
 	}
@@ -157,10 +158,11 @@ func (e *editor) visualPaste(saveSelection bool) {
 		value = b.newline() + value
 	}
 	if saveSelection {
-		e.register, e.linewise, e.registerTags = string(b.text[s.start:s.end]), b.visualLine, nil
-		if e.linewise && !strings.HasSuffix(e.register, "\n") {
-			e.register += b.newline()
+		text := string(b.text[s.start:s.end])
+		if b.visualLine && !strings.HasSuffix(text, "\n") {
+			text += b.newline()
 		}
+		e.setRegister(text, b.visualLine, nil)
 	}
 	b.replace(s, value)
 	b.cursor = s.start
