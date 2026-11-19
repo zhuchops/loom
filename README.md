@@ -158,6 +158,10 @@ Ex commands include `:split [file]`, `:vsplit [file]`, `:close`, `:only`, `:tabn
 
 Zen mode shows the active pane with a centered text area and the status line. Toggling it off reveals the same split layout, tabs, and sidebar.
 
+### Selecting past the edge
+
+While you drag a selection with the mouse, resting the pointer on or beyond the top, bottom, left or right edge of the pane scrolls the text so you can keep selecting. The further out the pointer, the faster it scrolls, and it keeps going while you hold still.
+
 ## Notifications
 
 Press **Space N**, run `:messages`, or click the status bar to open **Notification History**. It shows the latest 200 messages from the current session, newest first. Type to filter and press Enter or click a result to read its full text. Use the arrow keys, Page Up and Page Down, or the mouse wheel to scroll. Esc returns to the list with the filter and selection preserved.

@@ -49,12 +49,20 @@ func runTerminal(e *editor, explicitFile bool) error {
 	return err
 }
 
+type dragTickMsg struct{}
+
+func dragTick() tea.Cmd {
+	return tea.Tick(60*time.Millisecond, func(time.Time) tea.Msg { return dragTickMsg{} })
+}
+
 type terminalModel struct {
-	editor  *editor
-	view    renderer
-	ctx     context.Context
-	signals <-chan os.Signal
-	ticks   <-chan time.Time
+	dragAt      pointerEvent
+	dragTicking bool
+	editor      *editor
+	view        renderer
+	ctx         context.Context
+	signals     <-chan os.Signal
+	ticks       <-chan time.Time
 
 	signatureTarget signatureTarget
 	signatureToken  uint64
@@ -115,7 +123,22 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.MouseMsg:
 		if m.view.screen.Width() >= 4 && m.view.screen.Height() >= 5 {
-			m.view.mouse(e, terminalMouse(msg, m.view.leftDown))
+			p := terminalMouse(msg, m.view.leftDown)
+			m.view.mouse(e, p)
+			m.dragAt = p
+			if m.view.dragging && p.leftDown && !m.dragTicking {
+				m.dragTicking = true
+				next = dragTick()
+			}
+		}
+	case dragTickMsg:
+		next = nil
+		if m.view.dragging && m.view.leftDown {
+			// Keep scrolling while the pointer rests at the edge.
+			m.view.mouse(e, m.dragAt)
+			next = dragTick()
+		} else {
+			m.dragTicking = false
 		}
 	case completionReady:
 		if uint64(msg) == e.completion.token {

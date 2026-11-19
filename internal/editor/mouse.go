@@ -244,11 +244,8 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			e.tree.focused = false
 			e.invalidateCompletion()
 			e.scrollLock = false
-			if v.dragging && y < pane.y {
-				b.top = max(0, b.top-1)
-			}
-			if v.dragging && y >= pane.y+pane.h {
-				b.top = min(len(b.lines)-1, b.top+1)
+			if v.dragging && !press {
+				v.edgeScroll(pane, x, y)
 			}
 			row := b.rowAtScreen(b.top, max(0, min(pane.h-1, y-pane.y)))
 			at := cellOffset(b, row, x-pane.x-pane.gutter+b.left)
@@ -352,4 +349,29 @@ func (e *editor) editorContext() {
 		}, nil})
 	}
 	e.openMenu(m)
+}
+
+// edgeScroll moves the view while a selection is dragged to or past the edge of
+// the pane, so there is more text to reach. The further out the pointer is, the
+// faster it goes.
+func (v *renderer) edgeScroll(pane paneBox, x, y int) {
+	b := pane.b
+	band := 1
+	if pane.h < 4 {
+		band = 0
+	}
+	if above := pane.y + band - y; above > 0 {
+		b.top = max(0, b.top-min(above, 6))
+	} else if below := y - (pane.y + pane.h - 1 - band); below > 0 {
+		b.top = min(len(b.lines)-1, b.top+min(below, 6))
+	}
+	left, right := pane.x+pane.gutter, pane.x+pane.w-1
+	if out := left + 1 - x; out > 0 && b.left > 0 {
+		b.left = max(0, b.left-min(out, 8))
+	} else if out := x - (right - 1); out > 0 {
+		row := b.rowAtScreen(b.top, max(0, min(pane.h-1, y-pane.y)))
+		if cellOffset(b, row, right-left+b.left) < b.lineEnd(row) {
+			b.left += min(out, 8)
+		}
+	}
 }
