@@ -119,6 +119,18 @@ Alt (Option) combinations are now recognised, so you can bind `alt+up`, `alt+x` 
 
 `Ctrl+V` selects a rectangle. `y`, `d`, `x` and `c` act on it; `I` and `A` insert at its left or right edge and repeat what you type on every line when you press Esc. Pasting a block pastes its lines as ordinary text.
 
+### Sticky scroll and breadcrumbs
+
+When you scroll into the middle of a function or block, the lines that open it (up to three) stay pinned to the top of the pane; click one to jump there. The status line shows the chain of enclosing scopes at the cursor, like `Server › Handle › if ok`. Scopes come from indentation, so it works in every language. Turn it off with `"sticky_scroll": false` or in Settings. While it is on the cursor keeps at least three lines clear of the top edge.
+
+### Recent files, jump list, project replace
+
+**Space F** lists recently opened files in this project, and they also come first in Go to File (**Ctrl+P**). **Space j** lists the jump list, newest first. **Space H** replaces across the project: type what to find (literal text, or `re:` for a regular expression; ignores case unless you type a capital), then the replacement. A list shows every matching line; the first entry replaces them all. Files open in a buffer are edited in place, so you can undo and nothing is saved for you; other files are written directly. Binary, hidden, `node_modules`, `vendor` and `target` files are skipped. Regular expression replacements use `$1` for groups.
+
+### More Vim motions
+
+`*` and `#` search for the word under the cursor, `{` and `}` move by paragraph, `H` `M` `L` jump to the top, middle and bottom of the window, `Ctrl+D` / `Ctrl+U` scroll half a page, `zz` `zt` `zb` place the cursor line, `gv` reselects the last selection, `~` toggles case, and in Select mode `~`, `U` and `gu` / `gU` change case. `Ctrl+C` leaves Insert mode.
+
 ### Vim compatibility
 
 | Keys | Action in the Vim profile |

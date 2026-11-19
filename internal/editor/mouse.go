@@ -244,6 +244,17 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			e.tree.focused = false
 			e.invalidateCompletion()
 			e.scrollLock = false
+			if press {
+				for _, sb := range v.sticky {
+					if sb.b == b && x >= sb.x && x < sb.x+sb.w && y >= sb.y && y < sb.y+len(sb.rows) {
+						from := e.jumpPoint()
+						b.anchor, b.cursor = -1, e.firstNonBlank(sb.rows[y-sb.y])
+						e.rememberJump(from)
+						e.clampModalCursor()
+						return
+					}
+				}
+			}
 			if v.dragging && !press {
 				v.edgeScroll(pane, x, y)
 			}

@@ -6,7 +6,16 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	// Never read or write the real config directory (themes, recent files).
+	dir, err := os.MkdirTemp("", "loom-test-config")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("XDG_CONFIG_HOME", dir)
+	defer os.RemoveAll(dir)
 	clipboardCopy = func(string) bool { return true }
 	clipboardPaste = func() (string, bool) { return "", false }
-	os.Exit(m.Run())
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
 }

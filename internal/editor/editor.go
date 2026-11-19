@@ -62,6 +62,7 @@ type editor struct {
 	history                     []string
 	yanking                     bool
 	blockInsert                 *blockInsert
+	recent                      []string
 	linewise                    bool
 	registerTags                []int
 	clipboardOut                string
@@ -910,6 +911,7 @@ func (e *editor) switchBuffer(b *buffer) {
 		}
 		p.b, p.cursor, p.top, p.left = b, b.cursor, b.top, b.left
 	}
+	e.touchRecent(b.path)
 	e.afterBufferSwitch()
 }
 

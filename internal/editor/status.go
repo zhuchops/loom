@@ -95,6 +95,9 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 	if e.problemsVisible(b) {
 		left += v.drawProblems(e, b, left, h-1, rightX-left) + 2
 	}
+	if crumbs := e.breadcrumbs(b); crumbs != "" && e.cfg.StickyScroll && w >= 60 {
+		name += "  ›  " + crumbs
+	}
 	message := e.message
 	if message != "" {
 		name = message + "  ·  " + name

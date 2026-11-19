@@ -352,7 +352,7 @@ func (e *editor) openFiles() {
 			if err != nil {
 				e.notify(err.Error())
 			}
-			m.options = options
+			m.options = append(e.recentOptions(true), options...)
 			m.filter()
 		}
 	}()

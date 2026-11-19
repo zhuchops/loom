@@ -41,6 +41,7 @@ type renderer struct {
 	treeBox, menuBox, completeBox, directoryBox hitBox
 	previewBox                                  hitBox
 	panes                                       []paneBox
+	sticky                                      []stickyBox
 	previews                                    []previewBox
 	barHits                                     []barHit
 	paneDividers                                []paneDivider
@@ -66,6 +67,7 @@ func (v *renderer) draw(e *editor) {
 	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
+	v.sticky = v.sticky[:0]
 	v.paneDividers = v.paneDividers[:0]
 	v.previews = v.previews[:0]
 	v.divider = -1
@@ -294,7 +296,11 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	col := cellWidth(string(b.text[b.lines[row]:b.cursor]))
 	e.useTabWidth(b)
 	if focused && !e.scrollLock {
-		so := min(e.cfg.Scrolloff, (box.h-1)/2)
+		so := e.cfg.Scrolloff
+		if e.cfg.StickyScroll && box.h >= 10 {
+			so = max(so, 3) // keep the cursor clear of the pinned lines
+		}
+		so = min(so, (box.h-1)/2)
 		reach := min(row+so, len(b.lines)-1)
 		b.top = max(0, max(reach-box.h+1, min(row-so, b.top)))
 		b.left = max(0, max(col-(box.w-gutter-1), min(col, b.left)))
@@ -443,6 +449,9 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 				}
 			}
 		}
+	}
+	if rows := e.stickyRows(b, box.h); len(rows) > 0 {
+		v.drawSticky(e, b, box, gutter, rows)
 	}
 	if !focused || e.tree.focused || e.menu != nil {
 		return

@@ -26,6 +26,7 @@ func runTerminal(e *editor, explicitFile bool) error {
 		view:   renderer{screen: newTerminalFrame(0, 0)},
 		ctx:    ctx, signals: signals, ticks: ticker.C,
 	}
+	e.loadRecent()
 	e.restoreSession(explicitFile)
 	if !explicitFile {
 		e.showDashboard()

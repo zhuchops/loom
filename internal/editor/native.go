@@ -19,6 +19,10 @@ func (e *editor) pageRows() int {
 
 func (e *editor) registerNativeCommands() {
 	e.registerMarkCommands()
+	e.registerVimExtras()
+	e.add("recent-files", "Recent Files", func(e *editor) { e.recentMenu() })
+	e.add("jumps", "Jump List", func(e *editor) { e.jumpsMenu() })
+	e.add("project-replace", "Replace in Project", func(e *editor) { e.projectReplacePrompt() })
 	e.registerRegisterCommands()
 	e.registerBlockCommands()
 	page := func(name string, dir string) {

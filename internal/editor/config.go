@@ -40,6 +40,8 @@ type config struct {
 	IndentStyle string `json:"indent_style"`
 	// Scrolloff keeps this many lines visible above and below the cursor.
 	Scrolloff int `json:"scrolloff"`
+	// StickyScroll pins the enclosing scopes of the top line to the pane.
+	StickyScroll bool `json:"sticky_scroll"`
 
 	Profile      string                       `json:"profile"`
 	Bindings     map[string]map[string]string `json:"bindings"`
@@ -138,12 +140,12 @@ func configPath() string {
 
 func defaultConfig() config {
 	return config{
-		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto", Scrolloff: 5,
+		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto", Scrolloff: 5, StickyScroll: true,
 		Languages: defaultLanguages(),
 		Bindings: map[string]map[string]string{
 			"global": {"ctrl+p": "files", "ctrl+s": "save", "ctrl+q": "quit", "ctrl+f": "search", "ctrl+b": "toggle-sidebar", "ctrl+a": "select-all",
 				"alt+up": "move-line-up", "alt+down": "move-line-down", "ctrl+z": "undo-here", "ctrl+y": "redo-here", "pageup": "page-up", "pagedown": "page-down"},
-			"insert": {"home": "insert-home", "end": "insert-end", "ctrl+left": "insert-word-left", "ctrl+right": "insert-word-right", "alt+left": "insert-word-left", "alt+right": "insert-word-right", "alt+backspace": "delete-word-back", "ctrl+home": "top", "ctrl+end": "bottom", "shift+tab": "insert-outdent", "ctrl+space": "complete", "ctrl+n": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
+			"insert": {"ctrl+c": "normal", "home": "insert-home", "end": "insert-end", "ctrl+left": "insert-word-left", "ctrl+right": "insert-word-right", "alt+left": "insert-word-left", "alt+right": "insert-word-right", "alt+backspace": "delete-word-back", "ctrl+home": "top", "ctrl+end": "bottom", "shift+tab": "insert-outdent", "ctrl+space": "complete", "ctrl+n": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
 				"backspace": "backspace", "delete": "delete-forward", "enter": "newline", "tab": "insert-tab", "esc": "normal"},
 			"modal": {"home": "home", "end": "end", "ctrl+home": "top", "ctrl+end": "bottom", "ctrl+left": "back-word", "ctrl+right": "word", "alt+left": "back-word", "alt+right": "word", "h": "left", "j": "down", "k": "up", "l": "right", "left": "left", "down": "down", "up": "up", "right": "right",
 				"f": "find-char-f", "F": "find-char-F", "t": "find-char-t", "T": "find-char-T", ";": "find-char-next", ",": "find-char-prev",
@@ -164,17 +166,19 @@ func defaultConfig() config {
 				"ctrl+w >": "pane-wider", "ctrl+w <": "pane-narrower", "ctrl+w +": "pane-taller", "ctrl+w -": "pane-shorter", "ctrl+w =": "pane-equalize",
 				"ctrl+w w": "focus-pane", "ctrl+w ctrl+w": "focus-pane", "ctrl+w c": "close-split", "ctrl+w o": "only-pane",
 				"g d": "definition", "g r": "references", "g h": "hover", "g ]": "jump-forward", "ctrl+o": "jump-back",
-				"\"": "register-prefix", "m": "mark-set", "'": "mark-line", "`": "mark-exact", "ctrl+v": "select-block", "space y": "registers",
+				"*": "search-word-next", "#": "search-word-prev", "H": "screen-top", "M": "screen-middle", "L": "screen-bottom",
+				"ctrl+d": "half-page-down", "ctrl+u": "half-page-up", "space j": "jumps", "space F": "recent-files", "space H": "project-replace",
+				"m": "mark-set", "ctrl+v": "select-block", "space y": "registers",
 				"i": "insert", "a": "append", "A": "append-line", "I": "insert-line", "o": "open-below", "O": "open-above",
 				"v": "select", "u": "undo", "ctrl+r": "redo", "x": "delete-forward", "p": "paste-after", "P": "paste-before",
 				"/": "search", ".": "repeat", "] d": "next-problem", "[ d": "prev-problem", "n": "next-match", "N": "prev-match", ":": "ex", "esc": "normal"},
 			"vim.normal": {"d": "delete-op", "c": "change-op", "y": "yank-op", ">": "indent-op", "<": "outdent-op", "q": "macro-record", "@": "macro-play",
-				"g c c": "toggle-comment",
-				"z a":   "fold-toggle", "z c": "fold-close", "z o": "fold-open", "z M": "fold-close-all", "z R": "fold-open-all", "g i": "implementation",
+				"{": "paragraph-prev", "}": "paragraph-next", "\"": "register-prefix", "'": "mark-line", "`": "mark-exact", "g c c": "toggle-comment", "g v": "reselect", "~": "toggle-case", "z z": "scroll-center", "z t": "scroll-top", "z b": "scroll-bottom",
+				"z a": "fold-toggle", "z c": "fold-close", "z o": "fold-open", "z M": "fold-close-all", "z R": "fold-open-all", "g i": "implementation",
 				"V": "select-line", "^": "first-nonblank", "D": "delete-to-end", "C": "change-to-end", "Y": "yank-line",
 				"r": "replace-character", "J": "join-lines", "%": "match-bracket",
 				"s a": "mini-add-motion", "s d": "mini-delete", "s r": "mini-replace", "s f": "mini-find", "s F": "mini-find-back", "s h": "mini-highlight"},
-			"vim.select": {"d": "delete-selection", "c": "change-selection", "y": "yank-selection", ">": "indent-selection", "<": "outdent-selection", "I": "block-insert", "A": "block-append", "S": "surround-selection", "i": "inner-object", "a": "around-object",
+			"vim.select": {"d": "delete-selection", "c": "change-selection", "y": "yank-selection", ">": "indent-selection", "<": "outdent-selection", "I": "block-insert", "A": "block-append", "~": "toggle-case-selection", "U": "upper-selection", "g u": "lower-selection", "g U": "upper-selection", "S": "surround-selection", "i": "inner-object", "a": "around-object",
 				"g c": "toggle-comment",
 				"V":   "select-line", "o": "select-other-end", "ctrl+c": "yank-selection", "ctrl+x": "delete-selection", "^": "first-nonblank", "x": "delete-selection", "J": "join-lines", "%": "match-bracket", "p": "visual-paste", "P": "visual-paste-keep",
 				"s a": "mini-add-selection"},
@@ -221,6 +225,7 @@ func applyConfig(cfg config, path string, explicit, restricted bool) (config, er
 		RestoreSession  *bool   `json:"restore_session"`
 		TabSize         *int    `json:"tab_size"`
 		Scrolloff       *int    `json:"scrolloff"`
+		StickyScroll    *bool   `json:"sticky_scroll"`
 		IndentStyle     *string `json:"indent_style"`
 
 		Profile      *string                      `json:"profile"`
@@ -256,6 +261,9 @@ func applyConfig(cfg config, path string, explicit, restricted bool) (config, er
 			return cfg, fmt.Errorf("tab_size must be between 1 and 16")
 		}
 		cfg.TabSize = *overlay.TabSize
+	}
+	if overlay.StickyScroll != nil {
+		cfg.StickyScroll = *overlay.StickyScroll
 	}
 	if overlay.Scrolloff != nil {
 		if *overlay.Scrolloff < 0 || *overlay.Scrolloff > 50 {
