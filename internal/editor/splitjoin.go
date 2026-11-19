@@ -9,16 +9,16 @@ import (
 )
 
 func (e *editor) indentUnit(base string) string {
-	switch e.cfg.IndentStyle {
+	switch e.indentStyleFor(e.b.path) {
 	case "tabs":
 		return "\t"
 	case "spaces":
-		return strings.Repeat(" ", e.cfg.TabSize)
+		return strings.Repeat(" ", e.tabSizeFor(e.b.path))
 	}
 	if e.cfg.languageFor(e.b.path) == "go" || e.cfg.languageFor(e.b.path) == "makefile" || strings.ContainsRune(base, '\t') {
 		return "\t"
 	}
-	return strings.Repeat(" ", e.cfg.TabSize)
+	return strings.Repeat(" ", e.tabSizeFor(e.b.path))
 }
 
 type argumentGroup struct {

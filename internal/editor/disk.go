@@ -173,7 +173,7 @@ func (e *editor) saveAgainst(expected *diskState, quit bool) bool {
 			return false
 		}
 		expected = &d
-		if e.cfg.FormatOnSave || e.cfg.OrganizeImports {
+		if e.formatOnSaveFor(b.path) || e.cfg.OrganizeImports {
 			formatErr = e.formatBuffer()
 		}
 	}

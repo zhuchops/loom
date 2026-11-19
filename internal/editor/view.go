@@ -292,8 +292,11 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	}
 	row := b.rowAt(b.cursor)
 	col := cellWidth(string(b.text[b.lines[row]:b.cursor]))
+	e.useTabWidth(b)
 	if focused && !e.scrollLock {
-		b.top = max(0, max(row-box.h+1, min(row, b.top)))
+		so := min(e.cfg.Scrolloff, (box.h-1)/2)
+		reach := min(row+so, len(b.lines)-1)
+		b.top = max(0, max(reach-box.h+1, min(row-so, b.top)))
 		b.left = max(0, max(col-(box.w-gutter-1), min(col, b.left)))
 	}
 	b.top = min(b.top, len(b.lines)-1)

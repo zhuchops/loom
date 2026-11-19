@@ -74,6 +74,22 @@ func (e *editor) registerNativeCommands() {
 	})
 	e.add("insert-outdent", "Outdent Line", func(e *editor) { e.outdentLineAtCursor() })
 	e.add("open-config", "Open Config File", func(e *editor) { e.openConfigFile() })
+	e.add("reload-config", "Reload Config", func(e *editor) { e.reloadConfig() })
+	e.add("settings", "Settings", func(e *editor) { e.settingsMenu(0) })
+	e.add("move-line-up", "Move Line Up", func(e *editor) { e.moveLines(-1) })
+	e.add("move-line-down", "Move Line Down", func(e *editor) { e.moveLines(1) })
+	e.add("delete-word-back", "Delete Word Backward", func(e *editor) {
+		b := e.b
+		if b.cursor == 0 {
+			return
+		}
+		start := motion(b, "back-word", b.cursor)
+		if start == b.cursor {
+			start = b.cursor - 1
+		}
+		b.replace(span{start, b.cursor}, "")
+		b.cursor = start
+	})
 }
 
 func (e *editor) clampCursor() {
@@ -82,6 +98,7 @@ func (e *editor) clampCursor() {
 
 // insertTab inserts a tab, or spaces up to the next tab stop.
 func (e *editor) insertTab() {
+	e.useTabWidth(e.b)
 	if e.indentUnit("") == "\t" {
 		e.insert("\t")
 		return
@@ -124,4 +141,48 @@ func (e *editor) openConfigFile() {
 		}
 	}
 	e.open(path)
+}
+
+// moveLines swaps the cursor's line, or every selected line, with its neighbour.
+func (e *editor) moveLines(dir int) {
+	b := e.b
+	if b.tags != nil || len(b.lines) < 2 {
+		return
+	}
+	first, last := b.rowAt(b.cursor), b.rowAt(b.cursor)
+	if b.anchor >= 0 {
+		first, last = b.rowAt(min(b.anchor, b.cursor)), b.rowAt(max(b.anchor, b.cursor))
+	}
+	if dir < 0 && first == 0 || dir > 0 && last == len(b.lines)-1 {
+		return
+	}
+	nl := b.newline()
+	lineText := func(r int) string { return string(b.text[b.lines[r]:b.lineEnd(r)]) }
+	var block []string
+	for r := first; r <= last; r++ {
+		block = append(block, lineText(r))
+	}
+	neighbour := first - 1
+	if dir > 0 {
+		neighbour = last + 1
+	}
+	other := lineText(neighbour)
+	from, to := b.lines[min(first, neighbour)], b.lineEnd(max(last, neighbour))
+	joined := strings.Join(block, nl)
+	var out string
+	if dir < 0 {
+		out = joined + nl + other
+	} else {
+		out = other + nl + joined
+	}
+	shift := len([]rune(other)) + len([]rune(nl))
+	if dir < 0 {
+		shift = -shift
+	}
+	cursor, anchor := b.cursor+shift, b.anchor
+	if anchor >= 0 {
+		anchor += shift
+	}
+	b.replace(span{from, to}, out)
+	b.cursor, b.anchor = cursor, anchor
 }

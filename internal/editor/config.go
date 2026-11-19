@@ -22,6 +22,10 @@ type languageConfig struct {
 	Server     []string `json:"server,omitempty"`
 	Format     []string `json:"format,omitempty"`
 	Roots      []string `json:"roots,omitempty"`
+	// Per-language settings. Unset means the global value applies.
+	TabSize      int    `json:"tab_size,omitempty"`
+	IndentStyle  string `json:"indent_style,omitempty"`
+	FormatOnSave *bool  `json:"format_on_save,omitempty"`
 }
 
 type config struct {
@@ -34,6 +38,8 @@ type config struct {
 	// elsewhere), "tabs" or "spaces".
 	TabSize     int    `json:"tab_size"`
 	IndentStyle string `json:"indent_style"`
+	// Scrolloff keeps this many lines visible above and below the cursor.
+	Scrolloff int `json:"scrolloff"`
 
 	Profile      string                       `json:"profile"`
 	Bindings     map[string]map[string]string `json:"bindings"`
@@ -43,7 +49,8 @@ type config struct {
 	AutoPairs    bool                         `json:"auto_pairs"`
 	Theme        string                       `json:"theme"`
 
-	path string // where the config was read from; not part of the file
+	explicit bool   // the path came from -config
+	path     string // where the config was read from; not part of the file
 }
 
 // Language servers and formatters are used only when their command is on PATH.
@@ -131,14 +138,14 @@ func configPath() string {
 
 func defaultConfig() config {
 	return config{
-		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto",
+		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto", Scrolloff: 5,
 		Languages: defaultLanguages(),
 		Bindings: map[string]map[string]string{
 			"global": {"ctrl+p": "files", "ctrl+s": "save", "ctrl+q": "quit", "ctrl+f": "search", "ctrl+b": "toggle-sidebar", "ctrl+a": "select-all",
-				"ctrl+z": "undo-here", "ctrl+y": "redo-here", "pageup": "page-up", "pagedown": "page-down"},
-			"insert": {"home": "insert-home", "end": "insert-end", "ctrl+left": "insert-word-left", "ctrl+right": "insert-word-right", "ctrl+home": "top", "ctrl+end": "bottom", "shift+tab": "insert-outdent", "ctrl+space": "complete", "ctrl+n": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
+				"alt+up": "move-line-up", "alt+down": "move-line-down", "ctrl+z": "undo-here", "ctrl+y": "redo-here", "pageup": "page-up", "pagedown": "page-down"},
+			"insert": {"home": "insert-home", "end": "insert-end", "ctrl+left": "insert-word-left", "ctrl+right": "insert-word-right", "alt+left": "insert-word-left", "alt+right": "insert-word-right", "alt+backspace": "delete-word-back", "ctrl+home": "top", "ctrl+end": "bottom", "shift+tab": "insert-outdent", "ctrl+space": "complete", "ctrl+n": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
 				"backspace": "backspace", "delete": "delete-forward", "enter": "newline", "tab": "insert-tab", "esc": "normal"},
-			"modal": {"home": "home", "end": "end", "ctrl+home": "top", "ctrl+end": "bottom", "ctrl+left": "back-word", "ctrl+right": "word", "h": "left", "j": "down", "k": "up", "l": "right", "left": "left", "down": "down", "up": "up", "right": "right",
+			"modal": {"home": "home", "end": "end", "ctrl+home": "top", "ctrl+end": "bottom", "ctrl+left": "back-word", "ctrl+right": "word", "alt+left": "back-word", "alt+right": "word", "h": "left", "j": "down", "k": "up", "l": "right", "left": "left", "down": "down", "up": "up", "right": "right",
 				"f": "find-char-f", "F": "find-char-F", "t": "find-char-t", "T": "find-char-T", ";": "find-char-next", ",": "find-char-prev",
 				"w": "word", "b": "back-word", "e": "word-end", "0": "home", "$": "end", "g g": "top", "G": "bottom",
 				"space f": "files", "space /": "project-search", "space e": "explorer", "space x": "explorer-popup",
@@ -149,7 +156,7 @@ func defaultConfig() config {
 				"space t h": "tab-left", "space t l": "tab-right", "space t 0": "tab-first", "space t $": "tab-last", "space t x": "close-tab",
 				"space t 1": "tab-1", "space t 2": "tab-2", "space t 3": "tab-3", "space t 4": "tab-4", "space t 5": "tab-5",
 				"space t 6": "tab-6", "space t 7": "tab-7", "space t 8": "tab-8", "space t 9": "tab-9",
-				"space z": "zen", "space n": "relative-numbers", "space q": "close-split",
+				"space ,": "settings", "space z": "zen", "space n": "relative-numbers", "space q": "close-split",
 				"space g g": "git-panel", "space g d": "git-diff", "space g b": "git-branch",
 				"space m": "markdown-preview", "space h": "replace", "space o": "symbols", "space O": "workspace-symbols",
 				"ctrl+w v": "split", "ctrl+w s": "split-below", "ctrl+w h": "pane-h", "ctrl+w j": "pane-j", "ctrl+w k": "pane-k", "ctrl+w l": "pane-l",
@@ -175,7 +182,29 @@ func defaultConfig() config {
 }
 
 func readConfig(path string, explicit bool) (config, error) {
-	cfg := defaultConfig()
+	cfg, err := applyConfig(defaultConfig(), path, explicit, false)
+	cfg.path, cfg.explicit = path, explicit
+	return cfg, err
+}
+
+// loadConfig reads the user config, then the project's .loom.json on top.
+func loadConfig(path string, explicit bool, root string) (config, error) {
+	cfg, err := readConfig(path, explicit)
+	if err != nil {
+		return cfg, fmt.Errorf("config %s: %w", path, err)
+	}
+	project := filepath.Join(root, ".loom.json")
+	cfg, err = applyConfig(cfg, project, false, true)
+	if err != nil {
+		return cfg, fmt.Errorf("%s: %w", project, err)
+	}
+	return cfg, nil
+}
+
+// applyConfig overlays one JSON file on cfg. A project file is restricted: it
+// may change settings and bindings, but not run commands (servers, formatters,
+// plugins), because a repository you open is not trusted.
+func applyConfig(cfg config, path string, explicit, restricted bool) (config, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) && !explicit {
 		return cfg, nil
@@ -190,6 +219,7 @@ func readConfig(path string, explicit bool) (config, error) {
 		OrganizeImports *bool   `json:"organize_imports"`
 		RestoreSession  *bool   `json:"restore_session"`
 		TabSize         *int    `json:"tab_size"`
+		Scrolloff       *int    `json:"scrolloff"`
 		IndentStyle     *string `json:"indent_style"`
 
 		Profile      *string                      `json:"profile"`
@@ -225,6 +255,12 @@ func readConfig(path string, explicit bool) (config, error) {
 			return cfg, fmt.Errorf("tab_size must be between 1 and 16")
 		}
 		cfg.TabSize = *overlay.TabSize
+	}
+	if overlay.Scrolloff != nil {
+		if *overlay.Scrolloff < 0 || *overlay.Scrolloff > 50 {
+			return cfg, fmt.Errorf("scrolloff must be between 0 and 50")
+		}
+		cfg.Scrolloff = *overlay.Scrolloff
 	}
 	if overlay.IndentStyle != nil {
 		switch *overlay.IndentStyle {
@@ -262,6 +298,24 @@ func readConfig(path string, explicit bool) (config, error) {
 		if lang.Roots != nil {
 			base.Roots = lang.Roots
 		}
+		if lang.TabSize != 0 {
+			if lang.TabSize < 1 || lang.TabSize > 16 {
+				return cfg, fmt.Errorf("%s: tab_size must be between 1 and 16", name)
+			}
+			base.TabSize = lang.TabSize
+		}
+		if lang.IndentStyle != "" {
+			if lang.IndentStyle != "auto" && lang.IndentStyle != "tabs" && lang.IndentStyle != "spaces" {
+				return cfg, fmt.Errorf("%s: indent_style must be auto, tabs or spaces", name)
+			}
+			base.IndentStyle = lang.IndentStyle
+		}
+		if lang.FormatOnSave != nil {
+			base.FormatOnSave = lang.FormatOnSave
+		}
+		if restricted && (lang.Server != nil || lang.Format != nil) {
+			return cfg, fmt.Errorf("a project config may not set language servers or formatters")
+		}
 		cfg.Languages[name] = base
 	}
 	for _, name := range sortedKeys(overlay.LanguageServers) {
@@ -282,7 +336,12 @@ func readConfig(path string, explicit bool) (config, error) {
 			dst[sequence] = command
 		}
 	}
-	cfg.Plugins = overlay.Plugins
+	if restricted && len(overlay.Plugins) > 0 {
+		return cfg, fmt.Errorf("a project config may not set plugins")
+	}
+	if !restricted {
+		cfg.Plugins = overlay.Plugins
+	}
 	return cfg, nil
 }
 

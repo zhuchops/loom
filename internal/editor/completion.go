@@ -228,6 +228,7 @@ func (e *editor) document(b *buffer) document {
 	return document{path: b.path, language: e.cfg.languageFor(b.path), text: string(b.text), version: b.version, position: b.lspPosition(b.cursor), end: b.lspPosition(len(b.text))}
 }
 func (e *editor) didSave(b *buffer) {
+	e.configSaved(b.path)
 	if s := e.session(b, false); s != nil {
 		doc := e.document(b)
 		go s.didSave(doc)

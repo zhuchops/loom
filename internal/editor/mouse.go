@@ -247,6 +247,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			if v.dragging && !press {
 				v.edgeScroll(pane, x, y)
 			}
+			e.useTabWidth(b)
 			row := b.rowAtScreen(b.top, max(0, min(pane.h-1, y-pane.y)))
 			at := cellOffset(b, row, x-pane.x-pane.gutter+b.left)
 			if press {

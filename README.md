@@ -79,6 +79,30 @@ Besides the Vim keys, the usual editor shortcuts work in every mode: `Ctrl+F` fi
 
 `tab_size` (1–16, default 4) sets how wide a tab is drawn and how many spaces make one indent. `indent_style` is `"auto"` (tabs in Go and Makefiles, spaces elsewhere), `"tabs"` or `"spaces"`. `Tab` in Insert follows it, inserting spaces up to the next tab stop when spaces are in use. The **Open Config File** command opens (and creates, if needed) your config.
 
+### Settings, reload and project config
+
+**Space ,** (or **Settings** in the palette) opens a settings list. Pick a row to flip or cycle it; the change is written to your config file and applied at once. A config file you save inside Loom reloads automatically, and **Reload Config** does it on demand. A broken file is reported and the running settings stay. Plugins are read only at startup.
+
+`scrolloff` (default 5) keeps that many lines visible around the cursor.
+
+Settings can be set per language, and per project:
+
+```json
+{
+  "tab_size": 4,
+  "languages": {
+    "python": { "tab_size": 4, "indent_style": "spaces", "format_on_save": false },
+    "go": { "indent_style": "tabs", "tab_size": 8 }
+  }
+}
+```
+
+A `.loom.json` in the project root is read on top of your config. Because a repository is not trusted, it may change settings, per-language settings and bindings, but not language servers, formatters or plugins; such a file is rejected.
+
+### Alt keys
+
+Alt (Option) combinations are now recognised, so you can bind `alt+up`, `alt+x` and so on. By default `Alt+↑` / `Alt+↓` move the line or selected lines, `Alt+←` / `Alt+→` move by word and `Alt+Backspace` deletes a word. Terminals send Alt as an Escape prefix; on macOS, set Option to "Use as Meta" in your terminal so it is not turned into special characters.
+
 ### Vim compatibility
 
 | Keys | Action in the Vim profile |

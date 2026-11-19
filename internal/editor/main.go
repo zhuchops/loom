@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.12.0"
+const version = "0.13.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
@@ -41,14 +41,6 @@ func run() error {
 	if !explicit {
 		*path = configPath()
 	}
-	cfg, err := readConfig(*path, explicit)
-	cfg.path = *path
-	if err != nil {
-		return fmt.Errorf("config %s: %w", *path, err)
-	}
-	if *profile != "" {
-		cfg.Profile = *profile
-	}
 	target := flag.Arg(0)
 	if info, err := os.Stat(target); err == nil && info.IsDir() {
 		if err := os.Chdir(target); err != nil {
@@ -56,14 +48,21 @@ func run() error {
 		}
 		target = ""
 	}
+	root, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	cfg, err := loadConfig(*path, explicit, root)
+	if err != nil {
+		return err
+	}
+	if *profile != "" {
+		cfg.Profile = *profile
+	}
 	if err := loadTheme(cfg); err != nil {
 		return err
 	}
 	b, err := loadBuffer(target)
-	if err != nil {
-		return err
-	}
-	root, err := os.Getwd()
 	if err != nil {
 		return err
 	}

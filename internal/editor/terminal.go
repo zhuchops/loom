@@ -215,7 +215,16 @@ func (m *terminalModel) View() tea.View {
 // Match the names used in Loom configs. Text takes priority for shifted
 // printable keys so a binding like "space N" still receives capital N.
 func terminalKey(k tea.Key) keyInput {
-	if k.Mod&(tea.ModAlt|tea.ModMeta|tea.ModHyper|tea.ModSuper) != 0 {
+	if k.Mod&(tea.ModMeta|tea.ModHyper|tea.ModSuper) != 0 {
+		return keyInput{}
+	}
+	if k.Mod&tea.ModAlt != 0 {
+		// Alt arrives as an escape prefix. Esc then a key is the same bytes, so
+		// only keys that mean something on their own are bound.
+		k.Mod &^= tea.ModAlt
+		if inner := terminalKey(k); inner.key != "" && inner.key != "esc" && inner.paste == "" {
+			return keyInput{key: "alt+" + inner.key}
+		}
 		return keyInput{}
 	}
 	switch k.Code {
