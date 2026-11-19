@@ -206,7 +206,7 @@ func (v *renderer) drawSourcePreview(p itemPreview, box hitBox, first int) {
 		for g.Next() && column < left+width {
 			text, size := g.Str(), max(1, g.Width())
 			if text == "\t" {
-				size = 4 - column%4
+				size = tabWidth - column%tabWidth
 				text = strings.Repeat(" ", size)
 			}
 			next := offset + utf8.RuneCountInString(g.Str())

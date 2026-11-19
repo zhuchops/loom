@@ -71,6 +71,14 @@ In Vim, `f.` moves to the next period, `;` repeats that move, and `,` finds a pe
 
 Vim supports counts, text objects, macros, and a single selection. A typing burst and a macro replay in one buffer each form one undo step.
 
+### Familiar keys
+
+Besides the Vim keys, the usual editor shortcuts work in every mode: `Ctrl+F` find, `Ctrl+Z` / `Ctrl+Y` undo and redo (without leaving Insert), `Ctrl+A` select all, `Ctrl+B` toggle the sidebar, `Ctrl+Q` quit, `PageUp` / `PageDown`, `Home` / `End`, `Ctrl+Home` / `Ctrl+End`, and `Ctrl+←` / `Ctrl+→` by word. In Insert, `Home` goes to the first character, then to column 0, and `Shift+Tab` outdents the line. In Select mode `Ctrl+C` copies and `Ctrl+X` cuts. Remap any of them under `bindings`.
+
+### Indentation settings
+
+`tab_size` (1–16, default 4) sets how wide a tab is drawn and how many spaces make one indent. `indent_style` is `"auto"` (tabs in Go and Makefiles, spaces elsewhere), `"tabs"` or `"spaces"`. `Tab` in Insert follows it, inserting spaces up to the next tab stop when spaces are in use. The **Open Config File** command opens (and creates, if needed) your config.
+
 ### Vim compatibility
 
 | Keys | Action in the Vim profile |

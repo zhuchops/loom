@@ -306,7 +306,7 @@ func cellOffset(b *buffer, row, col int) int {
 	for g.Next() {
 		width := max(1, g.Width())
 		if g.Str() == "\t" {
-			width = 4 - column%4
+			width = tabWidth - column%tabWidth
 		}
 		if col < column+width {
 			return at

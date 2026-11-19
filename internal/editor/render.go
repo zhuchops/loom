@@ -388,7 +388,7 @@ func cellWidth(s string) int {
 	width := 0
 	for g.Next() {
 		if g.Str() == "\t" {
-			width += 4 - width%4
+			width += tabWidth - width%tabWidth
 		} else {
 			width += max(1, g.Width())
 		}

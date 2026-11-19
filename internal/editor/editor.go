@@ -56,6 +56,7 @@ type editor struct {
 	pending                     pending
 	count                       int
 	register                    string
+	viewRows                    int
 	linewise                    bool
 	registerTags                []int
 	clipboardOut                string
@@ -89,6 +90,10 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 	if canonical, err := filepath.EvalSymlinks(root); err == nil {
 		root = canonical
 	}
+	if cfg.TabSize < 1 {
+		cfg.TabSize = 4
+	}
+	tabWidth = cfg.TabSize
 	e := &editor{cfg: cfg, b: b, buffers: []*buffer{b}, mode: "normal", root: root, macros: make(map[string][]keyInput),
 		commands: make(map[string]command), problems: make(map[string][]diagnostic), sessions: make(map[string]*languageSession), async: make(chan func(), 32), completionWake: make(chan uint64, 1)}
 	e.layout = &pane{b: b, cursor: b.cursor, top: b.top, left: b.left}
@@ -100,6 +105,7 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 	e.refreshTree("")
 	e.revealFile()
 	e.registerCommands()
+	e.registerNativeCommands()
 	e.workspaceCommands()
 	if err := e.registerPlugins(); err != nil {
 		return nil, err
@@ -137,7 +143,7 @@ func (e *editor) registerCommands() {
 	e.add("open-below", "Open Line Below", func(e *editor) { e.openLine(true) })
 	e.add("open-above", "Open Line Above", func(e *editor) { e.openLine(false) })
 	e.add("newline", "Insert Newline", func(e *editor) { e.insertNewline() })
-	e.add("insert-tab", "Insert Tab", func(e *editor) { e.insert("\t") })
+	e.add("insert-tab", "Insert Tab", func(e *editor) { e.insertTab() })
 	e.add("backspace", "Backspace", func(e *editor) {
 		if e.deleteAutoPair() {
 			return

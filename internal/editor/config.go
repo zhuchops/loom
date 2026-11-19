@@ -29,6 +29,11 @@ type config struct {
 	FormatOnSave    bool `json:"format_on_save"`
 	OrganizeImports bool `json:"organize_imports"`
 	RestoreSession  bool `json:"restore_session"`
+	// TabSize is the display width of a tab and the width of one indent level
+	// made of spaces. IndentStyle is "auto" (tabs in Go and Makefiles, spaces
+	// elsewhere), "tabs" or "spaces".
+	TabSize     int    `json:"tab_size"`
+	IndentStyle string `json:"indent_style"`
 
 	Profile      string                       `json:"profile"`
 	Bindings     map[string]map[string]string `json:"bindings"`
@@ -37,6 +42,8 @@ type config struct {
 	AutoComplete bool                         `json:"auto_complete"`
 	AutoPairs    bool                         `json:"auto_pairs"`
 	Theme        string                       `json:"theme"`
+
+	path string // where the config was read from; not part of the file
 }
 
 // Language servers and formatters are used only when their command is on PATH.
@@ -124,13 +131,14 @@ func configPath() string {
 
 func defaultConfig() config {
 	return config{
-		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true,
+		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto",
 		Languages: defaultLanguages(),
 		Bindings: map[string]map[string]string{
-			"global": {"ctrl+p": "files", "ctrl+s": "save"},
-			"insert": {"ctrl+space": "complete", "ctrl+n": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
+			"global": {"ctrl+p": "files", "ctrl+s": "save", "ctrl+q": "quit", "ctrl+f": "search", "ctrl+b": "toggle-sidebar", "ctrl+a": "select-all",
+				"ctrl+z": "undo-here", "ctrl+y": "redo-here", "pageup": "page-up", "pagedown": "page-down"},
+			"insert": {"home": "insert-home", "end": "insert-end", "ctrl+left": "insert-word-left", "ctrl+right": "insert-word-right", "ctrl+home": "top", "ctrl+end": "bottom", "shift+tab": "insert-outdent", "ctrl+space": "complete", "ctrl+n": "complete", "left": "insert-left", "right": "insert-right", "up": "insert-up", "down": "insert-down",
 				"backspace": "backspace", "delete": "delete-forward", "enter": "newline", "tab": "insert-tab", "esc": "normal"},
-			"modal": {"h": "left", "j": "down", "k": "up", "l": "right", "left": "left", "down": "down", "up": "up", "right": "right",
+			"modal": {"home": "home", "end": "end", "ctrl+home": "top", "ctrl+end": "bottom", "ctrl+left": "back-word", "ctrl+right": "word", "h": "left", "j": "down", "k": "up", "l": "right", "left": "left", "down": "down", "up": "up", "right": "right",
 				"f": "find-char-f", "F": "find-char-F", "t": "find-char-t", "T": "find-char-T", ";": "find-char-next", ",": "find-char-prev",
 				"w": "word", "b": "back-word", "e": "word-end", "0": "home", "$": "end", "g g": "top", "G": "bottom",
 				"space f": "files", "space /": "project-search", "space e": "explorer", "space x": "explorer-popup",
@@ -160,7 +168,7 @@ func defaultConfig() config {
 				"s a": "mini-add-motion", "s d": "mini-delete", "s r": "mini-replace", "s f": "mini-find", "s F": "mini-find-back", "s h": "mini-highlight"},
 			"vim.select": {"d": "delete-selection", "c": "change-selection", "y": "yank-selection", ">": "indent-selection", "<": "outdent-selection", "S": "surround-selection", "i": "inner-object", "a": "around-object",
 				"g c": "toggle-comment",
-				"V":   "select-line", "o": "select-other-end", "ctrl+c": "normal", "^": "first-nonblank", "x": "delete-selection", "J": "join-lines", "%": "match-bracket", "p": "visual-paste", "P": "visual-paste-keep",
+				"V":   "select-line", "o": "select-other-end", "ctrl+c": "yank-selection", "ctrl+x": "delete-selection", "^": "first-nonblank", "x": "delete-selection", "J": "join-lines", "%": "match-bracket", "p": "visual-paste", "P": "visual-paste-keep",
 				"s a": "mini-add-selection"},
 		},
 	}
@@ -177,10 +185,12 @@ func readConfig(path string, explicit bool) (config, error) {
 	}
 	defer f.Close()
 	var overlay struct {
-		RelativeNumbers *bool `json:"relative_numbers"`
-		FormatOnSave    *bool `json:"format_on_save"`
-		OrganizeImports *bool `json:"organize_imports"`
-		RestoreSession  *bool `json:"restore_session"`
+		RelativeNumbers *bool   `json:"relative_numbers"`
+		FormatOnSave    *bool   `json:"format_on_save"`
+		OrganizeImports *bool   `json:"organize_imports"`
+		RestoreSession  *bool   `json:"restore_session"`
+		TabSize         *int    `json:"tab_size"`
+		IndentStyle     *string `json:"indent_style"`
 
 		Profile      *string                      `json:"profile"`
 		Bindings     map[string]map[string]string `json:"bindings"`
@@ -209,6 +219,20 @@ func readConfig(path string, explicit bool) (config, error) {
 	}
 	if overlay.RestoreSession != nil {
 		cfg.RestoreSession = *overlay.RestoreSession
+	}
+	if overlay.TabSize != nil {
+		if *overlay.TabSize < 1 || *overlay.TabSize > 16 {
+			return cfg, fmt.Errorf("tab_size must be between 1 and 16")
+		}
+		cfg.TabSize = *overlay.TabSize
+	}
+	if overlay.IndentStyle != nil {
+		switch *overlay.IndentStyle {
+		case "auto", "tabs", "spaces":
+			cfg.IndentStyle = *overlay.IndentStyle
+		default:
+			return cfg, fmt.Errorf("indent_style must be auto, tabs or spaces")
+		}
 	}
 	if overlay.Profile != nil {
 		cfg.Profile = *overlay.Profile

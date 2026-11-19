@@ -279,6 +279,9 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 		return
 	}
 	v.panes = append(v.panes, paneBox{hitBox: box, b: b, gutter: gutter})
+	if focused {
+		e.viewRows = box.h
+	}
 	if b.highlightVersion != b.version || b.highlightPath != b.path {
 		b.highlightVersion, b.highlightPath = b.version, b.path
 		b.lexical = highlightSyntax(b, e.cfg.languageFor(b.path))
@@ -370,7 +373,7 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			g := graphemes.Str()
 			width := graphemes.Width()
 			if g == "\t" {
-				width = 4 - column%4
+				width = tabWidth - column%tabWidth
 				g = strings.Repeat(" ", width)
 			}
 			if width == 0 {

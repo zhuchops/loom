@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.11.1"
+const version = "0.12.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
@@ -42,6 +42,7 @@ func run() error {
 		*path = configPath()
 	}
 	cfg, err := readConfig(*path, explicit)
+	cfg.path = *path
 	if err != nil {
 		return fmt.Errorf("config %s: %w", *path, err)
 	}

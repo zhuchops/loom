@@ -237,7 +237,11 @@ func terminalKey(k tea.Key) keyInput {
 	case tea.KeyPgDown:
 		return keyInput{key: "pagedown"}
 	case tea.KeyLeft, tea.KeyRight, tea.KeyUp, tea.KeyDown, tea.KeyHome, tea.KeyEnd:
-		return keyInput{key: (tea.Key{Code: k.Code}).Keystroke()}
+		name := (tea.Key{Code: k.Code}).Keystroke()
+		if k.Mod&tea.ModCtrl != 0 {
+			name = "ctrl+" + name
+		}
+		return keyInput{key: name}
 	case tea.KeySpace, 0:
 		if k.Mod&tea.ModCtrl != 0 || k.Code == 0 {
 			return keyInput{key: "ctrl+space"}
