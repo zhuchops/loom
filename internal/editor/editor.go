@@ -57,6 +57,11 @@ type editor struct {
 	count                       int
 	register                    string
 	viewRows                    int
+	regs                        map[rune]register
+	regPick                     rune
+	history                     []string
+	yanking                     bool
+	blockInsert                 *blockInsert
 	linewise                    bool
 	registerTags                []int
 	clipboardOut                string
@@ -231,6 +236,13 @@ func (e *editor) registerCommands() {
 
 func (e *editor) takeCount() int { n := max(1, e.count); e.count = 0; return n }
 func (e *editor) normal() {
+	if e.mode == "select" {
+		e.b.markSelection()
+	}
+	if e.mode == "insert" && e.blockInsert != nil {
+		e.finishBlockInsert()
+	}
+	e.regPick = 0
 	if e.mode == "insert" {
 		b := e.b
 		if b.cursor > b.lines[b.rowAt(b.cursor)] {
@@ -238,7 +250,7 @@ func (e *editor) normal() {
 		}
 	}
 	e.mode, e.b.anchor, e.count, e.prefix, e.pending = "normal", -1, 0, "", pending{}
-	e.b.visualLine = false
+	e.b.visualLine, e.b.visualBlock = false, false
 	e.clampModalCursor()
 }
 func (e *editor) clampModalCursor() {
@@ -332,6 +344,11 @@ func (e *editor) insertMove(name string) {
 }
 
 func (e *editor) operate(op string, s span, linewise bool) {
+	if e.mode == "select" && e.b.visualBlock && e.b.anchor >= 0 && op != "indent" && op != "outdent" {
+		e.blockOperate(op)
+		return
+	}
+	e.yanking = op == "yank"
 	if op == "indent" || op == "outdent" {
 		e.shiftRows(op, s, 1)
 		return
@@ -365,7 +382,13 @@ func (e *editor) operate(op string, s span, linewise bool) {
 }
 
 func (e *editor) paste(after bool) {
-	e.syncRegister()
+	if e.regPick == 0 || e.regPick == '"' {
+		e.syncRegister()
+	}
+	e.withRegister(func() { e.pasteRegister(after) })
+}
+
+func (e *editor) pasteRegister(after bool) {
 	if e.register == "" {
 		return
 	}
@@ -617,6 +640,14 @@ func (e *editor) pendingInput(key string) {
 		}
 	case "mini-add", "mini-delete", "mini-replace-old", "mini-replace-new", "mini-find", "mini-find-back", "mini-highlight":
 		e.miniSurround(p, r)
+		return
+	case "register":
+		if validRegister(r) {
+			e.regPick = r
+		}
+		return
+	case "mark-set", "mark-line", "mark-exact":
+		e.markInput(p.kind, r)
 		return
 	case "record":
 		if r >= 'a' && r <= 'z' {
@@ -919,7 +950,7 @@ func (e *editor) tryQuit(force bool) {
 }
 func (e *editor) ex(line string) {
 	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ":"))
-	if e.directoryEx(line) || e.exAddress(line) {
+	if e.directoryEx(line) || e.exAddress(line) || e.runExRange(line) {
 		return
 	}
 	id, arg, _ := strings.Cut(strings.TrimSpace(line), " ")

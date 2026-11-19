@@ -42,6 +42,10 @@ func (e *editor) vimCommands() {
 
 func (e *editor) selectMode(linewise bool) {
 	b := e.b
+	if e.mode == "select" && b.visualBlock {
+		b.visualBlock, b.visualLine = false, linewise
+		return
+	}
 	if e.mode == "select" && b.anchor >= 0 {
 		if b.visualLine == linewise {
 			e.normal()
@@ -137,8 +141,14 @@ func shiftOffset(at int, edits []edit) int {
 }
 
 func (e *editor) visualPaste(saveSelection bool) {
+	if e.regPick == 0 || e.regPick == '"' {
+		e.syncRegister()
+	}
+	e.withRegister(func() { e.visualPasteRegister(saveSelection) })
+}
+
+func (e *editor) visualPasteRegister(saveSelection bool) {
 	b := e.b
-	e.syncRegister()
 	if e.register == "" || b.anchor < 0 {
 		return
 	}
@@ -162,6 +172,7 @@ func (e *editor) visualPaste(saveSelection bool) {
 		if b.visualLine && !strings.HasSuffix(text, "\n") {
 			text += b.newline()
 		}
+		e.yanking = false
 		e.setRegister(text, b.visualLine, nil)
 	}
 	b.replace(s, value)

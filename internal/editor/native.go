@@ -18,6 +18,9 @@ func (e *editor) pageRows() int {
 }
 
 func (e *editor) registerNativeCommands() {
+	e.registerMarkCommands()
+	e.registerRegisterCommands()
+	e.registerBlockCommands()
 	page := func(name string, dir string) {
 		e.add(name, "", func(e *editor) {
 			b := e.b

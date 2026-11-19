@@ -259,6 +259,10 @@ func (e *editor) openPalette() {
 		}
 		return nil
 	}}
+	if e.mode == "select" && e.b.anchor >= 0 {
+		e.b.markSelection()
+		m.input = "'<,'>"
+	}
 	for _, item := range exCommands {
 		m.options = append(m.options, option{item.title, ":" + item.syntax, func() { e.ex(item.syntax) }, nil})
 	}

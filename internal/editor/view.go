@@ -304,6 +304,10 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	if focused && b.anchor >= 0 {
 		selected = b.selection()
 	}
+	var blockSel []span
+	if focused && b.anchor >= 0 && b.visualBlock {
+		blockSel = b.blockSpans()
+	}
 	firstSelectedRow, lastSelectedRow := -1, -1
 	if focused && b.visualLine && b.anchor >= 0 {
 		firstSelectedRow, lastSelectedRow = b.rowAt(min(b.anchor, b.cursor)), b.rowAt(max(b.anchor, b.cursor))
@@ -401,7 +405,14 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 				}
 			}
 			next := offset + utf8.RuneCountInString(graphemes.Str())
-			if offset < selected.end && next > selected.start {
+			if blockSel != nil {
+				for _, sp := range blockSel {
+					if offset < sp.end && next > sp.start {
+						s = s.Background(selectStyle)
+						break
+					}
+				}
+			} else if offset < selected.end && next > selected.start {
 				s = s.Background(selectStyle)
 			}
 			if flashing && (offset < flash.inner.start && next > flash.outer.start || offset < flash.outer.end && next > flash.inner.end) {

@@ -36,7 +36,9 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 	if b.dashboard {
 		mode = "DASHBOARD"
 	}
-	if doc.mode == "select" && b.visualLine {
+	if doc.mode == "select" && b.visualBlock {
+		mode = "VISUAL BLOCK"
+	} else if doc.mode == "select" && b.visualLine {
 		mode = "VISUAL LINE"
 	} else if doc.mode == "select" && doc.cfg.Profile == "vim" {
 		mode = "VISUAL"

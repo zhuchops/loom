@@ -34,18 +34,20 @@ type buffer struct {
 	semanticPath, highlightPath       string
 	diagnostics                       []diagnostic
 
-	path       string
-	dashboard  bool
-	text       []rune
-	cursor     int
-	anchor     int
-	visualLine bool
-	lines      []int
-	version    int
-	saved      string
-	undo, redo []snapshot
-	top, left  int
-	folds      foldState
+	path        string
+	dashboard   bool
+	text        []rune
+	cursor      int
+	anchor      int
+	visualLine  bool
+	visualBlock bool
+	marks       map[rune]int
+	lines       []int
+	version     int
+	saved       string
+	undo, redo  []snapshot
+	top, left   int
+	folds       foldState
 	// wantCol is the column vertical moves aim for. It is only valid while the
 	// cursor still sits at wantAt, where the last vertical move left it.
 	wantCol, wantAt int
@@ -174,6 +176,7 @@ func (b *buffer) replaceAll(edits []edit, cursor int) {
 			tags = []int{}
 		}
 	}
+	shiftMarks(b.marks, edits)
 	b.restore(snapshot{result, cursor, tags, shiftAutoPairs(b.pairs, edits)})
 }
 
@@ -190,7 +193,7 @@ func (b *buffer) restore(s snapshot) {
 	b.tags = s.tags
 	b.pairs = s.pairs
 	b.text, b.cursor, b.anchor = s.text, min(s.cursor, len(s.text)), -1
-	b.visualLine = false
+	b.visualLine, b.visualBlock = false, false
 	b.version++
 	b.diagnostics = nil
 	b.indexLines()

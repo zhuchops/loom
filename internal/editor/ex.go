@@ -47,7 +47,7 @@ func (e *editor) exAddress(line string) bool {
 func (e *editor) paletteExact(line string) bool {
 	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ":"))
 	id, arg, _ := strings.Cut(line, " ")
-	if _, ok := exAddress(line); ok || line == "$" {
+	if _, ok := exAddress(line); ok || line == "$" || e.exRangeLike(line) {
 		return true
 	}
 	switch id {

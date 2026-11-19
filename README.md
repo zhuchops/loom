@@ -103,6 +103,22 @@ A `.loom.json` in the project root is read on top of your config. Because a repo
 
 Alt (Option) combinations are now recognised, so you can bind `alt+up`, `alt+x` and so on. By default `Alt+↑` / `Alt+↓` move the line or selected lines, `Alt+←` / `Alt+→` move by word and `Alt+Backspace` deletes a word. Terminals send Alt as an Escape prefix; on macOS, set Option to "Use as Meta" in your terminal so it is not turned into special characters.
 
+### Ex ranges: substitute, global, delete
+
+`:[range]s/pattern/replacement/[flags]` substitutes. Ranges are `%` (whole file), `N`, `N,M`, `.`, `$`, marks such as `'a`, and offsets like `.,+3`; with a selection the prompt starts with `'<,'>`. Flags are `g` (every match on a line) and `i` (ignore case). Patterns use Go regular expressions, so groups are `(…)`; the replacement takes `&` (whole match), `\1`–`\9`, `\n` and `\t`. `:g/pattern/d` deletes matching lines, `:g/pattern/s/a/b/` substitutes only on them, `:v/pattern/d` acts on the lines that do not match, and `:[range]d` deletes lines. Each command is one undo step and reports how many changes it made.
+
+### Marks
+
+`m{a-z}` sets a mark, `'{a-z}` jumps to its line and `` `{a-z} `` to the exact spot; `''` jumps back. Marks follow their text as you edit. `'<` and `'>` are the last selection.
+
+### Registers and clipboard history
+
+`"{name}` before a yank, delete or paste picks a register: `a`–`z` keep text to themselves (capitals append), `0` holds the last yank, `1`–`9` the last deletes, `"+` and `"*` are the system clipboard, and `"_` throws the text away without touching anything. **Space y** opens the registers and the history of the last 30 copies; pick one to paste it.
+
+### Visual block
+
+`Ctrl+V` selects a rectangle. `y`, `d`, `x` and `c` act on it; `I` and `A` insert at its left or right edge and repeat what you type on every line when you press Esc. Pasting a block pastes its lines as ordinary text.
+
 ### Vim compatibility
 
 | Keys | Action in the Vim profile |

@@ -68,12 +68,12 @@ func systemPaste() (string, bool) {
 	return "", false
 }
 
-// setRegister stores yanked text and mirrors it to the system clipboard. The
-// OSC52 copy goes out too, which is what reaches the local clipboard over SSH.
+// setRegister stores yanked or deleted text, honouring a register chosen with
+// a double quote. The default register is mirrored to the system clipboard,
+// like Vim's clipboard=unnamedplus. The OSC52 copy reaches the local clipboard
+// over SSH.
 func (e *editor) setRegister(text string, linewise bool, tags []int) {
-	e.register, e.linewise, e.registerTags = text, linewise, tags
-	e.clipboardOut, e.clipboardSet = text, true
-	clipboardCopy(text)
+	e.storeRegister(text, linewise, tags, e.yanking)
 }
 
 // syncRegister makes the register follow the system clipboard. Text copied in
