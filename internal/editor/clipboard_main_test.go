@@ -13,6 +13,7 @@ func TestMain(m *testing.M) {
 	}
 	os.Setenv("XDG_CONFIG_HOME", dir)
 	defer os.RemoveAll(dir)
+	animationsOn = false
 	clipboardCopy = func(string) bool { return true }
 	clipboardPaste = func() (string, bool) { return "", false }
 	code := m.Run()

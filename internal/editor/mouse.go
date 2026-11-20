@@ -134,9 +134,9 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 	if v.paneDrag != nil && down {
 		d := v.paneDrag
 		if d.vertical {
-			d.node.ratio = ratioFor(x-d.whole.x, d.whole.w)
+			d.node.setRatio(ratioFor(x-d.whole.x, d.whole.w), false)
 		} else {
-			d.node.ratio = ratioFor(y-d.whole.y, d.whole.h)
+			d.node.setRatio(ratioFor(y-d.whole.y, d.whole.h), false)
 		}
 		return
 	}
@@ -145,7 +145,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			if d := v.paneDividers[i]; d.box.contains(x, y) {
 				now := time.Now()
 				if now.Sub(v.lastClick) < 350*time.Millisecond && x == v.lastX && y == v.lastY {
-					d.node.ratio = 0 // double-click evens the split out
+					d.node.setRatio(0, e.cfg.Animations) // double-click evens the split out
 				} else {
 					v.paneDrag = &d
 				}
@@ -218,7 +218,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		if b.dashboard {
 			if press && pane.contains(x, y) {
 				e.focusPane(pane.leaf)
-				if at := dashboardActionsBox(pane.hitBox, e.dashboardSelection); at.contains(x, y) {
+				if at := e.dashboardBox(pane.hitBox); at.contains(x, y) {
 					e.dashboardSelection = at.start + y - at.y
 					e.dashboardInput("enter")
 				}

@@ -72,9 +72,10 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 	}
 	v.screen.FillArea(0, h-1, w, 1, ' ', panelStyle)
 	v.write(0, h-1, w, badge, badgeStyle)
+	v.write(cellWidth(badge), h-1, 1, "\ue0b0", panelStyle.Foreground(th.accent))
 	rightX := max(cellWidth(badge), w-cellWidth(right))
 	v.write(rightX, h-1, w-rightX, right, mutedStyle)
-	left := cellWidth(badge) + 1
+	left := cellWidth(badge) + 2
 	keys := keyLabel(doc.prefix)
 	if doc.pending.kind != "" {
 		keys += " " + doc.pending.kind

@@ -52,6 +52,8 @@ func runTerminal(e *editor, explicitFile bool) error {
 
 type dragTickMsg struct{}
 
+type animTickMsg struct{}
+
 func dragTick() tea.Cmd {
 	return tea.Tick(60*time.Millisecond, func(time.Time) tea.Msg { return dragTickMsg{} })
 }
@@ -59,6 +61,7 @@ func dragTick() tea.Cmd {
 type terminalModel struct {
 	dragAt      pointerEvent
 	dragTicking bool
+	animTicking bool
 	editor      *editor
 	view        renderer
 	ctx         context.Context
@@ -132,6 +135,8 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				next = dragTick()
 			}
 		}
+	case animTickMsg:
+		m.animTicking = false
 	case dragTickMsg:
 		next = nil
 		if m.view.dragging && m.view.leftDown {
@@ -189,6 +194,10 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if expiry := e.surroundFlash.until; expiry != flash {
 		timer := tea.Tick(time.Until(expiry), func(time.Time) tea.Msg { return flashExpired{} })
 		next = tea.Batch(next, timer)
+	}
+	if e.animating() && !m.animTicking {
+		m.animTicking = true
+		next = tea.Batch(next, tea.Tick(16*time.Millisecond, func(time.Time) tea.Msg { return animTickMsg{} }))
 	}
 	if e.clipboardSet {
 		e.clipboardSet = false

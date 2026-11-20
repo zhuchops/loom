@@ -42,6 +42,10 @@ type config struct {
 	Scrolloff int `json:"scrolloff"`
 	// StickyScroll pins the enclosing scopes of the top line to the pane.
 	StickyScroll bool `json:"sticky_scroll"`
+	// Animations eases pane resizes and splits; IndentGuides draws vertical
+	// guides in leading whitespace.
+	Animations   bool `json:"animations"`
+	IndentGuides bool `json:"indent_guides"`
 
 	Profile      string                       `json:"profile"`
 	Bindings     map[string]map[string]string `json:"bindings"`
@@ -140,7 +144,7 @@ func configPath() string {
 
 func defaultConfig() config {
 	return config{
-		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto", Scrolloff: 5, StickyScroll: true,
+		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto", Scrolloff: 5, StickyScroll: true, Animations: true, IndentGuides: true,
 		Languages: defaultLanguages(),
 		Bindings: map[string]map[string]string{
 			"global": {"ctrl+p": "files", "ctrl+s": "save", "ctrl+q": "quit", "ctrl+f": "search", "ctrl+b": "toggle-sidebar", "ctrl+a": "select-all",
@@ -226,6 +230,8 @@ func applyConfig(cfg config, path string, explicit, restricted bool) (config, er
 		TabSize         *int    `json:"tab_size"`
 		Scrolloff       *int    `json:"scrolloff"`
 		StickyScroll    *bool   `json:"sticky_scroll"`
+		Animations      *bool   `json:"animations"`
+		IndentGuides    *bool   `json:"indent_guides"`
 		IndentStyle     *string `json:"indent_style"`
 
 		Profile      *string                      `json:"profile"`
@@ -261,6 +267,12 @@ func applyConfig(cfg config, path string, explicit, restricted bool) (config, er
 			return cfg, fmt.Errorf("tab_size must be between 1 and 16")
 		}
 		cfg.TabSize = *overlay.TabSize
+	}
+	if overlay.Animations != nil {
+		cfg.Animations = *overlay.Animations
+	}
+	if overlay.IndentGuides != nil {
+		cfg.IndentGuides = *overlay.IndentGuides
 	}
 	if overlay.StickyScroll != nil {
 		cfg.StickyScroll = *overlay.StickyScroll

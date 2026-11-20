@@ -131,6 +131,15 @@ When you scroll into the middle of a function or block, the lines that open it (
 
 `*` and `#` search for the word under the cursor, `{` and `}` move by paragraph, `H` `M` `L` jump to the top, middle and bottom of the window, `Ctrl+D` / `Ctrl+U` scroll half a page, `zz` `zt` `zb` place the cursor line, `gv` reselects the last selection, `~` toggles case, and in Select mode `~`, `U` and `gu` / `gU` change case. `Ctrl+C` leaves Insert mode.
 
+### Look and feel
+
+- **Tab bar:** the active tab is marked with an accent bar, numbers are dimmed, unsaved tabs show a yellow dot, and `‹` / `›` appear when tabs scroll out of view.
+- **Pane borders:** the dividers around the pane you are working in are drawn in the accent color, and the divider you are dragging turns heavy.
+- **Animations:** resizing a pane with `Ctrl+W > < + - =`, evening out with a double-click, or opening a split glides over about 160 ms instead of jumping. Dragging with the mouse follows the pointer exactly. Turn it off with `"animations": false` (or in Settings) for reduced motion.
+- **Indent guides:** faint vertical lines mark each indent level in leading whitespace; `"indent_guides": false` hides them.
+- **Dashboard:** a block-letter logo with a color gradient, the project and git branch, and your five most recent files under the actions. Move with `j`/`k` or the arrow keys, open with Enter or a click.
+- **Status line:** the mode badge ends in a powerline arrow. The icons use a Nerd Font.
+
 ### Vim compatibility
 
 | Keys | Action in the Vim profile |

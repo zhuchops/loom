@@ -132,6 +132,8 @@ func (e *editor) settingsMenu(selected int) {
 	flip("Automatic completion", "auto_complete", e.cfg.AutoComplete)
 	flip("Automatic bracket pairs", "auto_pairs", e.cfg.AutoPairs)
 	flip("Restore session", "restore_session", e.cfg.RestoreSession)
+	flip("Animations", "animations", e.cfg.Animations)
+	flip("Indent guides", "indent_guides", e.cfg.IndentGuides)
 	flip("Sticky scroll and breadcrumbs", "sticky_scroll", e.cfg.StickyScroll)
 	choose("Tab size", "tab_size", strconv.Itoa(e.cfg.TabSize), func() any { return next([]int{2, 3, 4, 8}, e.cfg.TabSize) })
 	choose("Indent style", "indent_style", e.cfg.IndentStyle, func() any { return next([]string{"auto", "tabs", "spaces"}, e.cfg.IndentStyle) })
@@ -144,7 +146,7 @@ func (e *editor) settingsMenu(selected int) {
 	for i := range m.options {
 		run := m.options[i].run
 		label := m.options[i].label
-		if i < 10 {
+		if i < 12 {
 			m.options[i].run = func() {
 				run()
 				e.settingsMenu(settingsIndex(label))
@@ -157,6 +159,6 @@ func (e *editor) settingsMenu(selected int) {
 	}
 }
 
-var settingsOrder = []string{"Relative line numbers", "Format on save", "Organize imports on save", "Automatic completion", "Automatic bracket pairs", "Restore session", "Sticky scroll and breadcrumbs", "Tab size", "Indent style", "Scroll offset"}
+var settingsOrder = []string{"Relative line numbers", "Format on save", "Organize imports on save", "Automatic completion", "Automatic bracket pairs", "Restore session", "Animations", "Indent guides", "Sticky scroll and breadcrumbs", "Tab size", "Indent style", "Scroll offset"}
 
 func settingsIndex(label string) int { return slices.Index(settingsOrder, label) }

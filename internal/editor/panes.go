@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/zhuchops/loom/internal/markdown"
 )
@@ -20,6 +21,7 @@ type pane struct {
 	// A preview leaf renders b as Markdown instead of editing it. It never
 	// takes focus, and redraws from the buffer so it tracks every keystroke.
 	ratio              int // share of the first child in permille; 0 means half
+	anim               paneAnim
 	preview            bool
 	md                 []markdown.Line
 	mdVersion, mdWidth int
@@ -127,6 +129,11 @@ func (e *editor) splitPane(vertical bool, path string) {
 	second := *p
 	second.dashboardPrevious = nil
 	*p = pane{first: &first, second: &second, vertical: vertical}
+	if e.cfg.Animations {
+		// The new pane grows in from the edge.
+		p.ratio = 0
+		p.anim = paneAnim{from: 960, to: 500, start: time.Now()}
+	}
 	e.activePane = &second
 	if b != nil {
 		e.openLoaded(b)
@@ -239,17 +246,31 @@ func placePanes(p *pane, box hitBox, active *pane, leaves *[]panePlacement, divi
 	a, b := box, box
 	edge := box
 	if p.vertical {
-		a.w = splitSize(box.w, p.ratio, true)
+		a.w = splitSize(box.w, p.shownRatio(), true)
 		b.x, b.w = box.x+a.w+1, box.w-a.w-1
 		edge.x, edge.w = box.x+a.w, 1
 	} else {
-		a.h = splitSize(box.h, p.ratio, false)
+		a.h = splitSize(box.h, p.shownRatio(), false)
 		b.y, b.h = box.y+a.h+1, box.h-a.h-1
 		edge.y, edge.h = box.y+a.h, 1
 	}
 	*dividers = append(*dividers, paneDivider{edge, p.vertical, p, box})
 	placePanes(p.first, a, active, leaves, dividers)
 	placePanes(p.second, b, active, leaves, dividers)
+}
+
+// dividerTouches reports whether the divider runs along the edge of box, so
+// the active pane's borders can be picked out.
+func dividerTouches(d paneDivider, box hitBox) bool {
+	if box.w == 0 {
+		return false
+	}
+	if d.vertical {
+		beside := d.box.x == box.x+box.w || d.box.x+1 == box.x
+		return beside && d.box.y < box.y+box.h && box.y < d.box.y+d.box.h
+	}
+	beside := d.box.y == box.y+box.h || d.box.y+1 == box.y
+	return beside && d.box.x < box.x+box.w && box.x < d.box.x+d.box.w
 }
 
 // ancestors returns the splits from the root down to the one holding target.
@@ -288,7 +309,7 @@ func (e *editor) resizePane(vertical bool, steps int) {
 		} else {
 			ratio -= steps * resizeStep
 		}
-		node.ratio = max(50, min(950, ratio))
+		node.setRatio(max(50, min(950, ratio)), e.cfg.Animations)
 		return
 	}
 	e.notify("No split to resize in that direction")
@@ -300,7 +321,7 @@ func (e *editor) equalizePanes() {
 		if p == nil || p.b != nil {
 			return
 		}
-		p.ratio = 0
+		p.setRatio(0, e.cfg.Animations)
 		walk(p.first)
 		walk(p.second)
 	}
@@ -446,12 +467,26 @@ func (e *editor) drawLayout(v *renderer, box hitBox) {
 	var dividers []paneDivider
 	placePanes(e.layout, box, e.activePane, &leaves, &dividers)
 	v.paneDividers = append(v.paneDividers[:0], dividers...)
+	var active hitBox
+	for _, item := range leaves {
+		if item.p == e.activePane {
+			active = item.box
+		}
+	}
 	for _, d := range dividers {
-		mark := '─'
+		mark, style := '─', borderStyle
 		if d.vertical {
 			mark = '│'
 		}
-		v.screen.FillArea(d.box.x, d.box.y, d.box.w, d.box.h, mark, borderStyle)
+		if v.paneDrag != nil && v.paneDrag.node == d.node {
+			mark, style = '━', borderStyle.Foreground(th.accent)
+			if d.vertical {
+				mark = '┃'
+			}
+		} else if dividerTouches(d, active) {
+			style = borderStyle.Foreground(th.accent)
+		}
+		v.screen.FillArea(d.box.x, d.box.y, d.box.w, d.box.h, mark, style)
 	}
 	for _, item := range leaves {
 		p := item.p

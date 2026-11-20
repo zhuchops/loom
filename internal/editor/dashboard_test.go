@@ -31,7 +31,7 @@ func TestDashboardActionsAndFileTabs(t *testing.T) {
 	press(e, "space t 1")
 	v := renderer{screen: newTerminalFrame(100, 20)}
 	v.draw(e)
-	box := dashboardActionsBox(v.panes[0].hitBox, e.dashboardSelection)
+	box := e.dashboardBox(v.panes[0].hitBox)
 	v.mouse(e, pointerEvent{x: box.x, y: box.y + 2, leftDown: true})
 	if e.menu == nil || e.menu.title != "Open Buffers" {
 		t.Fatal("clicking the dashboard did not open the buffer picker")

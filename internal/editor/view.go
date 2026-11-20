@@ -167,19 +167,27 @@ func (v *renderer) drawTabs(e *editor, left, width int) {
 	if len(e.buffers) == 0 {
 		return
 	}
-	tabWidth := max(10, min(24, width/min(5, len(e.buffers))))
+	tabWidth := max(12, min(26, width/min(5, len(e.buffers))))
 	count := max(1, width/tabWidth)
 	active := slices.Index(e.buffers, e.b)
 	start := max(0, min(active-count+1, len(e.buffers)-count))
+	if start > 0 {
+		v.write(left, 0, 1, "‹", panelStyle.Foreground(th.accent))
+	}
 	for i := start; i < min(len(e.buffers), start+count); i++ {
 		b := e.buffers[i]
 		x := left + (i-start)*tabWidth
 		size := min(tabWidth, width-(x-left))
-		style := panelStyle
+		style, number := panelStyle, mutedStyle.Background(th.panel)
+		marker := panelStyle.Foreground(th.panel)
 		if b == e.b {
 			style = baseStyle.Bold(true)
+			number = mutedStyle.Background(th.bg)
+			marker = baseStyle.Foreground(th.accent).Bold(true)
 		} else if slices.ContainsFunc(e.layout.leaves(), func(p *pane) bool { return p.b == b }) {
 			style = menuStyle
+			number = mutedStyle.Background(menuStyle.bg)
+			marker = menuStyle
 		}
 		v.screen.FillArea(x, 0, size, 1, ' ', style)
 		name := filepath.Base(b.path)
@@ -188,13 +196,26 @@ func (v *renderer) drawTabs(e *editor, left, width int) {
 		} else if b.path == "" {
 			name = "Untitled"
 		}
-		v.write(x+1, 0, size-4, fmt.Sprintf("%d %s", i+1, name), style)
-		marker := "×"
-		if b.dirty() {
-			marker = "●"
+		// ▎ marks the active tab; the number is dimmer than the name.
+		glyph := " "
+		if b == e.b {
+			glyph = "▎"
 		}
-		v.write(x+size-2, 0, 1, marker, style)
+		v.write(x, 0, 1, glyph, marker)
+		label := fmt.Sprintf("%d ", i+1)
+		v.write(x+2, 0, size-5, label, number)
+		v.write(x+2+len(label), 0, max(0, size-5-len(label)), name, style)
+		mark, markStyle := "×", number
+		if b.dirty() {
+			mark, markStyle = "●", style.Foreground(th.yellow)
+		} else if b == e.b {
+			markStyle = style
+		}
+		v.write(x+size-2, 0, 1, mark, markStyle)
 		v.tabs = append(v.tabs, tabBox{hitBox{x, 0, size, 1, 0}, b, x + size - 2})
+	}
+	if shown := start + count; shown < len(e.buffers) {
+		v.write(left+width-1, 0, 1, "›", panelStyle.Foreground(th.accent))
 	}
 }
 
@@ -382,12 +403,22 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			matches = searchSpans.matchRange(offset, b.lineEnd(i))
 		}
 		graphemes := uniseg.NewGraphemes(string(b.text[offset:b.lineEnd(i)]))
+		leading := e.cfg.IndentGuides
 		for graphemes.Next() {
 			g := graphemes.Str()
 			width := graphemes.Width()
+			guide := false
 			if g == "\t" {
 				width = tabWidth - column%tabWidth
 				g = strings.Repeat(" ", width)
+				guide = leading && column > 0 && column%tabWidth == 0
+			} else if g == " " && leading {
+				guide = column > 0 && column%tabWidth == 0
+			} else {
+				leading = false
+			}
+			if guide {
+				g = "▏" + strings.Repeat(" ", width-1)
 			}
 			if width == 0 {
 				width = 1
@@ -401,6 +432,9 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 				s = next
 			}
 			s = s.Background(bg)
+			if guide {
+				s = s.Foreground(th.border)
+			}
 			for len(matches) > 0 && matches[0].end <= offset {
 				matches = matches[1:]
 			}
