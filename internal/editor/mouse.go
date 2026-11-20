@@ -26,6 +26,9 @@ type pointerEvent struct {
 	leftDown, shift bool
 }
 
+// wheelGesture is how long the wheel must be quiet before a new swipe may pick a new axis.
+const wheelGesture = 150 * time.Millisecond
+
 func (v *renderer) mouse(e *editor, event pointerEvent) {
 	x, y := event.x, event.y
 	button := event.button
@@ -38,6 +41,22 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 	}
 	if button == wheelDown {
 		wheel = 3
+	}
+	if isWheel := wheel != 0 || button == wheelLeft || button == wheelRight; isWheel {
+		// A touchpad swipe is never perfectly straight. Keep to the axis the
+		// swipe started on until the wheel pauses.
+		axis := 1
+		if wheel == 0 {
+			axis = 2
+		}
+		now := time.Now()
+		if now.Sub(v.wheelAt) > wheelGesture {
+			v.wheelAxis = axis
+		}
+		v.wheelAt = now
+		if axis != v.wheelAxis {
+			return
+		}
 	}
 	if v.mouseDiagnosticHover(e, event, wheel) {
 		return

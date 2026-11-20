@@ -140,6 +140,10 @@ When you scroll into the middle of a function or block, the lines that open it (
 - **Dashboard:** a block-letter logo with a color gradient, the project and git branch, and your five most recent files under the actions. Move with `j`/`k` or the arrow keys, open with Enter or a click.
 - **Status line:** the mode badge ends in a powerline arrow. The icons use a Nerd Font.
 
+### Touchpad scrolling
+
+A swipe scrolls along one axis only. The first direction of a swipe wins, and the sideways drift of your finger is ignored until the wheel pauses for about 150 ms. This applies everywhere that scrolls: editors, the explorer, pickers and previews.
+
 ### Vim compatibility
 
 | Keys | Action in the Vim profile |

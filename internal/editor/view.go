@@ -42,6 +42,8 @@ type renderer struct {
 	previewBox                                  hitBox
 	panes                                       []paneBox
 	sticky                                      []stickyBox
+	wheelAxis                                   int // 1 vertical, 2 horizontal
+	wheelAt                                     time.Time
 	previews                                    []previewBox
 	barHits                                     []barHit
 	paneDividers                                []paneDivider
