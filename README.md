@@ -144,6 +144,10 @@ When you scroll into the middle of a function or block, the lines that open it (
 
 A swipe scrolls along one axis only. The first direction of a swipe wins, and the sideways drift of your finger is ignored until the wheel pauses for about 150 ms. This applies everywhere that scrolls: editors, the explorer, pickers and previews.
 
+### Scrolling tabs
+
+When there are more tabs than fit, scroll the wheel or touchpad over the tab bar (either axis) to slide through them without switching buffer. Switching to another tab brings it back into view.
+
 ### Vim compatibility
 
 | Keys | Action in the Vim profile |

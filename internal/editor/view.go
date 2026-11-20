@@ -44,6 +44,9 @@ type renderer struct {
 	sticky                                      []stickyBox
 	wheelAxis                                   int // 1 vertical, 2 horizontal
 	wheelAt                                     time.Time
+	tabStart                                    int // first visible tab while scrolled by hand
+	tabManual                                   bool
+	tabActive                                   *buffer
 	previews                                    []previewBox
 	barHits                                     []barHit
 	paneDividers                                []paneDivider
@@ -173,6 +176,13 @@ func (v *renderer) drawTabs(e *editor, left, width int) {
 	count := max(1, width/tabWidth)
 	active := slices.Index(e.buffers, e.b)
 	start := max(0, min(active-count+1, len(e.buffers)-count))
+	if e.b != v.tabActive {
+		v.tabActive, v.tabManual = e.b, false
+	}
+	if v.tabManual {
+		v.tabStart = max(0, min(v.tabStart, len(e.buffers)-count))
+		start = v.tabStart
+	}
 	if start > 0 {
 		v.write(left, 0, 1, "‹", panelStyle.Foreground(th.accent))
 	}

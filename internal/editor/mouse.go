@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -98,6 +99,18 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		} else if !v.previewBox.contains(x, y) {
 			m.hovering = false
 		}
+		return
+	}
+	if y == 0 && len(v.tabs) > 0 && x >= v.tabs[0].x && (wheel != 0 || button == wheelLeft || button == wheelRight) {
+		step := 1
+		if wheel < 0 || button == wheelLeft {
+			step = -1
+		}
+		if !v.tabManual {
+			v.tabStart = max(0, slices.Index(e.buffers, v.tabs[0].b))
+		}
+		v.tabStart += step
+		v.tabManual = true
 		return
 	}
 	if _, h := v.screen.Size(); press && y == h-1 {
