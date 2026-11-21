@@ -64,3 +64,26 @@ func TestTallHoverNeverCoversThePointer(t *testing.T) {
 		}
 	}
 }
+
+func TestNewlineIndentsAfterOpeners(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"func a() {", "func a() {\n\t"},
+		{"x := f(", "x := f(\n\t"},
+		{"\tif y {", "\tif y {\n\t\t"},
+		{"x := []int{}", "x := []int{\n\t\n}"},
+		{"y := f()", "y := f()\n"},
+	}
+	for _, c := range cases {
+		e := testEditor(t, "vim", c.in)
+		e.b.path = "/tmp/x.go"
+		e.mode = "insert"
+		e.b.cursor = len(c.in)
+		if c.in == "x := []int{}" {
+			e.b.cursor = len(c.in) - 1
+		}
+		e.insertNewline()
+		if got := string(e.b.text); got != c.want {
+			t.Errorf("%q: got %q want %q", c.in, got, c.want)
+		}
+	}
+}

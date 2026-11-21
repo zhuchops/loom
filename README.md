@@ -135,6 +135,7 @@ When you scroll into the middle of a function or block, the lines that open it (
 
 - **Tab bar:** NvChad-style tabs with a file icon, the name and a close button; the active tab sits on the editor background, unsaved tabs show a yellow dot, and `‹` / `›` appear when tabs scroll out of view.
 - **Framed popups:** hover and diagnostic boxes, completion, function signature hints, which-key and menus all sit in their own rounded frame. A tall hover box now opens on the roomier side of the pointer, never covers it and never grows past half the screen, so moving the mouse away always dismisses it.
+- **Smart Enter:** Enter after `{`, `(` or `[` indents the new line one level deeper (also after a Python block colon and Go `case`/`default:` labels), and between a matching pair (`{}`, `()`, `[]`) it opens an indented middle line with the closer below. `o` follows the same rule.
 - **Pane borders:** the dividers around the pane you are working in are drawn in the accent color, and the divider you are dragging turns heavy.
 - **Animations:** resizing a pane with `Ctrl+W > < + - =`, evening out with a double-click, or opening a split glides over about 160 ms instead of jumping. Dragging with the mouse follows the pointer exactly. Turn it off with `"animations": false` (or in Settings) for reduced motion.
 - **Indent guides:** faint vertical lines mark each indent level in leading whitespace; `"indent_guides": false` hides them.

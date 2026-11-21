@@ -280,10 +280,19 @@ func (e *editor) insertNewline() {
 	at := b.cursor
 	indent := string(b.text[start:end])
 	newline := b.newline()
-	if b.tags == nil && at > start && at < len(b.text) && b.text[at-1] == '{' && b.text[at] == '}' {
-		inner := newline + indent + e.indentUnit(indent)
-		b.replaceAll([]edit{{span{at, at}, inner + newline + indent}}, at+len(inner))
-		return
+	if b.tags == nil {
+		before := strings.TrimRight(string(b.text[start:at]), " \t")
+		deeper := indent + e.indentAfter(before)
+		if closer := closerFor(before); closer != 0 && at < len(b.text) && b.text[at] == closer {
+			// Opening a bracket pair: put the cursor on an indented middle line.
+			inner := newline + deeper
+			b.replaceAll([]edit{{span{at, at}, inner + newline + indent}}, at+len(inner))
+			return
+		}
+		if deeper != indent {
+			e.insert(newline + deeper)
+			return
+		}
 	}
 	tag := 0
 	if b.tags != nil && at < len(b.tags) && b.text[at] == '\n' {
@@ -294,6 +303,44 @@ func (e *editor) insertNewline() {
 		b.tags[at], b.tags[b.cursor] = tag, 0
 	}
 }
+
+// closerFor returns the bracket that closes the opener ending text, or 0.
+func closerFor(text string) rune {
+	switch {
+	case strings.HasSuffix(text, "{"):
+		return '}'
+	case strings.HasSuffix(text, "("):
+		return ')'
+	case strings.HasSuffix(text, "["):
+		return ']'
+	}
+	return 0
+}
+
+// indentAfter is the extra indentation a new line gets after a line that
+// ends (ignoring trailing spaces) in an opening bracket, a Python block colon
+// or a Go case label.
+func (e *editor) indentAfter(before string) string {
+	if before == "" {
+		return ""
+	}
+	if closerFor(before) != 0 {
+		return e.indentUnit(before)
+	}
+	if !strings.HasSuffix(before, ":") {
+		return ""
+	}
+	switch e.cfg.languageFor(e.b.path) {
+	case "python":
+		return e.indentUnit(before)
+	case "go":
+		if t := strings.TrimSpace(before); strings.HasPrefix(t, "case ") || t == "default:" {
+			return e.indentUnit(before)
+		}
+	}
+	return ""
+}
+
 func (e *editor) openLine(below bool) {
 	b := e.b
 	row := b.rowAt(b.cursor)
@@ -313,6 +360,9 @@ func (e *editor) openLine(below bool) {
 			return
 		}
 		b.cursor = b.lineEnd(row)
+		if b.tags == nil {
+			indent += e.indentAfter(strings.TrimRight(string(b.text[start:b.cursor]), " \t"))
+		}
 		e.insert(b.newline() + indent)
 		return
 	}
