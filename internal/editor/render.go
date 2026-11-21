@@ -263,12 +263,12 @@ func (v *renderer) drawCompletion(c completionState, top, bottom int, signature 
 	rows := min(8, len(c.items))
 	below, above := bottom-y-1, y-top
 	lowerGap, upperGap := 0, 0
-	if signature && above == 0 {
-		lowerGap = 1
-		below--
-	} else if signature && below == 0 {
-		upperGap = 1
-		above--
+	if signature && above < 3 {
+		lowerGap = 3
+		below -= 3
+	} else if signature && below < 3 {
+		upperGap = 3
+		above -= 3
 	}
 	flip := below < rows+2 && above > below
 	space := below

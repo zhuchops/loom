@@ -103,7 +103,18 @@ func (v *renderer) drawDiagnosticHover(e *editor) {
 	}
 	width := min(100, w-2)
 	lines := wrapNotification(d.message, width-2)
-	height := min(h-2, len(lines)+2)
+	// Never cover the pointer: use whichever side of it has more room, and
+	// stay short enough that moving the mouse away always dismisses the box.
+	below, above := h-1-(d.y+1), d.y-1
+	room, onTop := below, false
+	if above > below && len(lines)+2 > below {
+		room, onTop = above, true
+	}
+	room = min(room, max(6, h/2))
+	if room < 4 {
+		return
+	}
+	height := min(len(lines)+2, room)
 	rows := height - 2
 	overflow := len(lines) > rows
 	if overflow {
@@ -112,8 +123,8 @@ func (v *renderer) drawDiagnosticHover(e *editor) {
 	d.scroll = max(0, min(d.scroll, len(lines)-rows))
 	x := max(0, min(d.x-1, w-width))
 	y := d.y + 1
-	if y+height > h-1 {
-		y = max(1, d.y-height)
+	if onTop {
+		y = d.y - height
 	}
 	box := hitBox{x: x, y: y, w: width, h: height}
 	title := d.title

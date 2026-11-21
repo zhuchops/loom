@@ -221,6 +221,8 @@ func (v *renderer) drawTabs(e *editor, left, width int) {
 			markStyle = style
 		}
 		v.write(x+size-2, 0, 1, mark, markStyle)
+		// A thin edge keeps neighbouring tabs from blending into one strip.
+		v.write(x+size-1, 0, 1, "▕", panelStyle.Foreground(th.border))
 		v.tabs = append(v.tabs, tabBox{hitBox{x, 0, size, 1, 0}, b, x + size - 2})
 	}
 	if shown := start + count; shown < len(e.buffers) {

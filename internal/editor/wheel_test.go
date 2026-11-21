@@ -47,3 +47,20 @@ func TestWheelScrollsTabs(t *testing.T) {
 		t.Fatal("scrolling tabs changed the active buffer")
 	}
 }
+
+func TestTallHoverNeverCoversThePointer(t *testing.T) {
+	e := testEditor(t, "vim", "hello\nworld\n")
+	v := &renderer{screen: newTerminalFrame(100, 30)}
+	v.draw(e)
+	long := strings.Repeat("documentation line\n", 80)
+	for _, y := range []int{2, 15, 28} {
+		v.diagnosticHover = diagnosticHover{buffer: e.b, version: e.b.version, x: 20, y: y, message: long}
+		v.draw(e)
+		if v.diagnosticBox.h == 0 {
+			t.Fatalf("no hover drawn for pointer row %d", y)
+		}
+		if v.diagnosticBox.contains(20, y) || v.diagnosticBox.h > 15 {
+			t.Fatalf("hover covers the pointer or is too tall at row %d: %+v", y, v.diagnosticBox)
+		}
+	}
+}

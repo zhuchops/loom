@@ -198,24 +198,28 @@ func (m *terminalModel) requestSignature(token uint64) tea.Cmd {
 func (v *renderer) drawSignature(hint signatureHint, top, bottom int) {
 	w := v.screen.Width()
 	x, y := v.screen.cursorX, v.screen.cursorY
-	row := y - 1
-	if row < top || v.completeBox.h > 0 && v.completeBox.y < y && y+1 < bottom {
-		row = y + 1
+	// The hint sits in its own rounded frame, three rows tall, above the
+	// cursor unless the completion list is there.
+	const frameRows = 3
+	boxY := y - frameRows
+	if boxY < top || v.completeBox.h > 0 && v.completeBox.y < y && y+frameRows < bottom {
+		boxY = y + 1
 	}
-	if row < top || row >= bottom {
+	if boxY < top || boxY+frameRows > bottom {
 		return
 	}
-	const padding = 2
 	bold := menuStyle.Bold(true).Foreground(th.yellow)
 	// Scroll long overloads horizontally so the active parameter remains visible.
 	before := strings.Map(signatureDisplayRune, hint.label[:hint.start])
 	active := strings.Map(signatureDisplayRune, hint.label[hint.start:hint.end])
 	label := strings.Map(signatureDisplayRune, hint.label)
-	limit := w - padding
+	limit := max(1, w-4)
 	skip := max(0, cellWidth(before)+min(cellWidth(active), limit)-limit)
-	width := min(w, cellWidth(label)-skip+padding)
-	x = max(0, min(x-1, w-width))
-	v.screen.FillArea(x, row, width, 1, ' ', menuStyle)
+	width := min(w, cellWidth(label)-skip+4)
+	x = max(0, min(x-2, w-width))
+	v.frame(hitBox{x: x, y: boxY, w: width, h: frameRows}, "")
+	row := boxY + 1
+	x += 1
 	g := uniseg.NewGraphemes(label)
 	column := 0
 	for g.Next() && limit > 0 {

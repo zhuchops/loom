@@ -101,11 +101,9 @@ func TestSignatureHintStaysClearOfCompletion(t *testing.T) {
 	for _, row := range []int{0, 1} {
 		e.b.cursor = e.b.lineEnd(row)
 		v.draw(e)
-		hintRow := v.screen.cursorY - 1
-		if row == 0 {
-			hintRow = v.screen.cursorY + 1
-		}
-		if v.completeBox.y <= hintRow || v.completeBox.h == 0 {
+		// Near the top there is no room above, so the framed hint goes below the cursor.
+		hintRow := v.screen.cursorY + 2
+		if v.completeBox.y <= hintRow+1 || v.completeBox.h == 0 {
 			t.Fatalf("completion overlaps the signature row %d: %+v", hintRow, v.completeBox)
 		}
 		highlighted := false
