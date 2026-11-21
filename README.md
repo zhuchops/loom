@@ -133,12 +133,12 @@ When you scroll into the middle of a function or block, the lines that open it (
 
 ### Look and feel
 
-- **Tab bar:** the active tab is marked with an accent bar, numbers are dimmed, unsaved tabs show a yellow dot, and `‹` / `›` appear when tabs scroll out of view.
+- **Tab bar:** NvChad-style tabs with a file icon, the name and a close button; the active tab sits on the editor background, unsaved tabs show a yellow dot, and `‹` / `›` appear when tabs scroll out of view.
 - **Pane borders:** the dividers around the pane you are working in are drawn in the accent color, and the divider you are dragging turns heavy.
 - **Animations:** resizing a pane with `Ctrl+W > < + - =`, evening out with a double-click, or opening a split glides over about 160 ms instead of jumping. Dragging with the mouse follows the pointer exactly. Turn it off with `"animations": false` (or in Settings) for reduced motion.
 - **Indent guides:** faint vertical lines mark each indent level in leading whitespace; `"indent_guides": false` hides them.
-- **Dashboard:** a block-letter logo with a color gradient, the project and git branch, and your five most recent files under the actions. Move with `j`/`k` or the arrow keys, open with Enter or a click.
-- **Status line:** the mode badge ends in a powerline arrow. The icons use a Nerd Font.
+- **Dashboard:** a block-letter logo, the project and git branch, and icon buttons with their shortcuts, followed by your five most recent files. Move with `j`/`k` or the arrow keys, open with Enter or a click.
+- **Status line:** NvChad layout. A mode block coloured by mode (blue normal, purple insert, cyan visual, orange replace, yellow prompt/explorer), the editing profile, file and problems in the middle, and on the right the git branch, language, a folder block with the project name and a coloured cursor-position block. The icons use a Nerd Font.
 
 ### Touchpad scrolling
 
@@ -280,7 +280,7 @@ Built-in language entries, with a language server and formatter used only when t
 
 ## Color themes
 
-Run **Color Theme** from the command palette to switch themes. Your choice is remembered next time. Built in: everforest (default), gruvbox, nord, dracula, tokyo-night, catppuccin, one-dark, monokai, solarized-dark, solarized-light, and terminal. The `terminal` theme draws with your terminal's own background and 16 ANSI colors, so it follows whatever palette the terminal uses. Set `"theme": "nord"` in your config to pin one.
+Run **Color Theme** from the command palette to switch themes. Your choice is remembered next time. Built in: nvchad (default, the NvChad One Dark palette), everforest, gruvbox, nord, dracula, tokyo-night, catppuccin, one-dark, monokai, solarized-dark, solarized-light, and terminal. The `terminal` theme draws with your terminal's own background and 16 ANSI colors, so it follows whatever palette the terminal uses. Set `"theme": "nord"` in your config to pin one.
 
 ## File explorer and mouse
 

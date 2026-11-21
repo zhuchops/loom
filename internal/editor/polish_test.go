@@ -63,7 +63,7 @@ func TestPolishedScreen(t *testing.T) {
 	if !strings.Contains(dump(), "▏") {
 		t.Fatalf("no indent guide drawn:\n%s", dump())
 	}
-	if !strings.Contains(dump(), "▎") {
-		t.Fatal("active tab marker missing")
+	if !strings.Contains(dump(), "\uf108 NORMAL") {
+		t.Fatalf("mode block missing from the statusline:\n%s", dump())
 	}
 }

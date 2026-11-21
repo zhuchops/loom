@@ -208,15 +208,12 @@ func (v *renderer) drawTabs(e *editor, left, width int) {
 		} else if b.path == "" {
 			name = "Untitled"
 		}
-		// ▎ marks the active tab; the number is dimmer than the name.
-		glyph := " "
-		if b == e.b {
-			glyph = "▎"
+		// NvChad tabufline: file icon, name, then the close button.
+		v.write(x+1, 0, 2, treeIcon(b.path, false, false), marker)
+		if b.dashboard {
+			v.write(x+1, 0, 2, "\uf015", marker)
 		}
-		v.write(x, 0, 1, glyph, marker)
-		label := fmt.Sprintf("%d ", i+1)
-		v.write(x+2, 0, size-5, label, number)
-		v.write(x+2+len(label), 0, max(0, size-5-len(label)), name, style)
+		v.write(x+3, 0, size-5, name, style)
 		mark, markStyle := "×", number
 		if b.dirty() {
 			mark, markStyle = "●", style.Foreground(th.yellow)

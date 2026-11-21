@@ -7,7 +7,7 @@ import (
 )
 
 func TestTerminalThemeUsesPalette(t *testing.T) {
-	defer applyTheme(theme.All[0])
+	defer applyTheme(baselineTheme())
 	applyTheme(theme.Terminal())
 	style := baseStyle.Foreground(th.red).uvStyle()
 	if style.Bg != nil || style.Fg == nil || semanticColor("keyword") != int32(ansiColor(1)) {
@@ -23,7 +23,7 @@ func TestTerminalThemeUsesPalette(t *testing.T) {
 
 func TestSetThemeRefreshesColors(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	defer applyTheme(theme.All[0])
+	defer applyTheme(baselineTheme())
 	e := testEditor(t, "vim", "x")
 	nord, _ := theme.Find("nord")
 	e.setTheme(nord)

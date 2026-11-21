@@ -49,10 +49,27 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 	if e.menu != nil {
 		mode = "PROMPT"
 	}
-	badge := " " + strings.ToUpper(doc.cfg.Profile) + " " + mode + " "
-	badgeStyle := baseStyle.Background(th.accent).Foreground(th.badge).Bold(true)
+	// NvChad-style statusline: a mode block coloured by mode, the editing
+	// profile on a lighter block, and a coloured position block on the right.
+	modeColor := th.accent
+	switch {
+	case e.menu != nil || e.tree.focused:
+		modeColor = th.yellow
+	case doc.mode == "insert":
+		modeColor = th.purple
+	case doc.mode == "select":
+		modeColor = th.aqua
+	case strings.HasPrefix(doc.mode, "replace"):
+		modeColor = th.orange
+	}
+	badge := " \uf108 " + mode + " "
+	badgeStyle := baseStyle.Background(modeColor).Foreground(th.badge).Bold(true)
+	profile := " " + strings.ToLower(doc.cfg.Profile) + " "
+	profileStyle := menuStyle.Foreground(modeColor)
 	row := b.rowAt(b.cursor)
-	right := fmt.Sprintf(" %d:%d  %d%% ", row+1, b.cursor-b.lines[row]+1, (row+1)*100/len(b.lines))
+	position := fmt.Sprintf(" \uf0c9 %d:%d  %d%% ", row+1, b.cursor-b.lines[row]+1, (row+1)*100/len(b.lines))
+	positionStyle := baseStyle.Background(modeColor).Foreground(th.badge).Bold(true)
+	right := ""
 	if w >= 78 {
 		ending := "LF"
 		if b.newline() == "\r\n" {
@@ -62,20 +79,32 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 		if lang == "" {
 			lang = "TEXT"
 		}
-		right = " " + lang + "  " + ending + "  UTF-8 " + right
+		right = " " + lang + "  " + ending + "  UTF-8 "
 	}
 	if b.dashboard {
-		right = ""
+		position = ""
 	}
 	if e.git.branch != "" {
 		right = " \U000f062c " + e.git.branch + "  " + right
 	}
+	folder, folderName := "", ""
+	if w >= 78 {
+		folder, folderName = " \uf07b ", " "+filepath.Base(e.root)+" "
+	}
 	v.screen.FillArea(0, h-1, w, 1, ' ', panelStyle)
 	v.write(0, h-1, w, badge, badgeStyle)
-	v.write(cellWidth(badge), h-1, 1, "\ue0b0", panelStyle.Foreground(th.accent))
-	rightX := max(cellWidth(badge), w-cellWidth(right))
+	v.write(cellWidth(badge), h-1, w, profile, profileStyle)
+	rightX := max(cellWidth(badge)+cellWidth(profile), w-cellWidth(right)-cellWidth(folder)-cellWidth(folderName)-cellWidth(position))
 	v.write(rightX, h-1, w-rightX, right, mutedStyle)
-	left := cellWidth(badge) + 2
+	x := rightX + cellWidth(right)
+	if folder != "" {
+		v.write(x, h-1, w-x, folder, baseStyle.Background(th.accent).Foreground(th.badge))
+		x += cellWidth(folder)
+		v.write(x, h-1, w-x, folderName, menuStyle)
+		x += cellWidth(folderName)
+	}
+	v.write(x, h-1, w-x, position, positionStyle)
+	left := cellWidth(badge) + cellWidth(profile) + 1
 	keys := keyLabel(doc.prefix)
 	if doc.pending.kind != "" {
 		keys += " " + doc.pending.kind

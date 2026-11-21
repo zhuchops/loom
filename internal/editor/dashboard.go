@@ -7,12 +7,12 @@ import (
 )
 
 var dashboardActions = []struct {
-	label, command string
+	label, command, icon string
 }{
-	{"Go to File", "files"},
-	{"Search Project", "project-search"},
-	{"Open Buffers", "buffers"},
-	{"Command Palette", "palette"},
+	{"Find File", "files", "\uf002"},
+	{"Find Word", "project-search", "\uf15c"},
+	{"Open Buffers", "buffers", "\uf0c5"},
+	{"Command Palette", "palette", "\uf120"},
 }
 
 // dashItem is one selectable row: a command, or a recent file to open.
@@ -23,7 +23,7 @@ type dashItem struct {
 func (e *editor) dashboardItems() []dashItem {
 	var items []dashItem
 	for _, a := range dashboardActions {
-		items = append(items, dashItem{label: a.label, hint: e.shortcut(a.command), command: a.command})
+		items = append(items, dashItem{label: a.icon + "   " + a.label, hint: e.shortcut(a.command), command: a.command})
 	}
 	shown := 0
 	for _, path := range e.recent {
@@ -34,7 +34,7 @@ func (e *editor) dashboardItems() []dashItem {
 			continue
 		}
 		rel, _ := filepath.Rel(e.root, path)
-		items = append(items, dashItem{label: rel, hint: "recent", path: path})
+		items = append(items, dashItem{label: "\uf1da   " + rel, hint: "recent", path: path})
 		shown++
 	}
 	return items
@@ -133,7 +133,7 @@ func (v *renderer) drawDashboard(e *editor, box hitBox, focused bool) {
 		project += "  \U000f062c " + e.git.branch
 	}
 	if header > 4 {
-		colors := []terminalColor{th.accent, th.accent, th.aqua, th.aqua, th.purple, th.purple}
+		colors := []terminalColor{th.accent, th.accent, th.accent, th.aqua, th.aqua, th.aqua}
 		for i, line := range dashboardLogo {
 			v.write(list.x, top+i, list.w, line, baseStyle.Foreground(colors[i%len(colors)]).Bold(true))
 		}
@@ -148,9 +148,9 @@ func (v *renderer) drawDashboard(e *editor, box hitBox, focused bool) {
 	for row := range list.h {
 		i := list.start + row
 		item := items[i]
-		style, mark := menuStyle, "  "
+		style, mark := panelStyle, "  "
 		if focused && i == e.dashboardSelection {
-			style, mark = activeStyle, "› "
+			style, mark = activeStyle, "▎ "
 		}
 		y := list.y + row
 		v.screen.FillArea(list.x, y, list.w, 1, ' ', style)
