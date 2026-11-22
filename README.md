@@ -506,3 +506,7 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `notifications.go` keeps the full text of status messages and draws their detail view. `pairs.go` tracks generated delimiters through buffer edits and undo.
 
 Every change gets a README update and a version bump in `internal/editor/main.go`, committed as `vX.Y.Z`. Run `go test -race ./...` from this directory. Set `LOOM_TEST_GOPLS=1` to enable the tests against `gopls` on PATH. Renderer tests inspect the in-memory frame, and terminal adapter tests send Bubble Tea messages directly.
+
+## Projects
+
+Loom starts with no project open. The dashboard offers **Open Project** (also `:project [path]` and the command palette), which lists remembered projects, lets you browse folders, or takes a typed path. Opening a project switches the file tree, search, git and language servers to that folder and restores its session. Loom remembers the last open project and reopens it the next time you start it without arguments; **Close Project** clears that memory so the next start is empty again. `loom <dir>` opens a specific folder, and `loom .` opens the current one. File, search and git commands tell you to open a project first when none is open. Switching projects asks you to save unsaved buffers first.

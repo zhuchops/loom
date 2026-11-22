@@ -19,6 +19,8 @@ import (
 
 func (e *editor) workspaceCommands() {
 	e.add("split-join", "Toggle Split Join", func(e *editor) { e.toggleSplitJoin() })
+	e.add("open-project", "Open Project", func(e *editor) { e.projectMenu() })
+	e.add("close-project", "Close Project", func(e *editor) { e.closeProject() })
 	e.add("dashboard", "Open Dashboard", func(e *editor) { e.showDashboard() })
 	e.add("explorer-popup", "Open Explorer Popup", func(e *editor) { e.openDirectory("") })
 	e.add("toggle-sidebar", "Toggle Sidebar", func(e *editor) {
@@ -412,7 +414,7 @@ func (e *editor) sessionPath() string {
 }
 
 func (e *editor) restoreSession(explicit bool) {
-	if !e.cfg.RestoreSession {
+	if !e.cfg.RestoreSession || e.noProject {
 		return
 	}
 	raw, err := os.ReadFile(e.sessionPath())
@@ -484,7 +486,7 @@ func (e *editor) restoreSession(explicit bool) {
 }
 
 func (e *editor) saveSession() {
-	if !e.cfg.RestoreSession {
+	if !e.cfg.RestoreSession || e.noProject {
 		return
 	}
 	e.rememberPane()

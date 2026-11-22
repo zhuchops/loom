@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.22.1"
+const version = "0.23.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
@@ -52,6 +52,17 @@ func prepare() (e *editor, explicit bool, done bool, err error) {
 		*path = configPath()
 	}
 	target := flag.Arg(0)
+	noProject := false
+	if flag.NArg() == 0 {
+		// Without an argument loom reopens the last project, or starts empty.
+		if last := lastProject(); last != "" {
+			if err := os.Chdir(last); err != nil {
+				return nil, false, true, err
+			}
+		} else {
+			noProject = true
+		}
+	}
 	if info, statErr := os.Stat(target); statErr == nil && info.IsDir() {
 		if err := os.Chdir(target); err != nil {
 			return nil, false, true, err
@@ -62,7 +73,17 @@ func prepare() (e *editor, explicit bool, done bool, err error) {
 	if err != nil {
 		return nil, false, true, err
 	}
-	cfg, err := loadConfig(*path, explicit, root)
+	if noProject {
+		root, _ = os.UserHomeDir()
+		if root == "" {
+			root = "/"
+		}
+	}
+	configRoot := root
+	if noProject {
+		configRoot = ""
+	}
+	cfg, err := loadConfig(*path, explicit, configRoot)
 	if err != nil {
 		return nil, false, true, err
 	}
@@ -79,6 +100,10 @@ func prepare() (e *editor, explicit bool, done bool, err error) {
 	e, err = newEditor(cfg, b, root)
 	if err != nil {
 		return nil, false, true, err
+	}
+	e.configFile, e.configExplicit = *path, explicit
+	if noProject {
+		e.enterNoProject()
 	}
 	return e, target != "", false, nil
 }

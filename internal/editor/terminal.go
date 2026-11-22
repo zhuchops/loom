@@ -37,6 +37,9 @@ func runTerminal(e *editor, explicitFile bool) error {
 func (e *editor) begin(explicitFile bool) {
 	e.loadRecent()
 	e.restoreSession(explicitFile)
+	if !e.noProject && !explicitFile {
+		rememberProject(e.root)
+	}
 	if !explicitFile {
 		e.showDashboard()
 	} else {

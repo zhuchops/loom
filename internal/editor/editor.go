@@ -90,6 +90,8 @@ type editor struct {
 	lastFind                    characterFind
 	surroundFlash               surroundFlash
 	dashboardSelection          int
+	noProject, configExplicit   bool
+	configFile                  string
 }
 
 func newEditor(cfg config, b *buffer, root string) (*editor, error) {
@@ -113,6 +115,7 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 	e.registerCommands()
 	e.registerNativeCommands()
 	e.workspaceCommands()
+	e.needsProject("files", "project-search", "explorer", "explorer-popup", "toggle-sidebar", "git-panel", "git-branch", "refresh-git", "problems", "recent", "close-explorer")
 	if err := e.registerPlugins(); err != nil {
 		return nil, err
 	}
@@ -1008,6 +1011,12 @@ func (e *editor) ex(line string) {
 	id, arg, _ := strings.Cut(strings.TrimSpace(line), " ")
 	arg = strings.TrimSpace(arg)
 	switch id {
+	case "project":
+		if arg == "" {
+			e.projectMenu()
+		} else {
+			e.openProject(arg)
+		}
 	case "cd":
 		if arg == "" {
 			e.directoryPicker()

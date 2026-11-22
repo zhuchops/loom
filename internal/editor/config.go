@@ -202,6 +202,9 @@ func loadConfig(path string, explicit bool, root string) (config, error) {
 	if err != nil {
 		return cfg, fmt.Errorf("config %s: %w", path, err)
 	}
+	if root == "" {
+		return cfg, nil
+	}
 	project := filepath.Join(root, ".loom.json")
 	cfg, err = applyConfig(cfg, project, false, true)
 	if err != nil {

@@ -238,6 +238,9 @@ func (d *desktop) actionIcon(gtx layout.Context, command string, x, cy int, c co
 	case "buffers":
 		d.round(gtx, image.Rect(x+u(3), cy-u(7), x+u(14), cy+u(2)), u(2), blend(c, d.color(th.bg, th.bg), 0.5), false)
 		d.round(gtx, image.Rect(x, cy-u(4), x+u(11), cy+u(5)), u(2), c, false)
+	case "open-project", "project":
+		d.round(gtx, image.Rect(x, cy-u(7), x+u(7), cy-u(2)), u(2), c, false)
+		d.round(gtx, image.Rect(x, cy-u(4), x+u(15), cy+u(6)), u(2), c, false)
 	default:
 		d.round(gtx, image.Rect(x, cy-u(7), x+u(15), cy+u(7)), u(3), c, false)
 		d.stroke(gtx, d.color(th.bg, th.bg), 1.5*d.scale, func(p *clip.Path) {

@@ -3,6 +3,7 @@ package editor
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -13,6 +14,7 @@ var dashboardActions = []struct {
 	{"Find Word", "project-search", "\uf15c"},
 	{"Open Buffers", "buffers", "\uf0c5"},
 	{"Command Palette", "palette", "\uf120"},
+	{"Open Project", "open-project", "\uf07b"},
 }
 
 // dashInfo is what the dashboard shows, kept so a graphical front end can
@@ -28,13 +30,31 @@ type dashInfo struct {
 
 // dashItem is one selectable row: a command, or a recent file to open.
 type dashItem struct {
-	label, hint, command, path string
+	label, hint, command, path, dir string
 }
 
 func (e *editor) dashboardItems() []dashItem {
 	var items []dashItem
 	for _, a := range dashboardActions {
+		if e.noProject && (a.command == "files" || a.command == "project-search") {
+			continue
+		}
 		items = append(items, dashItem{label: a.icon + "   " + a.label, hint: e.shortcut(a.command), command: a.command})
+	}
+	if e.noProject {
+		// Opening a project is the main thing to do here, so it comes first.
+		if i := slices.IndexFunc(items, func(it dashItem) bool { return it.command == "open-project" }); i > 0 {
+			items = slices.Insert(slices.Delete(items, i, i+1), 0, dashItem{label: "\uf07b   Open Project", hint: e.shortcut("open-project"), command: "open-project"})
+		}
+		shown := 0
+		for _, p := range recentProjects() {
+			if shown == 5 {
+				break
+			}
+			items = append(items, dashItem{label: "\uf07b   " + filepath.Base(p), hint: shortPath(p), command: "project", dir: p})
+			shown++
+		}
+		return items
 	}
 	shown := 0
 	for _, path := range e.recent {
@@ -81,7 +101,7 @@ func (e *editor) showDashboard() {
 func (e *editor) runCommand(id string) {
 	if e.b.dashboard {
 		switch id {
-		case "dashboard", "files", "buffers", "palette", "ex", "project-search",
+		case "dashboard", "open-project", "close-project", "files", "buffers", "palette", "ex", "project-search",
 			"explorer", "explorer-popup", "close-explorer", "toggle-sidebar", "directory-jump",
 			"messages", "quit", "keybindings", "profile-vim", "recover-buffers",
 			"jump-back", "jump-forward", "git-panel", "git-branch", "refresh-git", "problems",
@@ -105,7 +125,9 @@ func (e *editor) dashboardInput(key string) bool {
 	case "k", "up":
 		e.dashboardSelection = max(0, e.dashboardSelection-1)
 	case "enter":
-		if item := items[e.dashboardSelection]; item.path != "" {
+		if item := items[e.dashboardSelection]; item.dir != "" {
+			e.openProject(item.dir)
+		} else if item.path != "" {
 			e.open(item.path)
 		} else {
 			e.runCommand(item.command)
@@ -140,8 +162,11 @@ func (v *renderer) drawDashboard(e *editor, box hitBox, focused bool) {
 	header := dashboardHeader(box.h, len(items))
 	top := list.y - header
 	project := filepath.Base(e.root)
+	if e.noProject {
+		project = "No project open"
+	}
 	v.dash = dashInfo{box: box, list: list, header: header, items: items, selected: e.dashboardSelection, focused: focused,
-		project: filepath.Base(e.root), branch: e.git.branch, logo: header > 4}
+		project: project, branch: e.git.branch, logo: header > 4}
 	if e.git.branch != "" {
 		project += "  \U000f062c " + e.git.branch
 	}
