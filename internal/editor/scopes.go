@@ -66,14 +66,20 @@ func scopeLabel(line string) string {
 	return line
 }
 
-// breadcrumbs is the chain of enclosing scopes at the cursor.
+// breadcrumbs is the chain of enclosing scopes at the cursor, as one line.
 func (e *editor) breadcrumbs(b *buffer) string {
+	return strings.Join(e.scopeTrail(b), " › ")
+}
+
+// scopeTrail names the scopes around the cursor, outermost first. When they
+// run deep the outermost stays, as that is where the function's name is.
+func (e *editor) scopeTrail(b *buffer) []string {
 	if b.dashboard || b.tags != nil || len(b.lines) > 200000 {
-		return ""
+		return nil
 	}
 	rows := scopeRows(b, b.rowAt(b.cursor))
 	if len(rows) > 4 {
-		rows = rows[len(rows)-4:]
+		rows = append([]int{rows[0]}, rows[len(rows)-3:]...)
 	}
 	names := make([]string, 0, len(rows))
 	for _, r := range rows {
@@ -81,5 +87,5 @@ func (e *editor) breadcrumbs(b *buffer) string {
 			names = append(names, name)
 		}
 	}
-	return strings.Join(names, " › ")
+	return names
 }

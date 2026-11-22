@@ -40,8 +40,8 @@ type options struct {
 	IndentStyle string `json:"indent_style"`
 	// Scrolloff keeps this many lines visible above and below the cursor.
 	Scrolloff int `json:"scrolloff"`
-	// Breadcrumbs names the scopes around the cursor in the terminal's status
-	// line. The key is from when it also pinned those lines to the pane.
+	// Breadcrumbs names the scopes around the cursor. The key is from when it
+	// also pinned those lines to the pane.
 	Breadcrumbs  bool `json:"sticky_scroll"`
 	SmoothScroll bool `json:"smooth_scroll"`
 	AutoComplete bool `json:"auto_complete"`
@@ -117,8 +117,6 @@ type setting struct {
 
 	// desktop settings have no effect in a terminal.
 	desktop bool
-	// terminal settings have no effect in the desktop app.
-	terminal bool
 	// added settings came after 0.17. They are written to settings.json,
 	// because older versions refuse a config.json with keys they don't know.
 	added bool
@@ -152,7 +150,7 @@ var settingList = []setting{
 	{key: "tab_size", page: "editor", group: "Indentation", title: "Tab size", kind: settingNumber, min: 1, max: 16, step: 1},
 	{key: "indent_style", page: "editor", group: "Indentation", title: "Indent with", help: "Auto uses tabs for Go and Makefiles", kind: settingChoice, choices: []string{"auto", "tabs", "spaces"}},
 	{key: "scrolloff", page: "editor", group: "Scrolling", title: "Scroll offset", help: "Lines kept visible around the cursor", kind: settingNumber, min: 0, max: 50, step: 1},
-	{key: "sticky_scroll", page: "editor", group: "Display", title: "Breadcrumbs", help: "The scopes around the cursor, in the status line", kind: settingSwitch, terminal: true},
+	{key: "sticky_scroll", page: "editor", group: "Display", title: "Breadcrumbs", help: "The functions and blocks around the cursor", kind: settingSwitch},
 	{key: "smooth_scroll", page: "editor", group: "Scrolling", title: "Smooth scrolling", kind: settingSwitch, desktop: true, added: true, needs: "animations"},
 	{key: "auto_complete", page: "editor", group: "Typing", title: "Automatic completion", kind: settingSwitch},
 	{key: "auto_pairs", page: "editor", group: "Typing", title: "Automatic bracket pairs", kind: settingSwitch},

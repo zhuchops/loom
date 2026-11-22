@@ -229,6 +229,8 @@ func TestDesktopScreens(t *testing.T) {
 		{name: "zen", file: src, do: run("zen")},
 		{name: "path-everforest", file: "internal/tasks/handlers.go", theme: "everforest", do: keys("G k k")},
 		{name: "path-light", file: "internal/tasks/handlers.go", theme: "solarized-light", do: keys("G k k")},
+		{name: "path-scopes", file: src, theme: "everforest", do: keys("1 2 G")},
+		{name: "path-scopes-narrow", file: src, w: 640, h: 440, do: keys("1 2 G")},
 		{name: "path-narrow", file: "internal/tasks/handlers.go", w: 640, h: 440, do: changeOptions(func(o *options) { o.UIFontSize = 18 })},
 		{name: "replace", file: src, do: func(s *screen) { run("replace")(s); press(s.e, "f m t") }},
 		{name: "results", file: src, do: func(s *screen) { run("project-search")(s); press(s.e, "f m t enter") }},

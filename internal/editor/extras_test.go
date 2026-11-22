@@ -53,6 +53,19 @@ func TestScopesAndBreadcrumbs(t *testing.T) {
 	}
 }
 
+func TestDeepScopesKeepTheFunction(t *testing.T) {
+	src := "func createUser() {\n"
+	for i := range 6 {
+		src += strings.Repeat("\t", i+1) + "if ok {\n"
+	}
+	src += strings.Repeat("\t", 7) + "work()\n"
+	e := testEditor(t, "vim", src)
+	e.b.cursor = e.b.lines[7]
+	if got := e.scopeTrail(e.b); len(got) != 4 || got[0] != "createUser" {
+		t.Fatalf("trail: %v", got)
+	}
+}
+
 func TestRecentAndJumps(t *testing.T) {
 	e := testEditor(t, "vim", "x")
 	dir := t.TempDir()

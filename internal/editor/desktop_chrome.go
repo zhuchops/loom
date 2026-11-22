@@ -435,7 +435,8 @@ func (d *desktop) dragTab(e *editor, b *buffer) {
 // both the tabs and the code.
 func (d *desktop) pathFill() color.NRGBA { return blend(d.c.bg, d.c.accent, 0.12) }
 
-// paintCrumbs draws the path of the file being edited.
+// paintCrumbs draws where the cursor is: the file's path, then the functions
+// and blocks around it.
 func (d *desktop) paintCrumbs(e *editor) {
 	r, u, c := d.geo.crumbs, d.u, &d.c
 	if r.Empty() {
@@ -456,7 +457,16 @@ func (d *desktop) paintCrumbs(e *editor) {
 
 	x, cy, right := r.Min.X+u(14), (r.Min.Y+r.Max.Y)/2, r.Max.X-u(14)
 	mark := u(24) // the file's icon, ahead of its name
-	dirs = d.fitFolders(dirs, right-x-mark-d.width(name, textPathFile))
+	var scopes []string
+	if e.cfg.Breadcrumbs {
+		scopes = e.scopeTrail(e.b)
+	}
+	tail := 0
+	for _, s := range scopes {
+		tail += u(22) + d.width(s, textPath)
+	}
+	// Short of room the folders give way first, then the innermost blocks.
+	dirs = d.fitFolders(dirs, right-x-mark-d.width(name, textPathFile)-tail)
 	folder, chevron := readable(c.dim, band, 4.5), readable(c.dim, band, 3)
 	for _, dir := range dirs {
 		x += d.text(x, cy, dir, textPath, folder)
@@ -465,7 +475,16 @@ func (d *desktop) paintCrumbs(e *editor) {
 	}
 	d.fileIcon(x+u(9), cy, e.b.path)
 	x += mark
-	d.text(x, cy, d.fit(name, right-x, textPathFile), textPathFile, readable(c.text, band, 4.5))
+	ink := readable(c.text, band, 4.5)
+	x += d.text(x, cy, d.fit(name, right-x, textPathFile), textPathFile, ink)
+	for _, scope := range scopes {
+		if right-x < u(50) {
+			break
+		}
+		d.icon(iconRight, x+u(11), cy, 11, chevron)
+		x += u(22)
+		x += d.text(x, cy, d.fit(scope, right-x, textPath), textPath, ink)
+	}
 }
 
 // fitFolders drops folders from the front until they fit in w, so the file's

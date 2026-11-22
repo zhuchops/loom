@@ -90,7 +90,7 @@ The desktop app has a settings window. Type to search all of it, move with the a
 | Appearance | Default color theme (`theme`), animations (`animations`) |
 | Fonts, code | `font_family`, `font_size`, `font_weight`, `font_bold_weight`, `line_height`, `letter_spacing`, `font_ligatures`, `italic_comments`, `font_fallback` |
 | Fonts, interface | `ui_font_family`, `ui_font_size` (scales the whole interface), `ui_font_weight` |
-| Editor | `line_numbers`, `relative_numbers`, `highlight_line`, `indent_guides`, `tab_size`, `indent_style`, `scrolloff`, `sticky_scroll` (terminal), `smooth_scroll`, `auto_complete`, `auto_pairs`, `hover_docs` |
+| Editor | `line_numbers`, `relative_numbers`, `highlight_line`, `indent_guides`, `tab_size`, `indent_style`, `scrolloff`, `sticky_scroll` (breadcrumbs), `smooth_scroll`, `auto_complete`, `auto_pairs`, `hover_docs` |
 | Cursor | `cursor_normal`, `cursor_insert` (`block`, `bar` or `underline`), `cursor_blink`, `cursor_glide` |
 | Interface | `path_bar`, `status_bar`, `scrollbar` |
 | Files | `format_on_save`, `organize_imports`, `reopen_project`, `restore_session` |
@@ -142,7 +142,7 @@ Alt (Option) combinations are now recognised, so you can bind `alt+up`, `alt+x` 
 
 ### Breadcrumbs
 
-In the terminal the status line shows the chain of scopes around the cursor, like `Server › Handle › if ok`. Scopes come from indentation, so it works in every language. Turn it off with `"sticky_scroll": false` or in Settings (the key keeps its old name so existing configs still load). The desktop app shows only the file's path, in a tinted bar under the tabs. Nothing is pinned over the code in either.
+The chain of functions and blocks around the cursor, like `Server › Handle › if ok`, follows the file in the desktop app's path bar and is in the status line in a terminal. Scopes come from indentation, so it works in every language. Turn it off with `"sticky_scroll": false` or in Settings (the key keeps its old name so existing configs still load). Nothing is pinned over the code.
 
 ### Recent files, jump list, project replace
 
@@ -169,7 +169,7 @@ In the terminal the status line shows the chain of scopes around the cursor, lik
 
 - **Title bar:** the project (click for recent projects), the branch (click to switch), a search field, and buttons for Source Control, the Command Palette and Settings.
 - **Sidebar:** the file tree with git state, buttons for a new file, a new folder and filtering. Right-click for actions; drag its edge to resize it.
-- **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click to close. The path of the file and the current symbol are shown beneath.
+- **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click to close. A tinted bar beneath shows the file's path and the functions and blocks around the cursor.
 - **Pickers and panels:** the palette, file search with a highlighted preview, settings with switches, Source Control with stage and commit buttons, and a diff with both line numbers.
 - **Messages** appear as a toast at the bottom right. Click one for the history.
 - **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first.
