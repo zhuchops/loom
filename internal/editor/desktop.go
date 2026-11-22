@@ -34,6 +34,12 @@ import (
 
 // MainDesktop runs Loom in a native window and exits the process on failure.
 func MainDesktop() {
+	// Started from Finder, the working directory is "/"; begin in the home folder.
+	if wd, err := os.Getwd(); err == nil && wd == "/" {
+		if home, err := os.UserHomeDir(); err == nil {
+			_ = os.Chdir(home)
+		}
+	}
 	e, explicit, done, err := prepare()
 	if err == nil && !done {
 		go func() {
@@ -76,6 +82,7 @@ type desktop struct {
 	mx, my         int // pointer position in pixels
 	scale          float32
 	scroll         scrollAnim
+	cur            cursorAnim
 	demo           bool
 	width, height  int
 }

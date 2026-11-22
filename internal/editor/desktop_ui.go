@@ -251,6 +251,56 @@ func (d *desktop) updateScroll(now time.Time, pane *paneBox) {
 	sa.lastTop = top
 }
 
+// cursorAnim slides the cursor between cells instead of jumping.
+type cursorAnim struct {
+	x, y, fx, fy, tx, ty float32
+	start                time.Time
+	active, valid        bool
+}
+
+const cursorTime = 60 * time.Millisecond
+
+func (d *desktop) updateCursor(now time.Time, f *terminalFrame) {
+	c := &d.cur
+	if !f.cursorVisible || f.cursorY >= d.rows {
+		c.valid, c.active = false, false
+		return
+	}
+	dy := 0
+	sa := &d.scroll
+	if sa.active {
+		dy = int((float64(sa.total) - sa.progress(now)) * float64(d.cellH))
+	}
+	tx := float32(f.cursorX * d.cellW)
+	ty := float32(d.rowY(f.cursorY, d.rows) + (d.rowH(f.cursorY, d.rows)-d.cellH)/2 + dy)
+	far := absf(tx-c.tx) > float32(24*d.cellW) || absf(ty-c.ty) > float32(10*d.cellH)
+	if !c.valid || sa.active || d.modal(d.m.editor) || far || !animationsOn {
+		*c = cursorAnim{x: tx, y: ty, tx: tx, ty: ty, valid: true}
+		return
+	}
+	if tx != c.tx || ty != c.ty {
+		c.fx, c.fy, c.start, c.active = c.x, c.y, now, true
+		c.tx, c.ty = tx, ty
+	}
+	if c.active {
+		t := min(1, float32(now.Sub(c.start))/float32(cursorTime))
+		ease := 1 - (1-t)*(1-t)
+		c.x, c.y = c.fx+(c.tx-c.fx)*ease, c.fy+(c.ty-c.fy)*ease
+		if t >= 1 {
+			c.active, c.x, c.y = false, c.tx, c.ty
+		} else {
+			d.w.Invalidate()
+		}
+	}
+}
+
+func absf(v float32) float32 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 type cellRange struct{ x0, y0, x1, y1 int }
 
 func (d *desktop) onRing(x, y int) (ring, corner bool) {
@@ -354,7 +404,12 @@ func (d *desktop) paintCells(gtx layout.Context, src cellSource, r cellRange, dy
 				end += max(1, w)
 			}
 			if style.bg != th.bg {
-				d.fill(gtx, image.Rect(x*d.cellW, py, end*d.cellW, py+ph), d.color(style.bg, th.bg))
+				rect := image.Rect(x*d.cellW, py, end*d.cellW, py+ph)
+				if main && style.bg == th.sel {
+					d.round(gtx, rect, d.dp(3), d.color(style.bg, th.bg), false)
+				} else {
+					d.fill(gtx, rect, d.color(style.bg, th.bg))
+				}
 			}
 			x = end
 		}
@@ -363,13 +418,15 @@ func (d *desktop) paintCells(gtx layout.Context, src cellSource, r cellRange, dy
 	cursorX, cursorY := -1, -1
 	if main && f != nil && f.cursorVisible {
 		cursorX, cursorY = f.cursorX, f.cursorY
-		if cursorX >= r.x0 && cursorX < r.x1 && cursorY >= r.y0 && cursorY < r.y1 {
-			py := d.rowY(cursorY, rows) + dy + (d.rowH(cursorY, rows)-d.cellH)/2
-			rect := image.Rect(cursorX*d.cellW, py, (cursorX+1)*d.cellW, py+d.cellH)
+		if cursorX >= r.x0 && cursorX < r.x1 && cursorY >= r.y0 && cursorY < r.y1 && d.cur.valid {
+			rect := image.Rect(int(d.cur.x), int(d.cur.y), int(d.cur.x)+d.cellW, int(d.cur.y)+d.cellH)
+			col := d.color(th.fg, th.fg)
 			if f.cursorShape == cursorBar {
 				rect.Max.X = rect.Min.X + max(2, d.cellW/6)
+			} else if d.cur.active {
+				col.A = 150
 			}
-			d.fill(gtx, rect, d.color(th.fg, th.fg))
+			d.fill(gtx, rect, col)
 		}
 	}
 	for y := r.y0; y < r.y1 && y < rows; y++ {
@@ -392,7 +449,7 @@ func (d *desktop) paintCells(gtx layout.Context, src cellSource, r cellRange, dy
 				}
 			}
 			fg := style.fg
-			if x == cursorX && y == cursorY && f != nil && f.cursorShape != cursorBar {
+			if x == cursorX && y == cursorY && f != nil && f.cursorShape != cursorBar && !d.cur.active {
 				fg = style.bg
 				if fg&defaultFlag != 0 {
 					fg = th.bg
@@ -442,6 +499,7 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 	d.fill(gtx, image.Rectangle{Max: size}, d.color(th.bg, th.bg))
 	pane := d.activePane()
 	d.updateScroll(gtx.Now, pane)
+	d.updateCursor(gtx.Now, f)
 	if !e.zen {
 		d.paintSidebar(gtx, e)
 		d.paintTabs(gtx, e)
@@ -479,6 +537,10 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 	d.fill(gtx, image.Rect(0, d.height-d.bottom, size.X, d.height-d.bottom+1), d.color(th.border, th.border))
 	d.paintMenu(gtx, e)
 	d.paintCompletion(gtx, e)
+	d.paintTreePopup(gtx, e)
+	d.paintDirectoryTitle(gtx, e)
+	d.paintSourceControl(gtx, e)
+	d.paintDiff(gtx, e)
 	d.paintCardBorders(gtx)
 	d.paintStatus(gtx, e)
 }
@@ -507,6 +569,45 @@ func (d *desktop) magnifier(gtx layout.Context, x, cy int, c color.NRGBA) {
 	})
 }
 
+// matchRunes returns which runes of label a fuzzy query matches, in order.
+func matchRunes(label, query string) map[int]bool {
+	query = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(query), ":")))
+	out := map[int]bool{}
+	if query == "" {
+		return out
+	}
+	q := []rune(query)
+	k := 0
+	for i, r := range []rune(strings.ToLower(label)) {
+		if k < len(q) && r == q[k] {
+			out[i] = true
+			k++
+		}
+	}
+	if k < len(q) {
+		return map[int]bool{}
+	}
+	return out
+}
+
+// highlighted draws label with the matched letters in the accent colour.
+func (d *desktop) highlighted(gtx layout.Context, x, cy int, label string, hit map[int]bool, fg, accent color.NRGBA, sp float32) {
+	runes := []rune(label)
+	for i := 0; i < len(runes); {
+		j := i
+		for j < len(runes) && hit[j] == hit[i] {
+			j++
+		}
+		seg := string(runes[i:j])
+		if hit[i] {
+			x += d.ui(gtx, x, cy, seg, accent, sp, true)
+		} else {
+			x += d.ui(gtx, x, cy, seg, fg, sp, false)
+		}
+		i = j
+	}
+}
+
 // paintMenu draws the command palette and other pickers: an input row and a
 // list with rounded selection, in the interface font.
 func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
@@ -518,47 +619,80 @@ func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
 	fr, list := v.menuFrame, v.menuBox
 	x0, x1 := list.x, list.x+list.w
 	inputRow := fr.y + 1
+	card := d.color(th.menu, th.bg)
 	block := d.columnRect(x0, x1, inputRow, max(list.y+list.h, inputRow+1))
-	d.fill(gtx, block, d.color(th.menu, th.bg))
+	d.fill(gtx, block, card)
 	muted, fg := d.color(th.muted, th.fg), d.color(th.fg, th.fg)
+	accent := d.color(th.accent, th.fg)
 	px0, px1 := block.Min.X, block.Max.X
+	titleCY := d.rowY(fr.y, d.rows) + d.cellH/2 + d.dp(2)
 	if m.title != "" {
 		title := d.columnRect(fr.x+1, fr.x+fr.w-1, fr.y, fr.y+1)
-		d.fill(gtx, title, d.color(th.menu, th.bg))
-		d.ui(gtx, title.Min.X+d.dp(14), title.Min.Y+d.cellH/2+d.dp(2), m.title, muted, 12, true)
+		d.fill(gtx, title, card)
+		d.ui(gtx, title.Min.X+d.dp(14), titleCY, strings.ToUpper(m.title), muted, 11, true)
+		if n := len(m.matches); n > 0 {
+			count := fmt.Sprintf("%d", n)
+			if len(m.options) != n {
+				count = fmt.Sprintf("%d of %d", n, len(m.options))
+			}
+			d.ui(gtx, title.Max.X-d.dp(14)-d.uiWidth(gtx, count, 11, false), titleCY, count, muted, 11, false)
+		}
 	}
 	cy := d.rowY(inputRow, d.rows) + d.cellH/2
-	d.magnifier(gtx, px0+d.dp(12), cy, muted)
-	tx := px0 + d.dp(34)
-	switch {
-	case m.input == "":
-		d.ui(gtx, tx, cy, "Type to search…", muted, 15, false)
-		d.fill(gtx, image.Rect(tx-1, cy-d.dp(8), tx+max(1, d.dp(1)), cy+d.dp(8)), d.color(th.accent, th.fg))
-	default:
-		w := d.ui(gtx, tx, cy, d.fit(gtx, m.input, px1-tx-d.dp(16), 15, false), fg, 15, false)
-		d.fill(gtx, image.Rect(tx+w+d.dp(1), cy-d.dp(8), tx+w+d.dp(1)+max(1, d.dp(1)), cy+d.dp(8)), d.color(th.accent, th.fg))
+	d.magnifier(gtx, px0+d.dp(14), cy, muted)
+	tx := px0 + d.dp(40)
+	caret := func(x int) {
+		d.fill(gtx, image.Rect(x, cy-d.dp(9), x+max(2, d.dp(1)), cy+d.dp(9)), accent)
 	}
+	if m.input == "" {
+		caret(tx)
+		hint := "Search…"
+		if strings.Contains(strings.ToLower(m.title), "command") {
+			hint = "Type a command…"
+		}
+		d.ui(gtx, tx+d.dp(6), cy, hint, muted, 16, false)
+	} else {
+		w := d.ui(gtx, tx, cy, d.fit(gtx, m.input, px1-tx-d.dp(60), 16, false), fg, 16, false)
+		caret(tx + w + d.dp(1))
+	}
+	d.chip(gtx, px1-d.dp(14)-d.uiWidth(gtx, "esc", 11, false)-2*d.dp(6), cy, "esc", muted, blend(card, d.color(th.fg, th.fg), 0.08))
 	rule := d.rowY(inputRow, d.rows) + d.cellH
-	d.fill(gtx, image.Rect(px0+d.dp(8), rule-1, px1-d.dp(8), rule), d.color(th.border, th.border))
+	d.fill(gtx, image.Rect(px0, rule-1, px1, rule), d.color(th.border, th.border))
 	if len(m.matches) == 0 && m.empty != "" {
-		d.ui(gtx, px0+d.dp(14), d.rowY(list.y, d.rows)+d.cellH/2, m.empty, muted, 13, false)
+		d.ui(gtx, px0+d.dp(16), d.rowY(list.y, d.rows)+d.cellH/2, m.empty, muted, 13, false)
 	}
 	for i := 0; i < list.h && list.start+i < len(m.matches); i++ {
 		o := m.matches[list.start+i]
 		py := d.rowY(list.y+i, d.rows)
 		cy := py + d.cellH/2
-		if list.start+i == m.selected {
-			d.round(gtx, image.Rect(px0+d.dp(6), py+d.dp(1), px1-d.dp(6), py+d.cellH-d.dp(1)), d.dp(6), d.color(th.active, th.bg), false)
+		selected := list.start+i == m.selected
+		hover := d.mx >= px0 && d.mx < px1 && d.my >= py && d.my < py+d.cellH
+		switch {
+		case selected:
+			d.round(gtx, image.Rect(px0+d.dp(8), py+d.dp(1), px1-d.dp(8), py+d.cellH-d.dp(1)), d.dp(7), blend(card, accent, 0.20), false)
+			d.fill(gtx, image.Rect(px0+d.dp(10), py+d.dp(8), px0+d.dp(10)+max(2, d.dp(2)), py+d.cellH-d.dp(8)), accent)
+		case hover:
+			d.round(gtx, image.Rect(px0+d.dp(8), py+d.dp(1), px1-d.dp(8), py+d.cellH-d.dp(1)), d.dp(7), blend(card, d.color(th.fg, th.fg), 0.06), false)
 		}
-		right := px1 - d.dp(14)
+		right := px1 - d.dp(16)
 		if o.hint != "" {
-			hw := d.uiWidth(gtx, o.hint, 12, false)
-			if hw < (px1-px0)/2 {
-				d.ui(gtx, right-hw, cy, o.hint, muted, 12, false)
-				right -= hw + d.dp(12)
+			left := d.hintChips(gtx, right, cy, o.hint, selected)
+			if left > px0+(px1-px0)/2 {
+				right = left
+			} else {
+				right = px0 + (px1-px0)/2
 			}
 		}
-		d.ui(gtx, px0+d.dp(14), cy, d.fit(gtx, o.label, right-px0-d.dp(14), 14, false), fg, 14, false)
+		label := d.fit(gtx, o.label, right-px0-d.dp(20), 14, false)
+		d.highlighted(gtx, px0+d.dp(20), cy, label, matchRunes(label, m.input), fg, accent, 14)
+	}
+	if len(m.matches) > list.h && list.h > 0 {
+		trackTop := d.rowY(list.y, d.rows) + d.dp(6)
+		trackH := list.h*d.cellH - d.dp(12)
+		thumb := max(d.dp(18), trackH*list.h/len(m.matches))
+		off := (trackH - thumb) * list.start / max(1, len(m.matches)-list.h)
+		x := px1 - d.dp(5)
+		d.round(gtx, image.Rect(x, trackTop+off, x+d.dp(3), trackTop+off+thumb), d.dp(2), blend(card, d.color(th.fg, th.fg), 0.18), false)
 	}
 }
 
@@ -668,42 +802,7 @@ func (d *desktop) paintSidebar(gtx layout.Context, e *editor) {
 		label = strings.TrimSpace(label[i+len("·"):])
 	}
 	d.ui(gtx, px-d.dp(16)-d.uiWidth(gtx, label, 11, false), d.top/2, label, muted, 11, false)
-	t := &e.tree
-	for i := t.scroll; i < len(t.rows); i++ {
-		y := 1 + i - t.scroll
-		if y > rows-2 {
-			break
-		}
-		row := t.rows[i]
-		py := d.rowY(y, rows)
-		cy := py + d.cellH/2
-		hover := d.mx < px && d.my >= py && d.my < py+d.cellH
-		switch {
-		case i == t.selected && t.focused:
-			d.round(gtx, image.Rect(d.dp(6), py+1, px-d.dp(6), py+d.cellH-1), d.dp(6), d.color(th.active, th.bg), false)
-		case hover:
-			d.round(gtx, image.Rect(d.dp(6), py+1, px-d.dp(6), py+d.cellH-1), d.dp(6), d.color(th.line, th.bg), false)
-		}
-		x := d.dp(14) + row.depth*d.dp(14)
-		fg := d.color(th.fg, th.fg)
-		if row.path == e.b.path {
-			fg = d.color(th.accent, th.fg)
-		}
-		if row.dir {
-			d.chevron(gtx, x+d.dp(5), cy, t.expanded[row.path] || t.filter != "", muted)
-		}
-		x += d.dp(16)
-		iconColor := muted
-		if row.dir {
-			iconColor = d.color(th.accent, th.fg)
-		}
-		d.fileIcon(gtx, x, cy, row.path, row.dir, iconColor)
-		x += d.dp(22)
-		d.ui(gtx, x, cy, d.fit(gtx, filepath.Base(row.path), px-x-d.dp(26), 13, false), fg, 13, false)
-		if mark := e.git.files[row.path]; mark != 0 {
-			d.ui(gtx, px-d.dp(20), cy, string(mark), d.color(gitColor(mark), th.fg), 11, true)
-		}
-	}
+	d.treeRows(gtx, e, 0, px, 1, rows-2, e.tree.scroll)
 }
 
 func (d *desktop) chevron(gtx layout.Context, cx, cy int, open bool, c color.NRGBA) {

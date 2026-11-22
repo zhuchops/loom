@@ -2,3 +2,4 @@
 /loom
 /loom-uppercase
 .DS_Store
+dist/

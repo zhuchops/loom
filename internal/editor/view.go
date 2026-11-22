@@ -47,7 +47,8 @@ type renderer struct {
 	status                                      statusInfo
 	cards                                       []hitBox // framed popups drawn this frame
 	menuFrame                                   hitBox
-	tabStart                                    int // first visible tab while scrolled by hand
+	panelFrame, diffFrame, treeFrame            hitBox // framed panels, for graphical front ends
+	tabStart                                    int    // first visible tab while scrolled by hand
 	tabManual                                   bool
 	tabActive                                   *buffer
 	previews                                    []previewBox
@@ -73,6 +74,7 @@ func (v *renderer) draw(e *editor) {
 	v.screen.HideCursor()
 	v.treeBox, v.menuBox, v.completeBox, v.directoryBox = hitBox{}, hitBox{}, hitBox{}, hitBox{}
 	v.cards, v.menuFrame = v.cards[:0], hitBox{}
+	v.panelFrame, v.diffFrame, v.treeFrame = hitBox{}, hitBox{}, hitBox{}
 	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
@@ -127,6 +129,7 @@ func (v *renderer) draw(e *editor) {
 		if e.tree.popup || e.tree.focused && left == 0 {
 			v.dim(w, h-1)
 			box := centerBox(w, h, min(68, w-2), min(24, h-2))
+			v.treeFrame = box
 			v.frame(box, "Explorer")
 			v.drawTree(e, hitBox{box.x + 1, box.y + 1, box.w - 2, box.h - 2, 0})
 			v.screen.HideCursor()
