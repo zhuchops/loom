@@ -1013,7 +1013,7 @@ func (e *editor) ex(line string) {
 	switch id {
 	case "project":
 		if arg == "" {
-			e.projectMenu()
+			e.chooseProject()
 		} else {
 			e.openProject(arg)
 		}

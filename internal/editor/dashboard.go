@@ -101,7 +101,7 @@ func (e *editor) showDashboard() {
 func (e *editor) runCommand(id string) {
 	if e.b.dashboard {
 		switch id {
-		case "dashboard", "open-project", "close-project", "files", "buffers", "palette", "ex", "project-search",
+		case "dashboard", "open-project", "recent-projects", "close-project", "files", "buffers", "palette", "ex", "project-search",
 			"explorer", "explorer-popup", "close-explorer", "toggle-sidebar", "directory-jump",
 			"messages", "quit", "keybindings", "profile-vim", "recover-buffers",
 			"jump-back", "jump-forward", "git-panel", "git-branch", "refresh-git", "problems",

@@ -1,10 +1,15 @@
 package editor
 
 import (
+	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"time"
 )
 
 const projectLimit = 20
@@ -193,7 +198,7 @@ func (e *editor) projectMenu() {
 	if e.noProject {
 		start, _ = os.UserHomeDir()
 	}
-	m.options = append(m.options, option{"Browse folders…", shortPath(start), func() { e.browseProjects(start) }, nil})
+	m.options = append(m.options, option{"Browse in Loom…", shortPath(start), func() { e.browseProjects(start) }, nil})
 	for _, p := range recentProjects() {
 		if !e.noProject && p == e.root {
 			continue
@@ -247,4 +252,40 @@ func (e *editor) needsProject(ids ...string) {
 			run(e)
 		}}
 	}
+}
+
+// chooseProject asks for a folder with the system dialog (Finder on macOS).
+// Elsewhere, or when the dialog is unavailable, it falls back to the menu.
+func (e *editor) chooseProject() {
+	if runtime.GOOS != "darwin" {
+		e.projectMenu()
+		return
+	}
+	start := e.root
+	if e.noProject {
+		start, _ = os.UserHomeDir()
+	}
+	e.notify("Choose a folder in Finder…")
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		script := `POSIX path of (choose folder with prompt "Open Project"` + ` default location (POSIX file ` + appleQuote(start) + `))`
+		out, err := exec.CommandContext(ctx, "osascript", "-e", script).Output()
+		path := strings.TrimSpace(string(out))
+		e.async <- func() {
+			switch {
+			case err == nil && path != "":
+				e.openProject(path)
+			case err != nil:
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) { // a cancelled dialog is not an error worth showing
+					e.projectMenu()
+				}
+			}
+		}
+	}()
+}
+
+func appleQuote(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }

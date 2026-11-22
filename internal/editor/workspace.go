@@ -19,7 +19,8 @@ import (
 
 func (e *editor) workspaceCommands() {
 	e.add("split-join", "Toggle Split Join", func(e *editor) { e.toggleSplitJoin() })
-	e.add("open-project", "Open Project", func(e *editor) { e.projectMenu() })
+	e.add("open-project", "Open Project", func(e *editor) { e.chooseProject() })
+	e.add("recent-projects", "Recent Projects", func(e *editor) { e.projectMenu() })
 	e.add("close-project", "Close Project", func(e *editor) { e.closeProject() })
 	e.add("dashboard", "Open Dashboard", func(e *editor) { e.showDashboard() })
 	e.add("explorer-popup", "Open Explorer Popup", func(e *editor) { e.openDirectory("") })
