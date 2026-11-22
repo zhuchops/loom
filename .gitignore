@@ -1,5 +1,6 @@
 /bin/
 /loom
 /loom-uppercase
+/loom-desktop
 .DS_Store
 dist/
