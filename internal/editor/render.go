@@ -26,6 +26,7 @@ func centerBox(w, h, width, height int) hitBox {
 }
 
 func (v *renderer) frame(box hitBox, title string) {
+	v.cards = append(v.cards, box)
 	v.screen.FillArea(box.x, box.y, box.w, box.h, ' ', menuStyle)
 	edge := menuStyle.Foreground(th.accent)
 	v.screen.FillArea(box.x, box.y, box.w, 1, '─', edge)
@@ -88,6 +89,7 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 		height++
 	}
 	box := centerBox(w, h, width, height)
+	v.menuFrame = box
 	v.frame(box, m.title)
 	contentWidth := box.w - 4
 	if sideBySide {

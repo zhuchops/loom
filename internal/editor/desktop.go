@@ -75,6 +75,8 @@ type desktop struct {
 	top, bottom    int // pixel heights of the tab bar and status bar
 	mx, my         int // pointer position in pixels
 	scale          float32
+	scroll         scrollAnim
+	demo           bool
 	width, height  int
 }
 
@@ -233,7 +235,7 @@ func (d *desktop) measure(gtx layout.Context) {
 		d.sp = unit.Sp(float64(d.sp) * target / adv)
 	}
 	d.cellW = max(1, int(math.Round(float64(w)/200)))
-	d.cellH = h * 118 / 100
+	d.cellH = h * 135 / 100
 	d.lift = (d.cellH - h) / 2
 }
 
@@ -282,6 +284,7 @@ func (d *desktop) frame(gtx layout.Context) {
 		d.send(tea.WindowSizeMsg{Width: cols, Height: rows})
 	}
 	d.input(gtx)
+	d.runDemo()
 	d.m.view.draw(d.m.editor)
 	if d.m.editor.quit {
 		d.w.Perform(system.ActionClose)
@@ -462,4 +465,30 @@ func (d *desktop) glyph(gtx layout.Context, x, y int, s string, c color.NRGBA, b
 	call := macro.Stop()
 	gtx.Constraints = layout.Constraints{Max: image.Pt(1<<20, d.cellH*2)}
 	widget.Label{MaxLines: 1}.Layout(gtx, d.shaper, f, d.sp, s, call)
+}
+
+// runDemo feeds the keys in LOOM_DEMO_KEYS (space separated, e.g. "space p")
+// once the first frame has a size. It exists to script screenshots.
+func (d *desktop) runDemo() {
+	keys := os.Getenv("LOOM_DEMO_KEYS")
+	if d.demo || keys == "" || d.cols == 0 {
+		return
+	}
+	d.demo = true
+	for _, k := range strings.Fields(keys) {
+		switch {
+		case k == "space":
+			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
+		case k == "enter":
+			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+		case k == "esc":
+			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+		case strings.HasPrefix(k, "ctrl+") && len(k) == 6:
+			d.send(tea.KeyPressMsg(tea.Key{Code: rune(k[5]), Mod: tea.ModCtrl}))
+		default:
+			for _, r := range k {
+				d.send(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
+			}
+		}
+	}
 }

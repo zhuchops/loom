@@ -148,7 +148,7 @@ When you scroll into the middle of a function or block, the lines that open it (
 
 The window is drawn as an application rather than a terminal: a taller tab bar with rounded tabs, hover states and vector close buttons; an Explorer sidebar with a section header, vector file and folder icons and rounded selection; a status bar with a coloured mode pill, problem counts, branch and `Ln, Col`; crisp one-pixel dividers and rounded popup frames. Interface text uses the system sans-serif font (Helvetica Neue on macOS), code uses Menlo or the font in `LOOM_FONT`.
 
-Menus, the command palette, completion and other popups are still laid out on the character grid (with crisp borders), so they look like Loom rather than like a native dialog. Only macOS has been tried. Cmd and Ctrl both act as Ctrl; Option acts as Alt.
+The command palette and other pickers, and the completion list, are drawn as cards: rounded corners, a soft shadow, a search field with an icon, sans-serif rows and rounded selection. Other popups (hover, signature hints, which-key, find bar, notifications) sit in the same kind of card but keep monospace text. Scrolling glides by pixel over about 140 ms when the first visible line changes (turn it off with `"animations": false`). Setting `LOOM_DEMO_KEYS="space p"` types those keys at startup, which is handy for screenshots. Only macOS has been tried. Cmd and Ctrl both act as Ctrl; Option acts as Alt.
 
 ### Touchpad scrolling
 

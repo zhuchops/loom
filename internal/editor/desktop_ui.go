@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"gioui.org/f32"
@@ -152,20 +154,201 @@ func (d *desktop) modal(e *editor) bool {
 	return e.menu != nil || e.notificationDetail != nil || e.directory != nil || e.tree.popup || e.panel != nil || e.diff != nil
 }
 
-func (d *desktop) paint(gtx layout.Context, size image.Point) {
-	f := d.m.view.screen
+// cellSource is anything the grid can be painted from: the live frame, or a
+// snapshot of part of an earlier one.
+type cellSource interface {
+	Get(x, y int) (string, cellStyle, int)
+}
+
+type snapCell struct {
+	s     string
+	style cellStyle
+	w     int
+}
+
+type frameCells struct {
+	x0, y0, w, h int
+	cells        []snapCell
+}
+
+func takeSnapshot(f *terminalFrame, r hitBox) *frameCells {
+	s := &frameCells{x0: r.x, y0: r.y, w: r.w, h: r.h, cells: make([]snapCell, r.w*r.h)}
+	for y := range r.h {
+		for x := range r.w {
+			c, st, w := f.Get(r.x+x, r.y+y)
+			s.cells[y*r.w+x] = snapCell{c, st, w}
+		}
+	}
+	return s
+}
+
+func (s *frameCells) Get(x, y int) (string, cellStyle, int) {
+	x, y = x-s.x0, y-s.y0
+	if x < 0 || y < 0 || x >= s.w || y >= s.h {
+		return " ", cellStyle{}, 1
+	}
+	c := s.cells[y*s.w+x]
+	return c.s, c.style, c.w
+}
+
+// scrollAnim glides the text of the focused pane when its first line changes.
+type scrollAnim struct {
+	buf     *buffer
+	rect    hitBox
+	lastTop int
+	last    *frameCells
+	old     *frameCells
+	oldTop  int
+	total   int
+	p0      float64
+	start   time.Time
+	active  bool
+}
+
+const scrollTime = 140 * time.Millisecond
+
+func (a *scrollAnim) progress(now time.Time) float64 {
+	t := min(1, float64(now.Sub(a.start))/float64(scrollTime))
+	ease := 1 - (1-t)*(1-t)*(1-t)
+	return a.p0 + (float64(a.total)-a.p0)*ease
+}
+
+func (d *desktop) activePane() *paneBox {
 	e := d.m.editor
+	for i := range d.m.view.panes {
+		p := &d.m.view.panes[i]
+		if p.leaf == e.activePane && p.b != nil && !p.b.dashboard {
+			return p
+		}
+	}
+	return nil
+}
+
+func (d *desktop) updateScroll(now time.Time, pane *paneBox) {
+	sa := &d.scroll
+	if pane == nil || d.modal(d.m.editor) {
+		*sa = scrollAnim{}
+		return
+	}
+	top := pane.b.top
+	if sa.buf != pane.b || sa.rect != pane.hitBox {
+		*sa = scrollAnim{buf: pane.b, rect: pane.hitBox, lastTop: top}
+		return
+	}
+	if top == sa.lastTop {
+		return
+	}
+	old, oldTop, p := sa.last, sa.lastTop, 0.0
+	if sa.active {
+		old, oldTop, p = sa.old, sa.oldTop, sa.progress(now)
+	}
+	total := top - oldTop
+	if old != nil && animationsOn && total != 0 && total < pane.h && -total < pane.h && len(d.m.view.cards) == 0 {
+		*sa = scrollAnim{buf: sa.buf, rect: sa.rect, lastTop: top, last: sa.last, old: old, oldTop: oldTop, total: total, p0: p, start: now, active: true}
+	} else {
+		sa.active = false
+	}
+	sa.lastTop = top
+}
+
+type cellRange struct{ x0, y0, x1, y1 int }
+
+func (d *desktop) onRing(x, y int) (ring, corner bool) {
+	for _, c := range d.m.view.cards {
+		if x < c.x || x >= c.x+c.w || y < c.y || y >= c.y+c.h {
+			continue
+		}
+		left, right, top, bottom := x == c.x, x == c.x+c.w-1, y == c.y, y == c.y+c.h-1
+		if left || right || top || bottom {
+			return true, (left || right) && (top || bottom)
+		}
+	}
+	return false, false
+}
+
+func (d *desktop) inCard(x, y int) bool {
+	for _, c := range d.m.view.cards {
+		if x >= c.x && x < c.x+c.w && y >= c.y && y < c.y+c.h {
+			return true
+		}
+	}
+	return false
+}
+
+// chromeCell reports cells that the sidebar and tab bar paint natively, so the
+// grid must leave them alone (unless a popup sits on top of them).
+func (d *desktop) chromeCell(x, y int) bool {
+	e := d.m.editor
+	if e.zen || d.inCard(x, y) {
+		return false
+	}
+	v := &d.m.view
+	if v.divider > 0 && x <= v.divider && y < d.rows-1 {
+		return true
+	}
+	return y == 0 && x > v.divider
+}
+
+func isFrameChar(s string) bool {
+	switch s {
+	case "│", "─", "╭", "╮", "╰", "╯":
+		return true
+	}
+	return false
+}
+
+func (d *desktop) cardRect(c hitBox) image.Rectangle {
 	rows := d.rows
-	d.fill(gtx, image.Rectangle{Max: size}, d.color(th.bg, th.bg))
-	for y := 0; y < f.Height() && y < rows; y++ {
-		py, ph := d.rowY(y, rows), d.rowH(y, rows)
-		for x := 0; x < f.Width(); {
-			_, style, width := f.Get(x, y)
+	y0 := d.rowY(min(c.y, rows-1), rows)
+	y1 := d.rowY(min(c.y+c.h-1, rows-1), rows) + d.cellH
+	return image.Rect(c.x*d.cellW, y0, (c.x+c.w)*d.cellW, y1)
+}
+
+// paintCards draws the shadow and body of every framed popup behind the grid.
+func (d *desktop) paintCards(gtx layout.Context) {
+	for _, c := range d.m.view.cards {
+		r := d.cardRect(c)
+		for i, alpha := range []uint8{14, 10, 7, 4} {
+			grow := d.dp(2 + 3*i)
+			shadow := image.Rect(r.Min.X-grow, r.Min.Y-grow+d.dp(5), r.Max.X+grow, r.Max.Y+grow+d.dp(5))
+			d.round(gtx, shadow, d.dp(8)+grow, color.NRGBA{A: alpha}, false)
+		}
+		d.round(gtx, r, d.dp(8), d.color(th.menu, th.bg), false)
+	}
+}
+
+func (d *desktop) paintCardBorders(gtx layout.Context) {
+	for _, c := range d.m.view.cards {
+		rr := clip.UniformRRect(d.cardRect(c).Inset(0), d.dp(8))
+		paint.FillShape(gtx.Ops, d.color(th.border, th.border), clip.Stroke{Path: rr.Path(gtx.Ops), Width: float32(max(1, d.dp(1)))}.Op())
+	}
+}
+
+func (d *desktop) paintCells(gtx layout.Context, src cellSource, r cellRange, dy int, main bool) {
+	rows := d.rows
+	skipBg := func(x, y int) bool {
+		if !main {
+			return false
+		}
+		if d.chromeCell(x, y) {
+			return true
+		}
+		_, corner := d.onRing(x, y)
+		return corner
+	}
+	for y := r.y0; y < r.y1 && y < rows; y++ {
+		py, ph := d.rowY(y, rows)+dy, d.rowH(y, rows)
+		for x := r.x0; x < r.x1; {
+			_, style, width := src.Get(x, y)
 			width = max(1, width)
+			if skipBg(x, y) {
+				x += width
+				continue
+			}
 			end := x + width
-			for end < f.Width() {
-				_, next, w := f.Get(end, y)
-				if next.bg != style.bg {
+			for end < r.x1 {
+				_, next, w := src.Get(end, y)
+				if next.bg != style.bg || skipBg(end, y) {
 					break
 				}
 				end += max(1, w)
@@ -176,27 +359,40 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 			x = end
 		}
 	}
+	f, _ := src.(*terminalFrame)
 	cursorX, cursorY := -1, -1
-	if f.cursorVisible {
+	if main && f != nil && f.cursorVisible {
 		cursorX, cursorY = f.cursorX, f.cursorY
-		py := d.rowY(cursorY, rows) + (d.rowH(cursorY, rows)-d.cellH)/2
-		r := image.Rect(cursorX*d.cellW, py, (cursorX+1)*d.cellW, py+d.cellH)
-		if f.cursorShape == cursorBar {
-			r.Max.X = r.Min.X + max(2, d.cellW/6)
+		if cursorX >= r.x0 && cursorX < r.x1 && cursorY >= r.y0 && cursorY < r.y1 {
+			py := d.rowY(cursorY, rows) + dy + (d.rowH(cursorY, rows)-d.cellH)/2
+			rect := image.Rect(cursorX*d.cellW, py, (cursorX+1)*d.cellW, py+d.cellH)
+			if f.cursorShape == cursorBar {
+				rect.Max.X = rect.Min.X + max(2, d.cellW/6)
+			}
+			d.fill(gtx, rect, d.color(th.fg, th.fg))
 		}
-		d.fill(gtx, r, d.color(th.fg, th.fg))
 	}
-	for y := 0; y < f.Height() && y < rows; y++ {
-		py := d.rowY(y, rows) + (d.rowH(y, rows)-d.cellH)/2
-		for x := 0; x < f.Width(); {
-			s, style, width := f.Get(x, y)
+	for y := r.y0; y < r.y1 && y < rows; y++ {
+		py := d.rowY(y, rows) + dy + (d.rowH(y, rows)-d.cellH)/2
+		for x := r.x0; x < r.x1; {
+			s, style, width := src.Get(x, y)
 			width = max(1, width)
 			if s == "" || s == " " {
 				x += width
 				continue
 			}
+			if main && d.chromeCell(x, y) {
+				x += width
+				continue
+			}
+			if main {
+				if ring, _ := d.onRing(x, y); ring && isFrameChar(s) {
+					x += width
+					continue
+				}
+			}
 			fg := style.fg
-			if x == cursorX && y == cursorY && f.cursorShape != cursorBar {
+			if x == cursorX && y == cursorY && f != nil && f.cursorShape != cursorBar {
 				fg = style.bg
 				if fg&defaultFlag != 0 {
 					fg = th.bg
@@ -218,8 +414,8 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 			}
 			var run strings.Builder
 			start := x
-			for x < f.Width() {
-				t, st, w := f.Get(x, y)
+			for x < r.x1 {
+				t, st, w := src.Get(x, y)
 				onCursor := x == cursorX && y == cursorY
 				if st.fg != style.fg || st.bold != style.bold || w > 1 || len(t) != 1 || t[0] < 0x20 || t[0] >= 0x7f || onCursor && start != x {
 					break
@@ -236,15 +432,168 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 			}
 		}
 	}
-	// A hairline above the status bar.
-	d.fill(gtx, image.Rect(0, d.height-d.bottom, size.X, d.height-d.bottom+1), d.color(th.border, th.border))
-	d.paintStatus(gtx, e)
-	if d.modal(e) {
-		return
-	}
+}
+
+func (d *desktop) paint(gtx layout.Context, size image.Point) {
+	f := d.m.view.screen
+	e := d.m.editor
+	rows := d.rows
+	full := cellRange{0, 0, f.Width(), min(f.Height(), rows)}
+	d.fill(gtx, image.Rectangle{Max: size}, d.color(th.bg, th.bg))
+	pane := d.activePane()
+	d.updateScroll(gtx.Now, pane)
 	if !e.zen {
 		d.paintSidebar(gtx, e)
 		d.paintTabs(gtx, e)
+		if d.modal(e) {
+			// Match the grid's own dimming behind popups.
+			v := &d.m.view
+			dim := color.NRGBA{A: 115}
+			if v.divider > 0 {
+				d.fill(gtx, image.Rect(0, 0, v.divider*d.cellW+1, d.height-d.bottom), dim)
+			}
+			d.fill(gtx, image.Rect(max(0, v.divider*d.cellW+1), 0, d.width, d.top), dim)
+		}
+	}
+	d.paintCards(gtx)
+	d.paintCells(gtx, f, full, 0, true)
+	sa := &d.scroll
+	if sa.active {
+		r := cellRange{pane.x, pane.y, pane.x + pane.w, pane.y + pane.h}
+		area := image.Rect(pane.x*d.cellW, d.rowY(pane.y, rows), (pane.x+pane.w)*d.cellW, d.rowY(pane.y+pane.h-1, rows)+d.cellH)
+		clipArea := clip.Rect(area).Push(gtx.Ops)
+		d.fill(gtx, area, d.color(th.bg, th.bg))
+		p := sa.progress(gtx.Now)
+		d.paintCells(gtx, sa.old, r, -int(p*float64(d.cellH)), false)
+		d.paintCells(gtx, f, r, int((float64(sa.total)-p)*float64(d.cellH)), true)
+		clipArea.Pop()
+		if gtx.Now.Sub(sa.start) >= scrollTime {
+			sa.active = false
+		}
+		d.w.Invalidate()
+	}
+	if pane != nil && !sa.active {
+		sa.last = takeSnapshot(f, pane.hitBox)
+	}
+	// A hairline above the status bar.
+	d.fill(gtx, image.Rect(0, d.height-d.bottom, size.X, d.height-d.bottom+1), d.color(th.border, th.border))
+	d.paintMenu(gtx, e)
+	d.paintCompletion(gtx, e)
+	d.paintCardBorders(gtx)
+	d.paintStatus(gtx, e)
+}
+
+func (d *desktop) columnRect(x0, x1, y0, y1 int) image.Rectangle {
+	rows := d.rows
+	return image.Rect(x0*d.cellW, d.rowY(y0, rows), x1*d.cellW, d.rowY(y1-1, rows)+d.cellH)
+}
+
+func (d *desktop) magnifier(gtx layout.Context, x, cy int, c color.NRGBA) {
+	k := d.scale
+	cx, cyf := float32(x)+5*k, float32(cy)-1*k
+	d.stroke(gtx, c, 1.4*k, func(p *clip.Path) {
+		const n = 16
+		for i := 0; i <= n; i++ {
+			a := float64(i) / n * 2 * 3.14159265
+			pt := f32.Pt(cx+5*k*float32(math.Cos(a)), cyf+5*k*float32(math.Sin(a)))
+			if i == 0 {
+				p.MoveTo(pt)
+			} else {
+				p.LineTo(pt)
+			}
+		}
+		p.MoveTo(f32.Pt(cx+3.6*k, cyf+3.6*k))
+		p.LineTo(f32.Pt(cx+7.5*k, cyf+7.5*k))
+	})
+}
+
+// paintMenu draws the command palette and other pickers: an input row and a
+// list with rounded selection, in the interface font.
+func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
+	v := &d.m.view
+	m := e.menu
+	if m == nil || e.notificationDetail != nil || m.confirmation || v.menuFrame.w == 0 {
+		return
+	}
+	fr, list := v.menuFrame, v.menuBox
+	x0, x1 := list.x, list.x+list.w
+	inputRow := fr.y + 1
+	block := d.columnRect(x0, x1, inputRow, max(list.y+list.h, inputRow+1))
+	d.fill(gtx, block, d.color(th.menu, th.bg))
+	muted, fg := d.color(th.muted, th.fg), d.color(th.fg, th.fg)
+	px0, px1 := block.Min.X, block.Max.X
+	if m.title != "" {
+		title := d.columnRect(fr.x+1, fr.x+fr.w-1, fr.y, fr.y+1)
+		d.fill(gtx, title, d.color(th.menu, th.bg))
+		d.ui(gtx, title.Min.X+d.dp(14), title.Min.Y+d.cellH/2+d.dp(2), m.title, muted, 12, true)
+	}
+	cy := d.rowY(inputRow, d.rows) + d.cellH/2
+	d.magnifier(gtx, px0+d.dp(12), cy, muted)
+	tx := px0 + d.dp(34)
+	switch {
+	case m.input == "":
+		d.ui(gtx, tx, cy, "Type to search…", muted, 15, false)
+		d.fill(gtx, image.Rect(tx-1, cy-d.dp(8), tx+max(1, d.dp(1)), cy+d.dp(8)), d.color(th.accent, th.fg))
+	default:
+		w := d.ui(gtx, tx, cy, d.fit(gtx, m.input, px1-tx-d.dp(16), 15, false), fg, 15, false)
+		d.fill(gtx, image.Rect(tx+w+d.dp(1), cy-d.dp(8), tx+w+d.dp(1)+max(1, d.dp(1)), cy+d.dp(8)), d.color(th.accent, th.fg))
+	}
+	rule := d.rowY(inputRow, d.rows) + d.cellH
+	d.fill(gtx, image.Rect(px0+d.dp(8), rule-1, px1-d.dp(8), rule), d.color(th.border, th.border))
+	if len(m.matches) == 0 && m.empty != "" {
+		d.ui(gtx, px0+d.dp(14), d.rowY(list.y, d.rows)+d.cellH/2, m.empty, muted, 13, false)
+	}
+	for i := 0; i < list.h && list.start+i < len(m.matches); i++ {
+		o := m.matches[list.start+i]
+		py := d.rowY(list.y+i, d.rows)
+		cy := py + d.cellH/2
+		if list.start+i == m.selected {
+			d.round(gtx, image.Rect(px0+d.dp(6), py+d.dp(1), px1-d.dp(6), py+d.cellH-d.dp(1)), d.dp(6), d.color(th.active, th.bg), false)
+		}
+		right := px1 - d.dp(14)
+		if o.hint != "" {
+			hw := d.uiWidth(gtx, o.hint, 12, false)
+			if hw < (px1-px0)/2 {
+				d.ui(gtx, right-hw, cy, o.hint, muted, 12, false)
+				right -= hw + d.dp(12)
+			}
+		}
+		d.ui(gtx, px0+d.dp(14), cy, d.fit(gtx, o.label, right-px0-d.dp(14), 14, false), fg, 14, false)
+	}
+}
+
+// paintCompletion draws the completion list the same way.
+func (d *desktop) paintCompletion(gtx layout.Context, e *editor) {
+	v := &d.m.view
+	cb, c := v.completeBox, e.completion
+	if e.menu != nil || cb.h == 0 || len(c.items) == 0 {
+		return
+	}
+	framed := false
+	for _, card := range v.cards {
+		framed = framed || card.x == cb.x-1 && card.y == cb.y-1
+	}
+	if !framed {
+		return
+	}
+	block := d.columnRect(cb.x, cb.x+cb.w, cb.y, cb.y+cb.h)
+	d.fill(gtx, block, d.color(th.menu, th.bg))
+	muted, fg := d.color(th.muted, th.fg), d.color(th.fg, th.fg)
+	for i := 0; i < cb.h && cb.start+i < len(c.items); i++ {
+		item := c.items[cb.start+i]
+		py := d.rowY(cb.y+i, d.rows)
+		cy := py + d.cellH/2
+		if cb.start+i == c.selected {
+			d.round(gtx, image.Rect(block.Min.X+d.dp(4), py+d.dp(1), block.Max.X-d.dp(4), py+d.cellH-d.dp(1)), d.dp(6), d.color(th.active, th.bg), false)
+		}
+		right := block.Max.X - d.dp(10)
+		if item.Detail != "" {
+			detail := d.fit(gtx, item.Detail, (block.Max.X-block.Min.X)/2, 12, false)
+			dw := d.uiWidth(gtx, detail, 12, false)
+			d.ui(gtx, right-dw, cy, detail, muted, 12, false)
+			right -= dw + d.dp(12)
+		}
+		d.ui(gtx, block.Min.X+d.dp(10), cy, d.fit(gtx, item.Label, right-block.Min.X-d.dp(10), 13, false), fg, 13, false)
 	}
 }
 

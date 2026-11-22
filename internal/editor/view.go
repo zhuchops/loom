@@ -45,6 +45,8 @@ type renderer struct {
 	wheelAxis                                   int // 1 vertical, 2 horizontal
 	wheelAt                                     time.Time
 	status                                      statusInfo
+	cards                                       []hitBox // framed popups drawn this frame
+	menuFrame                                   hitBox
 	tabStart                                    int // first visible tab while scrolled by hand
 	tabManual                                   bool
 	tabActive                                   *buffer
@@ -70,6 +72,7 @@ func (v *renderer) draw(e *editor) {
 	v.screen.Fill(' ', baseStyle)
 	v.screen.HideCursor()
 	v.treeBox, v.menuBox, v.completeBox, v.directoryBox = hitBox{}, hitBox{}, hitBox{}, hitBox{}
+	v.cards, v.menuFrame = v.cards[:0], hitBox{}
 	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
