@@ -76,15 +76,35 @@ func loadTheme(cfg config) error {
 	return nil
 }
 
-func (e *editor) setTheme(t theme.Theme) {
+func defaultTheme() theme.Theme { return theme.All[0] }
+
+func checkTheme(cfg config) error {
+	if _, ok := theme.Find(cfg.Theme); cfg.Theme != "" && !ok {
+		return fmt.Errorf("unknown theme %q", cfg.Theme)
+	}
+	return nil
+}
+
+// showTheme changes the colours on screen without saving anything.
+func (e *editor) showTheme(t theme.Theme) {
 	applyTheme(t)
-	for _, b := range e.buffers {
-		// Highlights carry colors, so rebuild them for the new palette.
-		b.semantic, b.lexical = nil, nil
-		b.semanticVersion, b.highlightVersion = 0, 0
+	e.refreshHighlights()
+}
+
+// setTheme makes t the theme Loom starts with. Where the project chooses the
+// theme, the change lasts until it is reloaded.
+func (e *editor) setTheme(t theme.Theme) {
+	e.showTheme(t)
+	if e.projectSets("theme") {
+		e.notify("Theme: " + t.Name + " for now. This project's .loom.json sets its own")
+		return
 	}
 	if err := os.MkdirAll(filepath.Dir(themeStatePath()), 0755); err == nil {
 		os.WriteFile(themeStatePath(), []byte(t.Name+"\n"), 0644)
+	}
+	if err := e.setSetting("theme", t.Name); err != nil {
+		e.notify(err.Error())
+		return
 	}
 	e.notify("Theme: " + t.Name)
 }

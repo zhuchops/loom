@@ -81,9 +81,30 @@ Besides the Vim keys, the usual editor shortcuts work in every mode: `Ctrl+F` fi
 
 ### Settings, reload and project config
 
-**Space ,** (or **Settings** in the palette) opens a settings list. Pick a row to flip or cycle it; the change is written to your config file and applied at once. A config file you save inside Loom reloads automatically, and **Reload Config** does it on demand. A broken file is reported and the running settings stay. Plugins are read only at startup.
+**Space ,**, **Settings** in the palette or `⌘,` opens the settings. A change is applied and saved at once.
 
-`scrolloff` (default 5) keeps that many lines visible around the cursor.
+The desktop app has a settings window. Type to search all of it, move with the arrows, change with `←` and `→`, switch pages with Tab. A dot marks what you changed; **Reset** (or Delete) goes back to the default. The terminal shows a list of the settings that mean something in a terminal.
+
+| Page | Settings |
+| --- | --- |
+| Appearance | Default color theme (`theme`), animations (`animations`) |
+| Fonts, code | `font_family`, `font_size`, `font_weight`, `font_bold_weight`, `line_height`, `letter_spacing`, `font_ligatures`, `italic_comments`, `font_fallback` |
+| Fonts, interface | `ui_font_family`, `ui_font_size` (scales the whole interface), `ui_font_weight` |
+| Editor | `line_numbers`, `relative_numbers`, `highlight_line`, `indent_guides`, `tab_size`, `indent_style`, `scrolloff`, `sticky_scroll`, `smooth_scroll`, `auto_complete`, `auto_pairs`, `hover_docs` |
+| Cursor | `cursor_normal`, `cursor_insert` (`block`, `bar` or `underline`), `cursor_blink`, `cursor_glide` |
+| Interface | `path_bar`, `status_bar`, `scrollbar` |
+| Files | `format_on_save`, `organize_imports`, `reopen_project`, `restore_session` |
+| Languages | Tab size, indent style and format on save per language, and whether its server and formatter are installed |
+| Keyboard | The keys of every command in Normal, Visual and Insert mode. Click one and press the new keys. `⌘` shortcuts belong to the menu bar and can't be changed. |
+
+Settings live in `~/.config/loom/`, in two files read in this order:
+
+- `config.json`: your config. The settings window writes here only what Loom 0.17 already understood.
+- `settings.json`: settings added since, such as fonts. An older `loom` on the same machine doesn't read it, and would refuse to start if these keys were in `config.json`. You can still write any key in either file yourself; `settings.json` wins.
+
+A file you save inside Loom reloads automatically, and **Reload Config** does it on demand. A broken file is reported and the running settings stay; nothing writes over a file that isn't valid JSON. If the desktop app can't read a file when it starts, it says so and starts with the rest. Plugins are read only at startup.
+
+Code fonts must be monospaced. Fonts installed while Loom runs show up the next time you open the settings. Ligatures need a letter spacing of 0.
 
 Settings can be set per language, and per project:
 
@@ -97,7 +118,7 @@ Settings can be set per language, and per project:
 }
 ```
 
-A `.loom.json` in the project root is read on top of your config. Because a repository is not trusted, it may change settings, per-language settings and bindings, but not language servers, formatters or plugins; such a file is rejected.
+A `.loom.json` in the project root is read on top of your config, and what it sets is marked **Project** in the settings. Because a repository is not trusted, it may change settings, per-language settings and bindings, but not language servers, formatters or plugins; such a file is rejected. Closing or switching projects drops its settings.
 
 ### Alt keys
 
@@ -163,12 +184,12 @@ When you scroll into the middle of a function or block, the lines that open it (
 | `⌘F`, `⌥⌘F`, `⇧⌘F` | Find, Replace, Find in Project |
 | `⌘B`, `⇧⌘G`, `⇧⌘M` | Sidebar, Source Control, Problems |
 | `⌘L`, `⌘,` | Go to Line, Settings |
-| `⌘=`, `⌘-`, `⌘0` | Code size, until Loom quits |
+| `⌘=`, `⌘-`, `⌘0` | Code font size, saved |
 | `⌘←` / `⌘→` | Start / end of line |
 
 On macOS, Command belongs to the menu bar and Control to Vim, so `⌘D` is not `Ctrl+D`. Control shortcuts also work on a Russian keyboard layout. Option acts as Alt.
 
-Interface text uses Avenir Next, code uses Menlo or the font file in `LOOM_FONT`. Secondary text and syntax colors are nudged where a theme would make them unreadable. Started from Finder, Loom takes `PATH` from your login shell so language servers and formatters are found. Set `"animations": false` to turn off the gliding cursor and scrolling.
+Interface text uses Avenir Next and code Menlo until you pick others in Settings → Fonts (`LOOM_FONT` can point at a font file as the default). Secondary text and syntax colors are nudged where a theme would make them unreadable. Started from Finder, Loom takes `PATH` from your login shell so language servers and formatters are found. Set `"animations": false` to turn off the gliding cursor and scrolling.
 
 The app is signed ad hoc, not notarized. It has only been used on macOS. The Windows build does not compile yet (`recovery.go` uses a Unix call), and the Linux desktop build is untested.
 
@@ -312,7 +333,7 @@ Built-in language entries, with a language server and formatter used only when t
 
 ## Color themes
 
-Run **Color Theme** from the command palette to switch themes. Your choice is remembered next time. Built in: nvchad (default, the NvChad One Dark palette), everforest, gruvbox, nord, dracula, tokyo-night, catppuccin, one-dark, monokai, solarized-dark, solarized-light, and terminal. The `terminal` theme draws with your terminal's own background and 16 ANSI colors, so it follows whatever palette the terminal uses. Set `"theme": "nord"` in your config to pin one.
+Pick the default theme in **Settings → Appearance**, or run **Color Theme** from the command palette. Either saves it as `theme` in your config. Built in: nvchad (default, the NvChad One Dark palette), everforest, gruvbox, nord, dracula, tokyo-night, catppuccin, one-dark, monokai, solarized-dark, solarized-light, and terminal. The `terminal` theme draws with your terminal's own background and 16 ANSI colors, so it follows whatever palette the terminal uses. A project can set its own with `theme` in its `.loom.json`.
 
 ## File explorer and mouse
 

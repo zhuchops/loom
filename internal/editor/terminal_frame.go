@@ -30,6 +30,7 @@ func (c terminalColor) RGBA() (r, g, b, a uint32) {
 type cellStyle struct {
 	fg, bg    terminalColor
 	bold      bool
+	italic    bool
 	underline terminalColor
 }
 
@@ -62,6 +63,9 @@ func (s cellStyle) uvStyle() uv.Style {
 	style := uv.Style{Fg: s.fg.uvColor(), Bg: s.bg.uvColor()}
 	if s.bold {
 		style.Attrs = uv.AttrBold
+	}
+	if s.italic {
+		style.Attrs |= uv.AttrItalic
 	}
 	if s.underline != 0 {
 		style.Underline, style.UnderlineColor = uv.UnderlineCurly, s.underline.uvColor()
@@ -124,7 +128,7 @@ func (f *terminalFrame) Get(x, y int) (string, cellStyle, int) {
 		return "", cellStyle{}, 0
 	}
 	s := cell.Style
-	style := cellStyle{fg: frameColor(s.Fg), bg: frameColor(s.Bg), bold: s.Attrs&uv.AttrBold != 0}
+	style := cellStyle{fg: frameColor(s.Fg), bg: frameColor(s.Bg), bold: s.Attrs&uv.AttrBold != 0, italic: s.Attrs&uv.AttrItalic != 0}
 	if s.Underline != uv.UnderlineNone {
 		style.underline = frameColor(s.UnderlineColor)
 	}

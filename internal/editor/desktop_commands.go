@@ -5,6 +5,7 @@ package editor
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -15,6 +16,26 @@ func (d *desktop) command(id string) {
 		return
 	}
 	e := d.m.editor
+	if s := d.settings; s != nil && d.settingsHaveKeys() {
+		switch id {
+		case "paste":
+			if text, ok := clipboardPaste(); ok {
+				d.settingsKey(keyInput{paste: text})
+			}
+			return
+		case "copy", "cut", "undo", "redo", "select-all":
+			return
+		case "search":
+			s.focusSearch()
+			return
+		case "close-tab":
+			d.settings = nil
+			return
+		case "zoom-in", "zoom-out", "zoom-reset", "quit", "settings":
+		default:
+			d.settings = nil
+		}
+	}
 	doc := e
 	if e.directory != nil {
 		doc = e.directory.doc
@@ -334,3 +355,26 @@ const (
 	pickFile
 	pickSave
 )
+
+// askAboutConfig reports a config that couldn't be used. A toast would be
+// gone, or replaced by a language server's, before it was read.
+func (d *desktop) askAboutConfig() {
+	e := d.m.editor
+	if e.configProblem == nil {
+		return
+	}
+	file, problem := e.userConfigPath(), e.configProblem.Error()
+	for _, other := range []string{addedPath(file), filepath.Join(e.root, ".loom.json")} {
+		if other != "" && strings.Contains(problem, other) {
+			file = other
+		}
+	}
+	d.dialog = &dialog{
+		title: "Some settings couldn't be loaded",
+		body:  problem + "\n\nLoom started without them. Fix the file and save it to apply it.",
+		choices: []dialogChoice{
+			{"Open File", func() { e.open(file) }},
+			{"Continue", nil},
+		},
+	}
+}

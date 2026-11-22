@@ -71,8 +71,8 @@ func (v *renderer) mouseDiagnosticHover(e *editor, event pointerEvent, wheel int
 		}
 		if len(messages) > 0 {
 			diagnostic := strings.Join(messages, "\n\n")
-			v.diagnosticHover = diagnosticHover{buffer: b, version: b.version, x: event.x, y: event.y, at: at, message: diagnostic, diagnostic: diagnostic, requestDocumentation: event.x >= pane.x+pane.gutter && at < b.lineEnd(row)}
-		} else if event.x >= pane.x+pane.gutter && at < b.lineEnd(row) {
+			v.diagnosticHover = diagnosticHover{buffer: b, version: b.version, x: event.x, y: event.y, at: at, message: diagnostic, diagnostic: diagnostic, requestDocumentation: e.cfg.HoverDocs && event.x >= pane.x+pane.gutter && at < b.lineEnd(row)}
+		} else if e.cfg.HoverDocs && event.x >= pane.x+pane.gutter && at < b.lineEnd(row) {
 			v.diagnosticHover = diagnosticHover{buffer: b, version: b.version, x: event.x, y: event.y, at: at, title: "Hover Documentation", requestDocumentation: true}
 		}
 		if v.diagnosticHover.requestDocumentation && previous.requestDocumentation && previous.buffer == b && previous.version == b.version && previous.at == at && previous.diagnostic == v.diagnosticHover.diagnostic {

@@ -340,6 +340,9 @@ func gitColor(mark byte) terminalColor {
 
 func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	gutter := min(box.w-1, len(fmt.Sprint(len(b.lines)))+3)
+	if !e.cfg.LineNumbers {
+		gutter = min(box.w-1, 2) // room for signs and folds
+	}
 	if box.w < 3 {
 		return
 	}
@@ -413,7 +416,7 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 		screenY++
 		y := screenY
 		bg := th.bg
-		if i == row && focused {
+		if i == row && focused && e.cfg.HighlightLine {
 			bg = lineStyle
 			v.screen.FillArea(box.x, y, box.w, 1, ' ', baseStyle.Background(bg))
 		}
@@ -429,10 +432,12 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 		if e.relativeNumbers && i != row {
 			lineNumber = absInt(i - row)
 		}
-		v.write(box.x+1, y, gutter-2, fmt.Sprintf("%*d", gutter-2, lineNumber), number)
+		if e.cfg.LineNumbers {
+			v.write(box.x+1, y, gutter-2, fmt.Sprintf("%*d", gutter-2, lineNumber), number)
+		}
 		// The blank column between the number and the text shows fold state:
 		// ▾ for a fold that is open, ▸ for one that is closed.
-		if _, ok := foldable[i]; ok && gutter >= 3 {
+		if _, ok := foldable[i]; ok && gutter >= 2 {
 			glyph := "▾"
 			if b.folds.closed[i] {
 				glyph = "▸"

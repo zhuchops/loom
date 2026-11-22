@@ -91,8 +91,10 @@ type editor struct {
 	surroundFlash               surroundFlash
 	dashboardSelection          int
 	noProject                   bool
-	configFile                  string
-	configExplicit              bool
+	// configProblem is why Loom had to start without some of the config.
+	configProblem error
+	// settingsPage, when a front end sets it, shows its own settings window.
+	settingsPage func()
 	// pickFolder, when a front end sets it, shows its own folder dialog.
 	pickFolder func(start string, chosen func(path string))
 }
@@ -110,6 +112,7 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 	e.layout = &pane{b: b, cursor: b.cursor, top: b.top, left: b.left}
 	e.activePane = e.layout
 	e.relativeNumbers = cfg.RelativeNumbers
+	italicComments = cfg.ItalicComments
 	e.languageWake = make(chan int, 4)
 	e.gitWake = make(chan struct{}, 1)
 	e.tree = fileTree{sidebar: true, width: 28, expanded: map[string]bool{root: true}}

@@ -5,6 +5,7 @@ package editor
 import (
 	"image"
 	"image/color"
+	"math"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -53,7 +54,7 @@ func (s *frameCells) Get(x, y int) (string, cellStyle, int) {
 // boxRect is where a box of cells is, stretched over the padding at the edges.
 func (d *desktop) boxRect(b hitBox, region rect) rect {
 	o := d.geo.grid.Min
-	r := image.Rect(o.X+b.x*d.cellW, o.Y+b.y*d.cellH, o.X+(b.x+b.w)*d.cellW, o.Y+(b.y+b.h)*d.cellH)
+	r := image.Rect(o.X+d.cellX(b.x), o.Y+b.y*d.cellH, o.X+d.cellX(b.x+b.w), o.Y+(b.y+b.h)*d.cellH)
 	if b.x == 0 {
 		r.Min.X = region.Min.X
 	}
@@ -141,7 +142,7 @@ func (d *desktop) paintDivider(div paneDivider, region rect) {
 
 func (d *desktop) paintPaneScrollbar(e *editor, p paneBox, area rect) {
 	total := len(p.b.lines)
-	if total <= p.h {
+	if total <= p.h || !e.cfg.Scrollbar {
 		return
 	}
 	track := image.Rect(area.Max.X-d.u(10), area.Min.Y, area.Max.X, area.Max.Y)
@@ -183,7 +184,7 @@ func (d *desktop) paintCells(src cellSource, box hitBox, dy int, region rect, gr
 				end += max(1, w)
 			}
 			if style.bg != th.bg {
-				r := image.Rect(o.X+x*d.cellW, py, o.X+end*d.cellW, py+d.cellH)
+				r := image.Rect(o.X+d.cellX(x), py, o.X+d.cellX(end), py+d.cellH)
 				if x == 0 {
 					r.Min.X = region.Min.X
 				}
@@ -205,29 +206,35 @@ func (d *desktop) paintCells(src cellSource, box hitBox, dy int, region rect, gr
 				x += width
 			} else {
 				bg := background(style.bg)
-				px := o.X + x*d.cellW
+				px := o.X + d.cellX(x)
 				switch {
 				case d.lineChar(px, py, s, style.fg, bg):
 					x += width
 				case !plainASCII(s):
-					d.glyph(px, py, s, d.cellFG(style.fg, bg), style.bold)
+					d.glyph(px, py, s, d.cellFG(style.fg, bg), style.bold, style.italic)
 					x += width
 				default:
 					var run strings.Builder
+					var last byte
 					for x < x1 {
 						t, next, _ := src.Get(x, y)
-						if next.fg != style.fg || next.bg != style.bg || next.bold != style.bold || next.underline != style.underline || !plainASCII(t) {
+						if next.fg != style.fg || next.bg != style.bg || next.bold != style.bold || next.italic != style.italic || next.underline != style.underline || !plainASCII(t) {
 							break
 						}
+						// Spaced-out letters are placed one by one.
+						if run.Len() > 0 && (d.look.spacing != 0 || !d.look.ligatures && ligatureBreak(last, t[0])) {
+							break
+						}
+						last = t[0]
 						run.WriteString(t)
 						x++
 					}
-					d.glyph(px, py, run.String(), d.cellFG(style.fg, bg), style.bold)
+					d.glyph(px, py, run.String(), d.cellFG(style.fg, bg), style.bold, style.italic)
 				}
 			}
 			if style.underline != 0 {
 				uy := py + d.cellH - d.u(2.5)
-				d.fill(image.Rect(o.X+start*d.cellW, uy, o.X+x*d.cellW, uy+d.u(1.2)), nrgba(style.underline, d.c.red))
+				d.fill(image.Rect(o.X+d.cellX(start), uy, o.X+d.cellX(x), uy+d.u(1.2)), nrgba(style.underline, d.c.red))
 			}
 		}
 	}
@@ -235,9 +242,10 @@ func (d *desktop) paintCells(src cellSource, box hitBox, dy int, region rect, gr
 
 func plainASCII(s string) bool { return len(s) == 1 && s[0] > 0x20 && s[0] < 0x7f }
 
-func (d *desktop) glyph(x, y int, s string, c color.NRGBA, bold bool) {
+func (d *desktop) glyph(x, y int, s string, c color.NRGBA, bold, italic bool) {
 	st := d.code
-	st.strong = bold
+	st.strong, st.italic = bold, italic
+	x += d.px(d.look.spacing / 2)
 	defer op.Offset(image.Pt(x, y+d.lift)).Push(d.gtx.Ops).Pop()
 	d.lay(d.gtx, s, st, c)
 }
@@ -248,7 +256,7 @@ func (d *desktop) lineChar(x, y int, s string, fg terminalColor, bg color.NRGBA)
 	if n != len(s) {
 		return false
 	}
-	w, h, line := d.cellW, d.cellH, d.hairline()
+	w, h, line := int(math.Ceil(d.cellW)), d.cellH, d.hairline()
 	cx, cy := x+w/2, y+h/2
 	c := nrgba(fg, d.c.text)
 	switch r {
@@ -300,7 +308,7 @@ func (d *desktop) activePane() *paneBox {
 }
 
 func (d *desktop) modal(e *editor) bool {
-	return d.dialog != nil || e.menu != nil || e.notificationDetail != nil || e.directory != nil || e.panel != nil || e.diff != nil
+	return d.dialog != nil || d.settings != nil || e.menu != nil || e.notificationDetail != nil || e.directory != nil || e.panel != nil || e.diff != nil
 }
 
 // scrollAnim glides the text of the focused pane when its first line changes.
@@ -345,7 +353,8 @@ func (d *desktop) updateScroll(pane *paneBox) {
 		old, oldTop, p = sa.old, sa.oldTop, sa.progress(now)
 	}
 	total := top - oldTop
-	if old != nil && animationsOn && total != 0 && total < pane.h && -total < pane.h {
+	cfg := &e.cfg.options
+	if old != nil && animationsOn && cfg.Animations && cfg.SmoothScroll && total != 0 && total < pane.h && -total < pane.h {
 		*sa = scrollAnim{buf: sa.buf, box: sa.box, lastTop: top, last: sa.last, old: old, oldTop: oldTop, total: total, p0: p, start: now, active: true}
 	} else {
 		sa.active = false
@@ -356,7 +365,7 @@ func (d *desktop) updateScroll(pane *paneBox) {
 // cursorAnim slides the cursor between cells instead of jumping.
 type cursorAnim struct {
 	x, y, fx, fy, tx, ty float32
-	start                time.Time
+	start, moved         time.Time
 	active, valid        bool
 }
 
@@ -372,10 +381,15 @@ func (d *desktop) updateCursor(f *terminalFrame) {
 	if sa := &d.scroll; sa.active {
 		dy = int((float64(sa.total) - sa.progress(now)) * float64(d.cellH))
 	}
-	tx, ty := float32(o.X+f.cursorX*d.cellW), float32(o.Y+f.cursorY*d.cellH+dy)
+	tx, ty := float32(o.X+d.cellX(f.cursorX)), float32(o.Y+f.cursorY*d.cellH+dy)
 	far := absf(tx-c.tx) > float32(24*d.cellW) || absf(ty-c.ty) > float32(10*d.cellH)
-	if !c.valid || d.scroll.active || d.modal(d.m.editor) || far || !animationsOn {
-		*c = cursorAnim{x: tx, y: ty, tx: tx, ty: ty, valid: true}
+	cfg := &d.m.editor.cfg.options
+	glide := animationsOn && cfg.Animations && cfg.CursorGlide
+	if tx != c.tx || ty != c.ty {
+		c.moved = now // a moving cursor doesn't blink
+	}
+	if !c.valid || d.scroll.active || d.modal(d.m.editor) || far || !glide {
+		*c = cursorAnim{x: tx, y: ty, tx: tx, ty: ty, valid: true, moved: c.moved}
 		return
 	}
 	if tx != c.tx || ty != c.ty {
@@ -394,15 +408,35 @@ func (d *desktop) updateCursor(f *terminalFrame) {
 	}
 }
 
+const blinkTime = 530 * time.Millisecond
+
 func (d *desktop) paintCursor(f *terminalFrame, ground color.NRGBA) {
-	if !f.cursorVisible || !d.cur.valid || d.dialog != nil {
+	if !f.cursorVisible || !d.cur.valid || d.dialog != nil || d.settings != nil {
 		return
 	}
+	cfg := &d.m.editor.cfg.options
+	shape := cfg.CursorNormal
+	if f.cursorShape == cursorBar {
+		shape = cfg.CursorInsert
+	}
+	if cfg.CursorBlink && d.active {
+		if d.cur.moved.IsZero() {
+			d.cur.moved = d.gtx.Now
+		}
+		steps := d.gtx.Now.Sub(d.cur.moved) / blinkTime
+		d.gtx.Execute(op.InvalidateCmd{At: d.cur.moved.Add((steps + 1) * blinkTime)})
+		if steps%2 == 1 {
+			return
+		}
+	}
 	x, y := int(d.cur.x), int(d.cur.y)
-	r := image.Rect(x, y, x+d.cellW, y+d.cellH)
+	r := image.Rect(x, y, x+int(math.Round(d.cellW)), y+d.cellH)
 	switch {
-	case f.cursorShape == cursorBar:
-		r.Max.X = r.Min.X + d.u(2)
+	case shape == "bar":
+		r.Max.X = r.Min.X + max(1, d.px(2))
+		d.fill(r, d.c.accent)
+	case shape == "underline":
+		r.Min.Y = r.Max.Y - max(1, d.px(2.5))
 		d.fill(r, d.c.accent)
 	case !d.active:
 		d.border(r, 1, d.c.accent, d.u(1))
@@ -411,7 +445,7 @@ func (d *desktop) paintCursor(f *terminalFrame, ground color.NRGBA) {
 	default:
 		d.round(r, 1.5, d.c.accent)
 		if s, style, _ := f.Get(f.cursorX, f.cursorY); s != "" && s != " " && s != "▏" {
-			d.glyph(x, y, s, readable(ground, d.c.accent, 4.5), style.bold)
+			d.glyph(x, y, s, readable(ground, d.c.accent, 4.5), style.bold, style.italic)
 		}
 	}
 }

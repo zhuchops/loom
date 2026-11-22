@@ -1,11 +1,8 @@
 package editor
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 )
 
 // tabSizeFor and indentStyleFor apply a language's own settings over the global ones.
@@ -36,29 +33,63 @@ func (e *editor) useTabWidth(b *buffer) { tabWidth = e.tabSizeFor(b.path) }
 // reloadConfig re-reads the user and project config without restarting. A
 // broken file is reported and the running settings stay as they were.
 func (e *editor) reloadConfig() {
-	cfg, err := loadConfig(e.cfg.path, e.cfg.explicit, e.root)
+	cfg, err := loadConfig(e.cfg.path, e.cfg.explicit, e.configRoot())
 	if err != nil {
 		e.notify(err.Error())
 		return
 	}
-	cfg.Profile, cfg.Plugins = e.cfg.Profile, e.cfg.Plugins
+	cfg.Profile = e.cfg.Profile
 	keys, err := compileKeys(cfg, e.commands)
+	if err == nil {
+		err = e.useConfig(cfg, keys)
+	}
 	if err != nil {
 		e.notify("Config: " + err.Error())
 		return
 	}
-	if err := loadTheme(cfg); err != nil {
-		e.notify("Config: " + err.Error())
-		return
+	e.notify("Config reloaded")
+}
+
+// useConfig switches the running editor to cfg.
+func (e *editor) useConfig(cfg config, keys map[string]map[string]string) error {
+	if err := checkTheme(cfg); err != nil {
+		return err
 	}
+	before, oldTheme := e.cfg, th.name
+	if before.Theme != "" && cfg.Theme == "" {
+		applyTheme(defaultTheme()) // unless one was picked before, below
+	}
+	if err := loadTheme(cfg); err != nil {
+		return err
+	}
+	cfg.Profile, cfg.Plugins = before.Profile, before.Plugins
 	e.cfg, e.keys = cfg, keys
-	e.relativeNumbers = cfg.RelativeNumbers
+	// Space n changes this for the session; only a changed setting undoes that.
+	if cfg.RelativeNumbers != before.RelativeNumbers {
+		e.relativeNumbers = cfg.RelativeNumbers
+	}
+	italicComments = cfg.ItalicComments
 	e.useTabWidth(e.b)
+	if e.directory != nil {
+		doc := e.directory.doc
+		doc.cfg, doc.keys = cfg, keys
+		doc.cfg.AutoComplete, doc.cfg.AutoPairs = false, false
+	}
+	if th.name != oldTheme || cfg.ItalicComments != before.ItalicComments {
+		e.refreshHighlights()
+	}
+	return nil
+}
+
+// refreshHighlights rebuilds highlights, which carry colours and styles.
+func (e *editor) refreshHighlights() {
 	for _, b := range e.buffers {
 		b.semantic, b.lexical = nil, nil
 		b.semanticVersion, b.highlightVersion = 0, 0
 	}
-	e.notify("Config reloaded")
+	if e.b.path != "" {
+		e.scheduleLanguage()
+	}
 }
 
 // configSaved reloads when the file just saved is the user or project config.
@@ -67,39 +98,17 @@ func (e *editor) configSaved(path string) {
 	if err != nil {
 		return
 	}
-	user, _ := filepath.Abs(e.cfg.path)
-	if abs == user || abs == filepath.Join(e.root, ".loom.json") {
+	user, _ := filepath.Abs(e.userConfigPath())
+	if abs == user || abs == addedPath(user) || abs == filepath.Join(e.root, ".loom.json") {
 		e.reloadConfig()
 	}
 }
 
-// persistSetting writes one top-level key into the user config file.
+// persistSetting saves one setting and reports what went wrong.
 func (e *editor) persistSetting(key string, value any) {
-	path := e.cfg.path
-	if path == "" {
-		path = configPath()
-	}
-	doc := map[string]any{}
-	if raw, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(raw, &doc); err != nil {
-			e.notify("Config is not valid JSON: " + err.Error())
-			return
-		}
-	}
-	doc[key] = value
-	out, err := json.MarshalIndent(doc, "", "  ")
-	if err == nil {
-		err = os.MkdirAll(filepath.Dir(path), 0o755)
-	}
-	if err == nil {
-		err = os.WriteFile(path, append(out, '\n'), 0o644)
-	}
-	if err != nil {
+	if err := e.setSetting(key, value); err != nil {
 		e.notify(err.Error())
-		return
 	}
-	e.cfg.path = path
-	e.reloadConfig()
 }
 
 // next returns the entry after current in choices, wrapping around.
@@ -108,57 +117,66 @@ func next[T comparable](choices []T, current T) T {
 	return choices[(i+1)%len(choices)]
 }
 
+// openSettings shows the settings window, or the list where there is none.
+func (e *editor) openSettings() {
+	if e.settingsPage != nil {
+		e.settingsPage()
+		return
+	}
+	e.settingsMenu(0)
+}
+
+// cycleValue is what picking a row in the terminal list changes it to.
+func (e *editor) cycleValue(s setting) any {
+	switch s.kind {
+	case settingSwitch:
+		return !e.cfg.on(s.key)
+	case settingChoice:
+		return next(s.choices, e.cfg.text(s.key))
+	}
+	steps := map[string][]float64{"tab_size": {2, 3, 4, 8}, "scrolloff": {0, 3, 5, 8, 12}}[s.key]
+	return next(steps, e.cfg.number(s.key))
+}
+
+// settingsMenu lists the settings that mean something in a terminal. Picking
+// a row changes it and leaves the list on that row.
 func (e *editor) settingsMenu(selected int) {
 	m := &menu{title: "Settings", hidePreview: true}
-	state := func(on bool) string {
-		if on {
-			return "on"
+	for _, s := range settingList {
+		if s.desktop {
+			continue
 		}
-		return "off"
-	}
-	flip := func(label, key string, value bool) {
-		m.options = append(m.options, option{label, state(value), func() {
-			e.persistSetting(key, !value)
-		}, nil})
-	}
-	choose := func(label, key string, hint string, to func() any) {
-		m.options = append(m.options, option{label, hint, func() {
-			e.persistSetting(key, to())
-		}, nil})
-	}
-	flip("Relative line numbers", "relative_numbers", e.cfg.RelativeNumbers)
-	flip("Format on save", "format_on_save", e.cfg.FormatOnSave)
-	flip("Organize imports on save", "organize_imports", e.cfg.OrganizeImports)
-	flip("Automatic completion", "auto_complete", e.cfg.AutoComplete)
-	flip("Automatic bracket pairs", "auto_pairs", e.cfg.AutoPairs)
-	flip("Restore session", "restore_session", e.cfg.RestoreSession)
-	flip("Animations", "animations", e.cfg.Animations)
-	flip("Indent guides", "indent_guides", e.cfg.IndentGuides)
-	flip("Sticky scroll and breadcrumbs", "sticky_scroll", e.cfg.StickyScroll)
-	choose("Tab size", "tab_size", strconv.Itoa(e.cfg.TabSize), func() any { return next([]int{2, 3, 4, 8}, e.cfg.TabSize) })
-	choose("Indent style", "indent_style", e.cfg.IndentStyle, func() any { return next([]string{"auto", "tabs", "spaces"}, e.cfg.IndentStyle) })
-	choose("Scroll offset", "scrolloff", strconv.Itoa(e.cfg.Scrolloff), func() any { return next([]int{0, 3, 5, 8, 12}, e.cfg.Scrolloff) })
-	m.options = append(m.options,
-		option{"Color theme…", th.name, e.themeMenu, nil},
-		option{"Open config file", e.cfg.path, e.openConfigFile, nil},
-		option{"Reload config", "", e.reloadConfig, nil})
-	// Reopen on the same row after a change so several can be flipped in a row.
-	for i := range m.options {
-		run := m.options[i].run
-		label := m.options[i].label
-		if i < 12 {
-			m.options[i].run = func() {
-				run()
-				e.settingsMenu(settingsIndex(label))
+		if s.kind == settingTheme {
+			m.options = append(m.options, option{s.title, th.name, e.themeMenu, nil})
+			continue
+		}
+		var state string
+		switch s.kind {
+		case settingSwitch:
+			state = "off"
+			if e.cfg.on(s.key) {
+				state = "on"
 			}
+		case settingChoice:
+			state = e.cfg.text(s.key)
+		case settingNumber:
+			state = formatNumber(e.cfg.number(s.key))
 		}
+		if e.projectSets(s.key) {
+			state += " (project)"
+		}
+		index := len(m.options)
+		m.options = append(m.options, option{s.title, state, func() {
+			e.persistSetting(s.key, e.cycleValue(s))
+			e.settingsMenu(index)
+		}, nil})
 	}
+	m.options = append(m.options,
+		option{"Keyboard shortcuts", "", e.showKeys, nil},
+		option{"Open config file", e.userConfigPath(), e.openConfigFile, nil},
+		option{"Reload config", "", e.reloadConfig, nil})
 	e.openMenu(m)
 	if selected > 0 && selected < len(m.matches) {
 		m.selected = selected
 	}
 }
-
-var settingsOrder = []string{"Relative line numbers", "Format on save", "Organize imports on save", "Automatic completion", "Automatic bracket pairs", "Restore session", "Animations", "Indent guides", "Sticky scroll and breadcrumbs", "Tab size", "Indent style", "Scroll offset"}
-
-func settingsIndex(label string) int { return slices.Index(settingsOrder, label) }

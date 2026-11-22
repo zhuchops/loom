@@ -152,16 +152,8 @@ func (e *editor) openProject(dir string) {
 	if err := os.Chdir(dir); err != nil {
 		e.notify(err.Error())
 	}
-	if cfg, err := loadConfig(e.configFile, e.configExplicit, dir); err != nil {
-		e.notify(err.Error())
-	} else {
-		cfg.Profile = e.cfg.Profile
-		if keys, err := compileKeys(cfg, e.commands); err == nil {
-			e.cfg, e.keys = cfg, keys
-			tabWidth = max(1, cfg.TabSize)
-		}
-	}
 	e.root, e.noProject = dir, false
+	e.followConfig()
 	e.tree = fileTree{sidebar: true, width: 28, expanded: map[string]bool{dir: true}}
 	e.refreshTree("")
 	e.restoreSession(false)
@@ -190,6 +182,7 @@ func (e *editor) closeProject() {
 	_ = os.Chdir(home)
 	e.root = home
 	e.enterNoProject()
+	e.followConfig()
 	forgetLastProject()
 	e.showDashboard()
 }
@@ -298,4 +291,27 @@ func (e *editor) chooseProject() {
 
 func appleQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
+
+// followConfig applies the config of the project just switched to, and drops
+// what the last one set.
+func (e *editor) followConfig() {
+	cfg, err := loadConfig(e.cfg.path, e.cfg.explicit, e.configRoot())
+	if err != nil {
+		e.notify(err.Error())
+		// Keep going with just the user's settings, not the last project's.
+		if cfg, err = readConfig(e.cfg.path, e.cfg.explicit); err != nil {
+			return
+		}
+	}
+	cfg.Profile = e.cfg.Profile
+	keys, err := compileKeys(cfg, e.commands)
+	if err == nil {
+		err = e.useConfig(cfg, keys)
+	}
+	if err != nil {
+		e.notify("Config: " + err.Error())
+		return
+	}
+	e.relativeNumbers = cfg.RelativeNumbers
 }

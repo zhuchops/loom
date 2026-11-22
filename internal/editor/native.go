@@ -82,7 +82,7 @@ func (e *editor) registerNativeCommands() {
 	e.add("insert-outdent", "Outdent Line", func(e *editor) { e.outdentLineAtCursor() })
 	e.add("open-config", "Open Config File", func(e *editor) { e.openConfigFile() })
 	e.add("reload-config", "Reload Config", func(e *editor) { e.reloadConfig() })
-	e.add("settings", "Settings", func(e *editor) { e.settingsMenu(0) })
+	e.add("settings", "Settings", func(e *editor) { e.openSettings() })
 	e.add("move-line-up", "Move Line Up", func(e *editor) { e.moveLines(-1) })
 	e.add("move-line-down", "Move Line Down", func(e *editor) { e.moveLines(1) })
 	e.add("delete-word-back", "Delete Word Backward", func(e *editor) {

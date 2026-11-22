@@ -4,6 +4,7 @@ package editor
 
 import (
 	"image"
+	"math"
 	"runtime"
 	"strings"
 	"unicode/utf8"
@@ -33,6 +34,9 @@ type zone struct {
 }
 
 func (d *desktop) zone(z zone) {
+	if !d.clip.Empty() {
+		z.r = z.r.Intersect(d.clip)
+	}
 	if z.r.Empty() {
 		return
 	}
@@ -50,7 +54,8 @@ func (d *desktop) button(r rect, click func()) bool {
 func (d *desktop) block(r rect) { d.zone(zone{r: r}) }
 
 func (d *desktop) hot(r rect) bool {
-	return d.grab == nil && d.hoverLayer <= d.layer && image.Pt(d.mx, d.my).In(r)
+	p := image.Pt(d.mx, d.my)
+	return d.grab == nil && d.hoverLayer <= d.layer && p.In(r) && (d.clip.Empty() || p.In(d.clip))
 }
 
 func (d *desktop) zoneAt() *zone {
@@ -243,7 +248,7 @@ func floorDiv(a, b int) int {
 // cell is the grid cell under the pointer.
 func (d *desktop) cell() (int, int) {
 	g := d.geo.grid.Min
-	return floorDiv(d.mx-g.X, d.cellW), floorDiv(d.my-g.Y, d.cellH)
+	return int(math.Floor(float64(d.mx-g.X) / d.cellW)), floorDiv(d.my-g.Y, d.cellH)
 }
 
 func (d *desktop) pointer(ev pointer.Event) {

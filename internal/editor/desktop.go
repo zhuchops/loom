@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"os"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -33,7 +35,7 @@ func MainDesktop() {
 		}
 	}
 	platformEnvironment()
-	e, explicit, done, err := prepare()
+	e, explicit, done, err := prepare(true)
 	if err == nil && !done {
 		go func() {
 			if err := runDesktop(e, explicit); err != nil {
@@ -50,7 +52,7 @@ func MainDesktop() {
 	}
 }
 
-const defaultCodeSize = 13
+const defaultUISize = 13 // the size the interface is designed at
 
 type desktop struct {
 	w     *app.Window
@@ -64,18 +66,22 @@ type desktop struct {
 	wraps   map[wrapped][]string
 
 	uiFont, uiStrong, codeFont font.Font
+	codeFamily, uiFamily       *fontFamily
+	hasItalic                  bool
+	look                       fontLook
+	clip                       rect
 
 	c    uiColors
 	inks map[[2]color.NRGBA]color.NRGBA
 
 	// The code grid.
-	metric       unit.Metric
-	scale        float32
-	codeSize     float32 // asked for; code is the size that fits the pixel grid
-	code         textStyle
-	cellW, cellH int
-	lift         int
-	cols, rows   int
+	metric     unit.Metric
+	scale      float32
+	code       textStyle
+	cellW      float64
+	cellH      int
+	lift       int
+	cols, rows int
 
 	geo geometry
 
@@ -100,6 +106,8 @@ type desktop struct {
 	dialog  *dialog
 	preview previewCache
 
+	settings *settingsView
+
 	scroll scrollAnim
 	cur    cursorAnim
 }
@@ -120,6 +128,7 @@ func runDesktop(e *editor, explicit bool) error {
 	d.platformStart()
 	e.begin(explicit)
 	defer e.finish()
+	d.askAboutConfig()
 	d.run(d.m.Init())
 	var ops op.Ops
 	for {
@@ -153,11 +162,12 @@ func runDesktop(e *editor, explicit bool) error {
 // window loop.
 func newDesktop(w *app.Window, e *editor, ctx context.Context, ticks <-chan time.Time) *desktop {
 	d := &desktop{
-		w: w, inbox: make(chan tea.Msg, 256), active: true, codeSize: defaultCodeSize,
+		w: w, inbox: make(chan tea.Msg, 256), active: true, look: lookOf(e.cfg.options),
 		sizes: map[measured]image.Point{}, wraps: map[wrapped][]string{}, inks: map[[2]color.NRGBA]color.NRGBA{},
 	}
 	d.m = &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0), native: true}, ctx: ctx, ticks: ticks}
 	d.loadFonts()
+	e.settingsPage = d.toggleSettings
 	return d
 }
 
@@ -195,6 +205,16 @@ func (d *desktop) send(msg tea.Msg) {
 	case tea.QuitMsg:
 		d.m.editor.quit = true
 		return
+	case tea.KeyPressMsg:
+		if d.settingsHaveKeys() {
+			d.settingsKey(terminalKey(tea.Key(msg)))
+			return
+		}
+	case tea.PasteMsg:
+		if d.settingsHaveKeys() {
+			d.settingsKey(keyInput{paste: msg.Content})
+			return
+		}
 	}
 	_, cmd := d.m.Update(msg)
 	d.run(cmd)
@@ -211,48 +231,65 @@ func (d *desktop) drain() {
 	}
 }
 
-// measure picks a code size whose advance is a whole number of pixels, so a
-// run of text stays on the cell grid.
+// measure sizes the code grid. A cell can be a fraction of a pixel wide:
+// rounding it would make neighbouring font sizes look the same.
 func (d *desktop) measure() {
 	gtx := d.gtx
 	if d.cellW > 0 && gtx.Metric == d.metric {
 		return
 	}
 	d.metric = gtx.Metric
-	d.scale = gtx.Metric.PxPerDp
+	d.scale = gtx.Metric.PxPerDp * d.look.uiPts / defaultUISize
 	clear(d.sizes)
 	clear(d.wraps)
 
-	const sample = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"
-	d.code = textStyle{size: d.codeSize, mono: true}
-	var size image.Point
-	for range 3 {
-		size = d.measureText(sample, d.code)
-		advance := float32(size.X) / float32(len(sample))
-		target := float32(int(advance + 0.5))
-		if target < 1 || advance-target < 0.005 && target-advance < 0.005 {
-			break
-		}
-		d.code.size *= target / advance
-	}
-	size = d.measureText(sample, d.code)
-	d.cellW = max(1, (size.X+len(sample)/2)/len(sample))
-	d.cellH = max(size.Y, d.u(d.code.size*1.6))
+	sample := strings.Repeat("M", 500)
+	d.code = textStyle{size: d.look.size, mono: true, code: true}
+	size := d.measureText(sample, d.code)
+	d.cellW = max(1, float64(size.X)/float64(len(sample))+float64(d.look.spacing*gtx.Metric.PxPerDp))
+	d.cellH = max(1, d.px(d.look.size*d.look.height))
 	d.lift = (d.cellH - size.Y) / 2
 }
 
-func (d *desktop) zoom(delta float32) {
-	if delta == 0 {
-		d.codeSize = defaultCodeSize
-	} else {
-		d.codeSize = max(9, min(26, d.codeSize+delta))
+// cellX is the pixel offset of a column.
+func (d *desktop) cellX(x int) int { return int(math.Round(float64(x) * d.cellW)) }
+
+// syncLook follows the font settings.
+func (d *desktop) syncLook() {
+	look := lookOf(d.m.editor.cfg.options)
+	if look == d.look {
+		return
 	}
+	reload := !look.sameFaces(d.look)
+	d.look = look
+	if reload {
+		d.loadFonts()
+	}
+	clear(d.sizes)
+	clear(d.wraps)
 	d.cellW = 0
-	d.scroll = scrollAnim{}
+	d.scroll, d.cur = scrollAnim{}, cursorAnim{}
+	d.measure()
+}
+
+// zoom changes the saved font size. Zero goes back to the default.
+func (d *desktop) zoom(delta float32) {
+	e := d.m.editor
+	var err error
+	if delta == 0 {
+		err = e.resetSetting("font_size")
+	} else {
+		s := settingByKey["font_size"]
+		err = e.setSetting(s.key, max(s.min, min(s.max, e.cfg.FontSize+float64(delta))))
+	}
+	if err != nil {
+		e.notify(err.Error())
+	}
 }
 
 func (d *desktop) frame(gtx layout.Context) {
 	d.gtx = gtx
+	d.syncLook()
 	d.measure()
 	d.drain()
 	d.input()
@@ -262,11 +299,9 @@ func (d *desktop) frame(gtx layout.Context) {
 		clear(d.inks)
 		d.platformTheme()
 	}
-	if d.cellW == 0 { // zoomed by input in this frame
-		d.measure()
-	}
+	d.syncLook() // settings may have changed with this frame's input
 	d.geo = d.arrange(e, gtx.Constraints.Max)
-	cols, rows := max(4, d.geo.grid.Dx()/d.cellW), max(5, d.geo.grid.Dy()/d.cellH)
+	cols, rows := max(4, int(float64(d.geo.grid.Dx())/d.cellW)), max(5, d.geo.grid.Dy()/d.cellH)
 	if cols != d.cols || rows != d.rows {
 		d.cols, d.rows = cols, rows
 		d.send(tea.WindowSizeMsg{Width: cols, Height: rows})
@@ -296,9 +331,9 @@ func (d *desktop) sidebarShown(e *editor, width int) bool {
 func (d *desktop) arrange(e *editor, size image.Point) geometry {
 	w, h := size.X, size.Y
 	g := geometry{window: image.Rectangle{Max: size}}
-	top, bottom, left := d.u(titleHeight), h, 0
+	top, bottom, left := max(d.px(titleHeight), d.u(titleHeight)), h, 0
 	g.title = image.Rect(0, 0, w, top)
-	if !e.zen {
+	if !e.zen && e.cfg.StatusBar {
 		bottom -= d.u(27)
 		g.status = image.Rect(0, bottom, w, h)
 	}
@@ -310,7 +345,7 @@ func (d *desktop) arrange(e *editor, size image.Point) geometry {
 	if !e.zen && (len(e.buffers) > 1 || !e.b.dashboard) {
 		g.tabs = image.Rect(left, y, w, y+d.u(36))
 		y = g.tabs.Max.Y
-		if !e.b.dashboard && e.b.path != "" {
+		if !e.b.dashboard && e.b.path != "" && e.cfg.PathBar {
 			g.crumbs = image.Rect(left, y, w, y+d.u(26))
 			y = g.crumbs.Max.Y
 		}
@@ -351,13 +386,16 @@ func (d *desktop) paint(e *editor) {
 	d.paintStatus(e)
 
 	d.layer = layerPopover
-	if e.menu == nil && e.panel == nil && e.diff == nil && e.directory == nil {
+	if e.menu == nil && e.panel == nil && e.diff == nil && e.directory == nil && d.settings == nil {
 		d.paintFind(e)
 		d.paintCompletion(e)
 		d.paintHover(e)
 	}
 
 	d.layer = layerModal
+	if d.settings != nil {
+		d.paintSettings(e)
+	}
 	switch {
 	case e.notificationDetail != nil:
 		d.paintDetail(e)
@@ -370,7 +408,7 @@ func (d *desktop) paint(e *editor) {
 	case e.directory != nil:
 		d.paintDirectory(e)
 	}
-	if e.menu == nil && e.panel == nil && e.diff == nil && e.notificationDetail == nil {
+	if e.menu == nil && e.panel == nil && e.diff == nil && e.notificationDetail == nil && d.settings == nil {
 		d.paintWhichKey(e)
 	}
 

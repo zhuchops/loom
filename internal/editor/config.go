@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,34 +30,18 @@ type languageConfig struct {
 }
 
 type config struct {
-	RelativeNumbers bool `json:"relative_numbers"`
-	FormatOnSave    bool `json:"format_on_save"`
-	OrganizeImports bool `json:"organize_imports"`
-	RestoreSession  bool `json:"restore_session"`
-	// TabSize is the display width of a tab and the width of one indent level
-	// made of spaces. IndentStyle is "auto" (tabs in Go and Makefiles, spaces
-	// elsewhere), "tabs" or "spaces".
-	TabSize     int    `json:"tab_size"`
-	IndentStyle string `json:"indent_style"`
-	// Scrolloff keeps this many lines visible above and below the cursor.
-	Scrolloff int `json:"scrolloff"`
-	// StickyScroll pins the enclosing scopes of the top line to the pane.
-	StickyScroll bool `json:"sticky_scroll"`
-	// Animations eases pane resizes and splits; IndentGuides draws vertical
-	// guides in leading whitespace.
-	Animations   bool `json:"animations"`
-	IndentGuides bool `json:"indent_guides"`
+	options
 
-	Profile      string                       `json:"profile"`
-	Bindings     map[string]map[string]string `json:"bindings"`
-	Languages    map[string]languageConfig    `json:"languages"`
-	Plugins      []pluginConfig               `json:"plugins"`
-	AutoComplete bool                         `json:"auto_complete"`
-	AutoPairs    bool                         `json:"auto_pairs"`
-	Theme        string                       `json:"theme"`
+	Profile   string                       `json:"profile"`
+	Bindings  map[string]map[string]string `json:"bindings"`
+	Languages map[string]languageConfig    `json:"languages"`
+	Plugins   []pluginConfig               `json:"plugins"`
 
 	explicit bool   // the path came from -config
 	path     string // where the config was read from; not part of the file
+	// Which settings the user's files and the project's file set. A language
+	// setting is named like "languages.go.tab_size".
+	fromUser, fromProject map[string]bool
 }
 
 // Language servers and formatters are used only when their command is on PATH.
@@ -144,7 +129,8 @@ func configPath() string {
 
 func defaultConfig() config {
 	return config{
-		Profile: "vim", AutoComplete: true, AutoPairs: true, FormatOnSave: true, RestoreSession: true, TabSize: 4, IndentStyle: "auto", Scrolloff: 5, StickyScroll: true, Animations: true, IndentGuides: true,
+		options:   defaultOptions(),
+		Profile:   "vim",
 		Languages: defaultLanguages(),
 		Bindings: map[string]map[string]string{
 			"global": {"ctrl+p": "files", "ctrl+s": "save", "ctrl+q": "quit", "ctrl+f": "search", "ctrl+b": "toggle-sidebar", "ctrl+a": "select-all",
@@ -190,25 +176,43 @@ func defaultConfig() config {
 	}
 }
 
+// readConfig reads the user's two files.
 func readConfig(path string, explicit bool) (config, error) {
-	cfg, err := applyConfig(defaultConfig(), path, explicit, false)
-	cfg.path, cfg.explicit = path, explicit
-	return cfg, err
+	return loadLayers(path, explicit, "", nil)
 }
 
 // loadConfig reads the user config, then the project's .loom.json on top.
 func loadConfig(path string, explicit bool, root string) (config, error) {
-	cfg, err := readConfig(path, explicit)
-	if err != nil {
+	return loadLayers(path, explicit, root, nil)
+}
+
+// loadLayers reads every config file in order. pending stands in for files
+// that are about to be written, so a change can be checked before it is saved.
+func loadLayers(path string, explicit bool, root string, pending map[string][]byte) (config, error) {
+	cfg := defaultConfig()
+	cfg.path, cfg.explicit = path, explicit
+	layer := func(file string, required, restricted bool) error {
+		var err error
+		if raw, ok := pending[file]; ok {
+			cfg, err = applyConfigData(cfg, raw, restricted)
+		} else {
+			cfg, err = applyConfig(cfg, file, required, restricted)
+		}
+		return err
+	}
+	if err := layer(path, explicit, false); err != nil {
 		return cfg, fmt.Errorf("config %s: %w", path, err)
 	}
-	if root == "" {
-		return cfg, nil
+	if added := addedPath(path); added != "" {
+		if err := layer(added, false, false); err != nil {
+			return cfg, fmt.Errorf("settings %s: %w", added, err)
+		}
 	}
-	project := filepath.Join(root, ".loom.json")
-	cfg, err = applyConfig(cfg, project, false, true)
-	if err != nil {
-		return cfg, fmt.Errorf("%s: %w", project, err)
+	if root != "" {
+		project := filepath.Join(root, ".loom.json")
+		if err := layer(project, false, true); err != nil {
+			return cfg, fmt.Errorf("%s: %w", project, err)
+		}
 	}
 	return cfg, nil
 }
@@ -217,94 +221,65 @@ func loadConfig(path string, explicit bool, root string) (config, error) {
 // may change settings and bindings, but not run commands (servers, formatters,
 // plugins), because a repository you open is not trusted.
 func applyConfig(cfg config, path string, explicit, restricted bool) (config, error) {
-	f, err := os.Open(path)
+	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) && !explicit {
 		return cfg, nil
 	}
 	if err != nil {
 		return cfg, err
 	}
-	defer f.Close()
-	var overlay struct {
-		RelativeNumbers *bool   `json:"relative_numbers"`
-		FormatOnSave    *bool   `json:"format_on_save"`
-		OrganizeImports *bool   `json:"organize_imports"`
-		RestoreSession  *bool   `json:"restore_session"`
-		TabSize         *int    `json:"tab_size"`
-		Scrolloff       *int    `json:"scrolloff"`
-		StickyScroll    *bool   `json:"sticky_scroll"`
-		Animations      *bool   `json:"animations"`
-		IndentGuides    *bool   `json:"indent_guides"`
-		IndentStyle     *string `json:"indent_style"`
+	return applyConfigData(cfg, raw, restricted)
+}
 
-		Profile      *string                      `json:"profile"`
-		Bindings     map[string]map[string]string `json:"bindings"`
-		Languages    map[string]languageConfig    `json:"languages"`
-		Plugins      []pluginConfig               `json:"plugins"`
-		AutoComplete *bool                        `json:"auto_complete"`
-		AutoPairs    *bool                        `json:"auto_pairs"`
-		Theme        *string                      `json:"theme"`
+func applyConfigData(cfg config, raw []byte, restricted bool) (config, error) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return cfg, nil // a file just created
+	}
+	var overlay struct {
+		options
+		Profile   *string                      `json:"profile"`
+		Bindings  map[string]map[string]string `json:"bindings"`
+		Languages map[string]languageConfig    `json:"languages"`
+		Plugins   []pluginConfig               `json:"plugins"`
 
 		// Older configs set only the server command for a language.
 		LanguageServers map[string][]string `json:"language_servers"`
 	}
-	d := json.NewDecoder(f)
+	// Settings a file leaves out keep the value they have so far.
+	overlay.options = cfg.options
+	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if err := d.Decode(&overlay); err != nil {
 		return cfg, err
 	}
-	if overlay.RelativeNumbers != nil {
-		cfg.RelativeNumbers = *overlay.RelativeNumbers
+	if err := overlay.options.validate(); err != nil {
+		return cfg, err
 	}
-	if overlay.FormatOnSave != nil {
-		cfg.FormatOnSave = *overlay.FormatOnSave
-	}
-	if overlay.OrganizeImports != nil {
-		cfg.OrganizeImports = *overlay.OrganizeImports
-	}
-	if overlay.RestoreSession != nil {
-		cfg.RestoreSession = *overlay.RestoreSession
-	}
-	if overlay.TabSize != nil {
-		if *overlay.TabSize < 1 || *overlay.TabSize > 16 {
-			return cfg, fmt.Errorf("tab_size must be between 1 and 16")
-		}
-		cfg.TabSize = *overlay.TabSize
-	}
-	if overlay.Animations != nil {
-		cfg.Animations = *overlay.Animations
-	}
-	if overlay.IndentGuides != nil {
-		cfg.IndentGuides = *overlay.IndentGuides
-	}
-	if overlay.StickyScroll != nil {
-		cfg.StickyScroll = *overlay.StickyScroll
-	}
-	if overlay.Scrolloff != nil {
-		if *overlay.Scrolloff < 0 || *overlay.Scrolloff > 50 {
-			return cfg, fmt.Errorf("scrolloff must be between 0 and 50")
-		}
-		cfg.Scrolloff = *overlay.Scrolloff
-	}
-	if overlay.IndentStyle != nil {
-		switch *overlay.IndentStyle {
-		case "auto", "tabs", "spaces":
-			cfg.IndentStyle = *overlay.IndentStyle
-		default:
-			return cfg, fmt.Errorf("indent_style must be auto, tabs or spaces")
-		}
-	}
+	cfg.options = overlay.options
 	if overlay.Profile != nil {
 		cfg.Profile = *overlay.Profile
 	}
-	if overlay.AutoComplete != nil {
-		cfg.AutoComplete = *overlay.AutoComplete
+	from := &cfg.fromUser
+	if restricted {
+		from = &cfg.fromProject
 	}
-	if overlay.Theme != nil {
-		cfg.Theme = *overlay.Theme
+	if *from == nil {
+		*from = map[string]bool{}
 	}
-	if overlay.AutoPairs != nil {
-		cfg.AutoPairs = *overlay.AutoPairs
+	var present map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &present); err != nil {
+		return cfg, err
+	}
+	for key := range present {
+		(*from)[key] = true
+	}
+	var languages map[string]map[string]json.RawMessage
+	if part, ok := present["languages"]; ok && json.Unmarshal(part, &languages) == nil {
+		for name, fields := range languages {
+			for key := range fields {
+				(*from)["languages."+name+"."+key] = true
+			}
+		}
 	}
 	for _, name := range sortedKeys(overlay.Languages) {
 		lang := overlay.Languages[name]
@@ -363,7 +338,7 @@ func applyConfig(cfg config, path string, explicit, restricted bool) (config, er
 	if restricted && len(overlay.Plugins) > 0 {
 		return cfg, fmt.Errorf("a project config may not set plugins")
 	}
-	if !restricted {
+	if !restricted && overlay.Plugins != nil {
 		cfg.Plugins = overlay.Plugins
 	}
 	return cfg, nil

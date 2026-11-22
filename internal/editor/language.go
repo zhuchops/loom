@@ -219,7 +219,7 @@ func decodeSemantic(b *buffer, data []int, types, modifiers []string) []highligh
 			}
 		}
 		if hex != 0 {
-			result = append(result, highlight{span{start, end}, baseStyle.Foreground(rgb(hex))})
+			result = append(result, highlight{span{start, end}, tokenStyle(types[kind], hex)})
 		}
 	}
 	return result

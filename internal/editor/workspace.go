@@ -465,7 +465,8 @@ func (e *editor) restoreSession(explicit bool) {
 	} else {
 		e.b = e.buffers[0]
 	}
-	if s.RelativeNumbers != nil {
+	// A setting beats what the session happened to end with.
+	if s.RelativeNumbers != nil && !e.cfg.fromUser["relative_numbers"] && !e.cfg.fromProject["relative_numbers"] {
 		e.relativeNumbers = *s.RelativeNumbers
 	}
 	e.layout, e.activePane = nil, nil

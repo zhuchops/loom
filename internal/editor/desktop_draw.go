@@ -11,13 +11,11 @@ import (
 
 	"gioui.org/f32"
 	"gioui.org/font"
-	"gioui.org/font/gofont"
 	"gioui.org/font/opentype"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
-	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
 )
@@ -28,6 +26,11 @@ type textStyle struct {
 	size   float32
 	strong bool
 	mono   bool
+	italic bool
+	// code size is the editor's own, not scaled with the interface.
+	code bool
+	// family previews an installed font.
+	family font.Typeface
 }
 
 var (
@@ -51,74 +54,52 @@ func readFaces(path string) []font.FontFace {
 	if err != nil {
 		return nil
 	}
-	faces, err := opentype.ParseCollection(raw)
+	faces, err := opentype.ParseCollection(withoutStrikes(raw))
 	if err != nil {
 		return nil
 	}
 	return faces
 }
 
-func (d *desktop) loadFonts() {
-	var faces []font.FontFace
-	d.uiFont = font.Font{Typeface: "Go", Weight: font.Medium}
-	d.uiStrong = font.Font{Typeface: "Go", Weight: font.Bold}
-	d.codeFont = font.Font{Typeface: "Go Mono"}
-
-	// Avenir Next in Medium stays legible at interface sizes and has Cyrillic.
-	for _, f := range readFaces("/System/Library/Fonts/Avenir Next.ttc") {
-		if f.Font.Style != font.Regular || f.Font.Weight != font.Medium && f.Font.Weight != font.SemiBold {
-			continue
-		}
-		faces = append(faces, f)
-		if f.Font.Weight == font.Medium {
-			d.uiFont = f.Font
-		} else {
-			d.uiStrong = f.Font
-		}
-	}
-	for _, path := range []string{os.Getenv("LOOM_FONT"), "/System/Library/Fonts/Menlo.ttc", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"} {
-		if path == "" {
-			continue
-		}
-		if code := readFaces(path); len(code) > 0 {
-			faces = append(faces, code...)
-			d.codeFont = code[0].Font
-			d.codeFont.Weight, d.codeFont.Style = font.Normal, font.Regular
-			break
-		}
-	}
-	// Key symbols such as ⌘ and ↵.
-	faces = append(faces, readFaces("/System/Library/Fonts/SFNS.ttf")...)
-	faces = append(faces, readFaces("/System/Library/Fonts/Apple Symbols.ttf")...)
-	faces = append(faces, gofont.Collection()...)
-	d.shaper = text.NewShaper(text.WithCollection(faces))
-}
-
 func (d *desktop) face(st textStyle) font.Font {
-	switch {
-	case st.mono && st.strong:
-		f := d.codeFont
-		f.Weight = font.Bold
-		return f
-	case st.mono:
-		return d.codeFont
-	case st.strong:
-		return d.uiStrong
+	if st.family != "" {
+		return font.Font{Typeface: st.family}
 	}
-	return d.uiFont
+	if !st.mono {
+		if st.strong {
+			return d.uiStrong
+		}
+		return d.uiFont
+	}
+	f := d.codeFont
+	if st.strong {
+		f.Weight = font.Bold
+	}
+	if st.italic && d.hasItalic {
+		f.Style = font.Italic
+	}
+	return f
 }
 
 // u converts density-independent pixels to device pixels.
 func (d *desktop) u(n float32) int { return int(n*d.scale + 0.5) }
 
-func (d *desktop) hairline() int { return max(1, int(d.scale/2+0.5)) }
+// px is u for what the interface size must not scale: code, and the system's
+// own window buttons.
+func (d *desktop) px(n float32) int { return int(n*d.gtx.Metric.PxPerDp + 0.5) }
+
+func (d *desktop) hairline() int { return max(1, int(d.gtx.Metric.PxPerDp/2+0.5)) }
 
 func (d *desktop) lay(gtx layout.Context, s string, st textStyle, c color.NRGBA) image.Point {
 	gtx.Constraints = layout.Constraints{Max: image.Pt(1<<20, 1<<20)}
 	rec := op.Record(gtx.Ops)
 	paint.ColorOp{Color: c}.Add(gtx.Ops)
 	ink := rec.Stop()
-	return widget.Label{MaxLines: 1}.Layout(gtx, d.shaper, d.face(st), unit.Sp(st.size), s, ink).Size
+	size := st.size
+	if !st.code {
+		size *= d.look.uiPts / defaultUISize
+	}
+	return widget.Label{MaxLines: 1}.Layout(gtx, d.shaper, d.face(st), unit.Sp(size), s, ink).Size
 }
 
 func (d *desktop) measureText(s string, st textStyle) image.Point {
@@ -279,8 +260,15 @@ func (d *desktop) border(r rect, radius float32, c color.NRGBA, width int) {
 	paint.FillShape(d.gtx.Ops, c, clip.Stroke{Path: shape.Path(d.gtx.Ops), Width: float32(width)}.Op())
 }
 
+// clipped draws inside r. What can't be seen there can't be clicked either.
 func (d *desktop) clipped(r rect, draw func()) {
 	defer clip.Rect(r).Push(d.gtx.Ops).Pop()
+	outer := d.clip
+	d.clip = r
+	if !outer.Empty() {
+		d.clip = r.Intersect(outer)
+	}
+	defer func() { d.clip = outer }()
 	draw()
 }
 

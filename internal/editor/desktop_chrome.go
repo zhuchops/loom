@@ -38,7 +38,7 @@ func (d *desktop) paintTitle(e *editor) {
 	r, u, c := d.geo.title, d.u, &d.c
 	d.fill(r, c.side)
 	d.lineH(r.Min.X, r.Max.X, r.Max.Y-d.hairline())
-	cy := r.Min.Y + u(titleCenter)
+	cy := r.Min.Y + max(d.px(titleCenter), u(12)+d.hairline())
 	var used []rect
 	place := func(x0, x1 int) rect {
 		box := image.Rect(x0, cy-u(12), x1, cy+u(12))
@@ -46,7 +46,7 @@ func (d *desktop) paintTitle(e *editor) {
 		return box
 	}
 
-	x := u(titleInset)
+	x := d.px(titleInset)
 	if !e.noProject {
 		box := place(x, x+u(24))
 		d.iconButton((box.Min.X+box.Max.X)/2, cy, iconSidebar, e.tree.sidebar, func() { d.command("sidebar") })
@@ -122,7 +122,7 @@ func (d *desktop) paintTitle(e *editor) {
 	slices.SortFunc(used, func(a, b rect) int { return a.Min.X - b.Min.X })
 	x = 0
 	if titleInset > 20 {
-		x = u(titleInset) // leave the traffic lights to the system
+		x = d.px(titleInset) // leave the traffic lights to the system
 	}
 	for _, box := range used {
 		if box.Min.X > x {
@@ -579,6 +579,9 @@ func languageName(id string) string {
 		"js": "JavaScript", "javascript": "JavaScript", "ts": "TypeScript", "typescript": "TypeScript", "tsx": "TSX", "jsx": "JSX",
 		"py": "Python", "python": "Python", "rs": "Rust", "rust": "Rust", "yml": "YAML", "yaml": "YAML", "json": "JSON",
 		"html": "HTML", "css": "CSS", "sh": "Shell", "c": "C", "cpp": "C++", "toml": "TOML", "sql": "SQL",
+		"asm": "Assembly", "cmake": "CMake", "csharp": "C#", "dockerfile": "Dockerfile", "graphql": "GraphQL",
+		"javascriptreact": "JavaScript JSX", "makefile": "Makefile", "ocaml": "OCaml", "php": "PHP", "proto": "Protocol Buffers",
+		"shellscript": "Shell", "typescriptreact": "TypeScript TSX", "xml": "XML",
 	}
 	if name, ok := names[strings.ToLower(id)]; ok {
 		return name

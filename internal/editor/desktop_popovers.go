@@ -143,7 +143,7 @@ func (d *desktop) paintCompletion(e *editor) {
 		return
 	}
 	comp, sig := &e.completion, e.signature
-	cx, cy := d.geo.grid.Min.X+v.screen.cursorX*d.cellW, d.geo.grid.Min.Y+v.screen.cursorY*d.cellH
+	cx, cy := d.geo.grid.Min.X+d.cellX(v.screen.cursorX), d.geo.grid.Min.Y+v.screen.cursorY*d.cellH
 
 	listAbove := false
 	if len(comp.items) > 0 {
@@ -305,7 +305,7 @@ func (d *desktop) paintHover(e *editor) {
 	}
 	lines, w, height := d.proseLayout(h.message, min(d.u(520), d.geo.window.Dx()-d.u(24)), title != "")
 	w = max(w, d.u(160))
-	x := d.geo.grid.Min.X + h.x*d.cellW - d.u(14)
+	x := d.geo.grid.Min.X + d.cellX(h.x) - d.u(14)
 	y := d.geo.grid.Min.Y + h.y*d.cellH
 	d.paintProse(d.besideLine(x, y, w, height, false), title, lines, &h.scroll)
 }

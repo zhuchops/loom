@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -95,6 +96,29 @@ func screenFixture(t *testing.T) string {
 	return root
 }
 
+// settingsOn opens the settings on a page and types keys into them.
+func settingsOn(page string, keys ...string) func(*screen) {
+	return func(s *screen) {
+		s.e.commands["settings"].run(s.e)
+		s.d.settings.show(slices.IndexFunc(settingPages, func(p settingPage) bool { return p.id == page }))
+		s.frame()
+		for _, k := range keys {
+			s.d.settingsKey(keyInput{key: k})
+		}
+	}
+}
+
+// changeOptions stands in for settings the user saved.
+func changeOptions(change func(*options)) func(*screen) {
+	return func(s *screen) {
+		cfg := s.e.cfg
+		change(&cfg.options)
+		if err := s.e.useConfig(cfg, s.e.keys); err != nil {
+			s.t.Fatal(err)
+		}
+	}
+}
+
 // TestDesktopScreens paints every screen. With LOOM_SHOTS=dir it also writes
 // each one to a PNG, without opening a window or touching the user's config.
 func TestDesktopScreens(t *testing.T) {
@@ -168,6 +192,40 @@ func TestDesktopScreens(t *testing.T) {
 		{name: "confirm", file: src, do: func(s *screen) { press(s.e, "i x esc"); s.d.closeTab(s.e.b) }},
 		{name: "quit", file: src, do: func(s *screen) { press(s.e, "i x esc"); s.d.requestQuit() }},
 		{name: "settings", file: src, do: run("settings")},
+		{name: "settings-fonts", file: src, do: settingsOn("fonts")},
+		{name: "settings-fonts-more", file: src, do: settingsOn("fonts", "pagedown", "pagedown")},
+		{name: "settings-editor", file: src, do: settingsOn("editor")},
+		{name: "settings-cursor", file: src, do: settingsOn("cursor")},
+		{name: "settings-interface", file: src, do: settingsOn("interface")},
+		{name: "settings-files", file: src, do: settingsOn("files")},
+		{name: "settings-languages", file: src, do: settingsOn("languages", "down", "down", "enter")},
+		{name: "settings-keyboard", file: src, do: settingsOn("keyboard")},
+		{name: "settings-recording", file: src, do: settingsOn("keyboard", "down", "enter", "space", "f")},
+		{name: "settings-picker", file: src, do: settingsOn("fonts", "enter")},
+		{name: "settings-picker-ui", file: src, do: func(s *screen) {
+			run("settings")(s)
+			s.d.settings.show(1)
+			s.d.openFontPicker(settingByKey["ui_font_family"])
+		}},
+		{name: "settings-search", file: src, do: settingsOn("appearance", "f", "o", "n", "t")},
+		{name: "settings-light", file: src, theme: "solarized-light", do: settingsOn("fonts")},
+		{name: "settings-small", file: src, w: 640, h: 440, do: settingsOn("fonts")},
+		{name: "settings-none", none: true, do: run("settings")},
+		{name: "fonts-changed", file: src, do: changeOptions(func(o *options) {
+			o.FontFamily, o.FontSize, o.LineHeight = "Monaco", 16, 1.35
+		})},
+		{name: "fonts-sf-weight", file: src, do: changeOptions(func(o *options) {
+			o.FontFamily, o.FontWeight, o.LetterSpacing = "SF Mono", 700, 1.5
+		})},
+		{name: "fonts-ui-large", file: src, do: func(s *screen) {
+			changeOptions(func(o *options) { o.UIFontFamily, o.UIFontSize = "Helvetica Neue", 18 })(s)
+			run("settings")(s)
+		}},
+		{name: "fonts-ui-small", file: src, do: changeOptions(func(o *options) { o.UIFontFamily, o.UIFontSize = "SF Pro", 11 })},
+		{name: "editor-options", file: src, do: changeOptions(func(o *options) {
+			o.LineNumbers, o.HighlightLine, o.PathBar, o.StatusBar = false, false, false, false
+			o.CursorNormal, o.ItalicComments = "underline", true
+		})},
 		{name: "zen", file: src, do: run("zen")},
 		{name: "replace", file: src, do: func(s *screen) { run("replace")(s); press(s.e, "f m t") }},
 		{name: "results", file: src, do: func(s *screen) { run("project-search")(s); press(s.e, "f m t enter") }},
@@ -347,7 +405,7 @@ func TestDesktopPointer(t *testing.T) {
 	}
 
 	o := d.geo.grid.Min
-	x, y := o.X+d.cellW*14, o.Y+d.cellH*4+d.cellH/2
+	x, y := o.X+d.cellX(14), o.Y+d.cellH*4+d.cellH/2
 	s.click(image.Rect(x-1, y-1, x+1, y+1))
 	if row := e.b.rowAt(e.b.cursor); row != 4 {
 		t.Fatalf("clicking the fifth line put the cursor on row %d", row)
@@ -475,5 +533,87 @@ func BenchmarkDesktopFrame(b *testing.B) {
 	s := &screen{d: newDesktop(new(app.Window), e, ctx, nil), e: e, w: 1440, h: 900, scale: 2}
 	for b.Loop() {
 		s.frame()
+	}
+}
+
+func TestDesktopSettings(t *testing.T) {
+	s := openScreen(t)
+	e, d := s.e, s.d
+	t.Cleanup(func() { applyTheme(baselineTheme()) })
+	e.open(filepath.Join(e.root, "main.go"))
+	s.frame()
+
+	d.command("settings")
+	s.frame()
+	if d.settings == nil {
+		t.Fatal("the settings didn't open")
+	}
+
+	// Arrows on the theme row pick the default theme.
+	s.key(key.NameRightArrow, 0)
+	saved, err := readConfig(e.userConfigPath(), false)
+	if err != nil || saved.Theme == "" || saved.Theme != th.name {
+		t.Fatalf("saved theme %q, showing %q (%v)", saved.Theme, th.name, err)
+	}
+
+	// Searching and changing, all from the keyboard.
+	s.typeText("code size")
+	cell, text := d.cellW, string(e.b.text)
+	s.key(key.NameRightArrow, 0)
+	s.frame()
+	if e.cfg.FontSize != 13.5 || d.cellW <= cell {
+		t.Fatalf("font size %v, cell %v after %v", e.cfg.FontSize, d.cellW, cell)
+	}
+	if string(e.b.text) != text || e.mode != "normal" {
+		t.Fatal("keys typed into the settings reached the editor")
+	}
+
+	// Tab leaves the search for the next page, and a click flips a switch.
+	s.key(key.NameTab, 0)
+	if d.settings.query != "" || settingPages[d.settings.page].id != "fonts" {
+		t.Fatalf("Tab went to page %d", d.settings.page)
+	}
+	d.settings.show(slices.IndexFunc(settingPages, func(p settingPage) bool { return p.id == "editor" }))
+	s.frame()
+	card := d.centred(d.u(960), d.u(670))
+	x := card.Max.X - d.u(40)
+	y := card.Min.Y + d.u(56) + d.u(8) + d.u(42) + d.u(23)
+	s.click(image.Rect(x-1, y-1, x+1, y+1))
+	if e.cfg.LineNumbers {
+		t.Fatal("clicking the switch didn't turn line numbers off")
+	}
+
+	// Rebinding records keys, Space included.
+	d.settings.show(slices.IndexFunc(settingPages, func(p settingPage) bool { return p.id == "keyboard" }))
+	d.settings.recording = &keyRecording{id: "theme", title: "Color Theme"}
+	s.frame()
+	s.typeText(" T")
+	s.key(key.NameReturn, 0)
+	if d.settings.recording != nil || e.keys["vim.normal"]["space T"] != "theme" {
+		t.Fatalf("rebinding failed: %q", d.settings.failure)
+	}
+
+	// The font picker saves the family it lands on.
+	d.settings.show(1)
+	s.key(key.NameReturn, 0)
+	if d.settings.picker == nil {
+		t.Fatal("Enter didn't open the font picker")
+	}
+	if choices := d.fontChoices(d.settings.picker); len(choices) > 1 {
+		s.key(key.NameDownArrow, 0)
+		s.key(key.NameReturn, 0)
+		if e.cfg.FontFamily != choices[1].name || d.codeFamily.name != choices[1].name {
+			t.Fatalf("picked %q, saved %q", choices[1].name, e.cfg.FontFamily)
+		}
+	}
+
+	s.key(key.NameEscape, 0)
+	if d.settings != nil {
+		t.Fatal("Esc didn't close the settings")
+	}
+
+	d.zoom(1)
+	if got, err := readConfig(e.userConfigPath(), false); err != nil || got.FontSize != 14.5 {
+		t.Fatalf("zoom wasn't saved: %v (%v)", got.FontSize, err)
 	}
 }
