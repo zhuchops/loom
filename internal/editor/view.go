@@ -44,6 +44,7 @@ type renderer struct {
 	sticky                                      []stickyBox
 	wheelAxis                                   int // 1 vertical, 2 horizontal
 	wheelAt                                     time.Time
+	status                                      statusInfo
 	tabStart                                    int // first visible tab while scrolled by hand
 	tabManual                                   bool
 	tabActive                                   *buffer

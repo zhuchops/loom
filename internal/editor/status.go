@@ -6,6 +6,16 @@ import (
 	"strings"
 )
 
+// statusInfo is what the status bar shows, kept so a graphical front end can
+// draw it in its own style.
+type statusInfo struct {
+	mode, profile, file, crumbs, message, keys, branch, language, ending, folder string
+	modeColor                                                                    terminalColor
+	line, column, percent                                                        int
+	problems, dashboard                                                          bool
+	fileErrors, fileWarnings, projectErrors, projectWarnings                     int
+}
+
 func (v *renderer) drawStatus(e *editor, w, h int) {
 	doc := e
 	b := e.b
@@ -125,7 +135,26 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 	if e.problemsVisible(b) {
 		left += v.drawProblems(e, b, left, h-1, rightX-left) + 2
 	}
-	if crumbs := e.breadcrumbs(b); crumbs != "" && e.cfg.StickyScroll && w >= 60 {
+	crumbs := ""
+	if c := e.breadcrumbs(b); c != "" && e.cfg.StickyScroll {
+		crumbs = c
+	}
+	ending, language := "LF", strings.ToUpper(e.cfg.languageFor(b.path))
+	if b.newline() == "\r\n" {
+		ending = "CRLF"
+	}
+	if language == "" {
+		language = "TEXT"
+	}
+	file, project := countProblems(b.diagnostics), e.projectProblems()
+	v.status = statusInfo{
+		mode: mode, profile: strings.ToLower(doc.cfg.Profile), file: name, crumbs: crumbs, message: e.message, keys: strings.TrimSpace(keys),
+		modeColor: modeColor, branch: e.git.branch, language: language, ending: ending,
+		line: row + 1, column: b.cursor - b.lines[row] + 1, percent: (row + 1) * 100 / len(b.lines), folder: filepath.Base(e.root),
+		problems: e.problemsVisible(b), fileErrors: file.errors, fileWarnings: file.warnings, projectErrors: project.errors, projectWarnings: project.warnings,
+		dashboard: b.dashboard,
+	}
+	if crumbs != "" && w >= 60 {
 		name += "  ›  " + crumbs
 	}
 	message := e.message

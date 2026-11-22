@@ -144,7 +144,11 @@ When you scroll into the middle of a function or block, the lines that open it (
 
 ### Desktop app (preview)
 
-`go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds Loom as a native window (Gio, GPU rendered). It runs the same editor, keys, themes and config as the terminal version, and draws the cell grid with a real font. It uses Menlo (or the font in `LOOM_FONT`), a Nerd Font Mono from `~/Library/Fonts` for icons, and Go Mono as a fallback. Cmd and Ctrl both act as Ctrl; Option acts as Alt. This is a first step: only macOS has been tried, and window chrome (pixel-smooth scrolling, proportional UI) is still the terminal layout.
+`go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds Loom as a native window (Gio, GPU rendered) with the same editor, keys, themes and config as the terminal version.
+
+The window is drawn as an application rather than a terminal: a taller tab bar with rounded tabs, hover states and vector close buttons; an Explorer sidebar with a section header, vector file and folder icons and rounded selection; a status bar with a coloured mode pill, problem counts, branch and `Ln, Col`; crisp one-pixel dividers and rounded popup frames. Interface text uses the system sans-serif font (Helvetica Neue on macOS), code uses Menlo or the font in `LOOM_FONT`.
+
+Menus, the command palette, completion and other popups are still laid out on the character grid (with crisp borders), so they look like Loom rather than like a native dialog. Only macOS has been tried. Cmd and Ctrl both act as Ctrl; Option acts as Alt.
 
 ### Touchpad scrolling
 

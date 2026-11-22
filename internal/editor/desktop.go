@@ -70,6 +70,12 @@ type desktop struct {
 	scrollX, scrollY                float32
 	skipEdit                        bool
 	leftDown                        bool
+
+	uiFont, uiBold font.Font
+	top, bottom    int // pixel heights of the tab bar and status bar
+	mx, my         int // pointer position in pixels
+	scale          float32
+	width, height  int
 }
 
 func runDesktop(e *editor, explicit bool) error {
@@ -182,12 +188,23 @@ func (d *desktop) loadFonts() {
 	faces = append(faces, main...)
 	faces = append(faces, icons...)
 	faces = append(faces, gofont.Collection()...)
-	d.shaper = text.NewShaper(text.WithCollection(faces))
 	d.fontRegular = font.Font{Typeface: "Go Mono"}
 	if len(main) > 0 {
 		d.fontRegular = main[0].Font
 		d.fontRegular.Weight, d.fontRegular.Style = font.Normal, font.Regular
 	}
+	d.uiFont = font.Font{Typeface: "Go"}
+	for _, path := range []string{"/System/Library/Fonts/HelveticaNeue.ttc", "/System/Library/Fonts/Helvetica.ttc", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"} {
+		if ui := load(path); len(ui) > 0 {
+			faces = append(faces, ui...)
+			d.uiFont = ui[0].Font
+			d.uiFont.Weight, d.uiFont.Style = font.Normal, font.Regular
+			break
+		}
+	}
+	d.uiBold = d.uiFont
+	d.uiBold.Weight = font.Bold
+	d.shaper = text.NewShaper(text.WithCollection(faces))
 	d.fontBold = d.fontRegular
 	d.fontBold.Weight = font.Bold
 	d.fontIcon = d.fontRegular
@@ -203,6 +220,7 @@ func (d *desktop) measure(gtx layout.Context) {
 		return
 	}
 	d.metric = gtx.Metric
+	d.scale = gtx.Metric.PxPerDp
 	d.sp = 15
 	var w, h int
 	for range 3 {
@@ -250,7 +268,15 @@ func (d *desktop) frame(gtx layout.Context) {
 	d.measure(gtx)
 	d.drain()
 	size := gtx.Constraints.Max
-	cols, rows := max(1, size.X/d.cellW), max(1, size.Y/d.cellH)
+	d.width, d.height = size.X, size.Y
+	zen := d.m.editor.zen
+	d.top, d.bottom = gtx.Dp(38), gtx.Dp(26)
+	chrome := 2
+	if zen {
+		d.top, chrome = 0, 1
+	}
+	cols, rows := max(1, size.X/d.cellW), max(5, chrome+(size.Y-d.top-d.bottom)/d.cellH)
+	d.bottom = max(d.bottom, size.Y-d.top-(rows-chrome)*d.cellH) // the status bar absorbs the remainder
 	if cols != d.cols || rows != d.rows {
 		d.cols, d.rows = cols, rows
 		d.send(tea.WindowSizeMsg{Width: cols, Height: rows})
@@ -363,7 +389,8 @@ func (d *desktop) edit(s string) {
 }
 
 func (d *desktop) pointer(ev pointer.Event) {
-	x, y := int(ev.Position.X)/d.cellW, int(ev.Position.Y)/d.cellH
+	d.mx, d.my = int(ev.Position.X), int(ev.Position.Y)
+	x, y := d.mx/d.cellW, d.cellRow(d.my)
 	mod := tea.KeyMod(0)
 	if ev.Modifiers.Contain(key.ModShift) {
 		mod |= tea.ModShift
@@ -412,88 +439,6 @@ func (d *desktop) pointer(ev pointer.Event) {
 			d.scrollX += step
 			mouse.Button = tea.MouseWheelLeft
 			d.send(tea.MouseWheelMsg(mouse))
-		}
-	}
-}
-
-func (d *desktop) paint(gtx layout.Context, size image.Point) {
-	f := d.m.view.screen
-	fill := func(r image.Rectangle, c color.NRGBA) {
-		paint.FillShape(gtx.Ops, c, clip.Rect(r).Op())
-	}
-	fill(image.Rectangle{Max: size}, d.color(th.bg, th.bg))
-	for y := 0; y < f.Height(); y++ {
-		// Backgrounds first, merged along the row.
-		for x := 0; x < f.Width(); {
-			_, style, width := f.Get(x, y)
-			width = max(1, width)
-			end := x + width
-			for end < f.Width() {
-				_, next, w := f.Get(end, y)
-				if next.bg != style.bg {
-					break
-				}
-				end += max(1, w)
-			}
-			if style.bg != th.bg {
-				fill(image.Rect(x*d.cellW, y*d.cellH, end*d.cellW, (y+1)*d.cellH), d.color(style.bg, th.bg))
-			}
-			x = end
-		}
-	}
-	// The cursor is a block that inverts the cell it covers, or a bar.
-	cursorX, cursorY := -1, -1
-	if f.cursorVisible {
-		cursorX, cursorY = f.cursorX, f.cursorY
-		r := image.Rect(cursorX*d.cellW, cursorY*d.cellH, (cursorX+1)*d.cellW, (cursorY+1)*d.cellH)
-		if f.cursorShape == cursorBar {
-			r.Max.X = r.Min.X + max(2, d.cellW/6)
-		}
-		fill(r, d.color(th.fg, th.fg))
-	}
-	for y := 0; y < f.Height(); y++ {
-		for x := 0; x < f.Width(); {
-			s, style, width := f.Get(x, y)
-			width = max(1, width)
-			if s == "" || s == " " {
-				x += width
-				continue
-			}
-			fg := style.fg
-			if x == cursorX && y == cursorY && f.cursorShape != cursorBar {
-				fg = style.bg
-				if fg&defaultFlag != 0 {
-					fg = th.bg
-				}
-			}
-			ascii := len(s) == 1 && s[0] > 0x20 && s[0] < 0x7f
-			if !ascii {
-				d.glyph(gtx, x*d.cellW, y*d.cellH, s, d.color(fg, th.fg), style.bold)
-				if style.underline != 0 {
-					fill(image.Rect(x*d.cellW, (y+1)*d.cellH-2, (x+width)*d.cellW, (y+1)*d.cellH-1), d.color(style.underline, th.fg))
-				}
-				x += width
-				continue
-			}
-			// Gather a run of ASCII with one look so it is shaped once.
-			var run strings.Builder
-			start := x
-			for x < f.Width() {
-				t, st, w := f.Get(x, y)
-				onCursor := x == cursorX && y == cursorY
-				if st.fg != style.fg || st.bold != style.bold || w > 1 || len(t) != 1 || t[0] < 0x20 || t[0] >= 0x7f || onCursor && start != x {
-					break
-				}
-				run.WriteString(t)
-				x++
-				if onCursor {
-					break // the cursor cell has its own colour
-				}
-			}
-			d.glyph(gtx, start*d.cellW, y*d.cellH, run.String(), d.color(fg, th.fg), style.bold)
-			if style.underline != 0 {
-				fill(image.Rect(start*d.cellW, (y+1)*d.cellH-2, x*d.cellW, (y+1)*d.cellH-1), d.color(style.underline, th.fg))
-			}
 		}
 	}
 }
