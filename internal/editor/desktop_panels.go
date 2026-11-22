@@ -30,6 +30,13 @@ func (d *desktop) chip(gtx layout.Context, x, cy int, s string, fg, bg color.NRG
 // hintChips draws a shortcut such as "Space q  :close" as keycaps, right-aligned
 // at right, and returns the x where it starts.
 func (d *desktop) hintChips(gtx layout.Context, right, cy int, hint string, selected bool) int {
+	if !looksLikeShortcut(hint) {
+		// Search results carry a snippet of code here, not keys.
+		text := d.fit(gtx, strings.TrimSpace(hint), d.dp(280), 12, false)
+		w := d.uiWidth(gtx, text, 12, false)
+		d.ui(gtx, right-w, cy, text, d.color(th.muted, th.fg), 12, false)
+		return right - w - d.dp(10)
+	}
 	bg := blend(d.color(th.menu, th.bg), d.color(th.fg, th.fg), 0.10)
 	if selected {
 		bg = blend(d.color(th.menu, th.bg), d.color(th.fg, th.fg), 0.16)
@@ -241,4 +248,9 @@ func (d *desktop) paintDirectoryTitle(gtx layout.Context, e *editor) {
 		title += "  \u25cf"
 	}
 	d.ui(gtx, r.Min.X+d.dp(14), d.rowY(fr.y, d.rows)+d.cellH/2+d.dp(2), d.fit(gtx, title, r.Dx()-d.dp(28), 12, true), d.color(th.muted, th.fg), 12, true)
+}
+
+// looksLikeShortcut tells key hints ("Space q  :close", "Ctrl+P") from text.
+func looksLikeShortcut(hint string) bool {
+	return len(hint) <= 32 && !strings.ContainsAny(hint, "(){},;=*")
 }

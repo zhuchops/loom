@@ -99,7 +99,11 @@ func runDesktop(e *editor, explicit bool) error {
 		ctx:    ctx, signals: nil, ticks: ticker.C,
 	}
 	d.w = new(app.Window)
-	d.w.Option(app.Title("Loom"), app.Size(unit.Dp(1200), unit.Dp(780)))
+	width, height := 1200, 780
+	if size := os.Getenv("LOOM_DEMO_SIZE"); size != "" { // for screenshots, e.g. 700x600
+		fmt.Sscanf(size, "%dx%d", &width, &height)
+	}
+	d.w.Option(app.Title("Loom"), app.Size(unit.Dp(width), unit.Dp(height)))
 	d.loadFonts()
 	e.begin(explicit)
 	defer e.finish()
@@ -488,6 +492,9 @@ func (d *desktop) runDemo() {
 			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
 		case k == "enter":
 			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+		case k == "down" || k == "up" || k == "tab":
+			code := map[string]rune{"down": tea.KeyDown, "up": tea.KeyUp, "tab": tea.KeyTab}[k]
+			d.send(tea.KeyPressMsg(tea.Key{Code: code}))
 		case k == "esc":
 			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
 		case strings.HasPrefix(k, "ctrl+") && len(k) == 6:

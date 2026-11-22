@@ -333,6 +333,9 @@ func (d *desktop) chromeCell(x, y int) bool {
 		return false
 	}
 	v := &d.m.view
+	if ds := v.dash; ds.box.w > 0 && x >= ds.box.x && x < ds.box.x+ds.box.w && y >= ds.box.y && y < ds.box.y+ds.box.h {
+		return true // the start screen is painted natively, underneath any popup
+	}
 	if v.divider > 0 && x <= v.divider && y < d.rows-1 {
 		return true
 	}
@@ -513,6 +516,10 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 			d.fill(gtx, image.Rect(max(0, v.divider*d.cellW+1), 0, d.width, d.top), dim)
 		}
 	}
+	d.paintDashboard(gtx, e)
+	if ds := d.m.view.dash; ds.box.w > 0 && d.modal(e) {
+		d.fill(gtx, d.columnRect(ds.box.x, ds.box.x+ds.box.w, ds.box.y, ds.box.y+ds.box.h), color.NRGBA{A: 115})
+	}
 	d.paintCards(gtx)
 	d.paintCells(gtx, f, full, 0, true)
 	sa := &d.scroll
@@ -535,7 +542,6 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 	}
 	// A hairline above the status bar.
 	d.fill(gtx, image.Rect(0, d.height-d.bottom, size.X, d.height-d.bottom+1), d.color(th.border, th.border))
-	d.paintDashboard(gtx, e)
 	d.paintTitles(gtx)
 	d.paintMenu(gtx, e)
 	d.paintCompletion(gtx, e)
@@ -669,7 +675,7 @@ func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
 	}
 	d.chip(gtx, px1-d.dp(14)-d.uiWidth(gtx, "esc", 11, false)-2*d.dp(6), cy, "esc", muted, blend(card, d.color(th.fg, th.fg), 0.08))
 	rule := d.rowY(inputRow, d.rows) + d.cellH
-	d.fill(gtx, image.Rect(px0, rule-max(1, d.dp(1)), px1, rule), blend(card, d.color(th.fg, th.fg), 0.22))
+	d.fill(gtx, image.Rect(px0, rule-max(2, d.dp(2)), px1, rule), blend(card, d.color(th.fg, th.fg), 0.26))
 	if len(m.matches) == 0 && m.empty != "" {
 		d.ui(gtx, px0+d.dp(16), d.rowY(list.y, d.rows)+d.cellH/2, m.empty, muted, 13, false)
 	}
@@ -687,7 +693,18 @@ func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
 			d.round(gtx, image.Rect(px0+d.dp(8), py+d.dp(1), px1-d.dp(8), py+d.cellH-d.dp(1)), d.dp(7), blend(card, d.color(th.fg, th.fg), 0.06), false)
 		}
 		right := px1 - d.dp(16)
-		if o.hint != "" {
+		switch {
+		case o.hint == "":
+		case !looksLikeShortcut(o.hint):
+			// A code snippet or detail: shown only if the label leaves room for it.
+			room := right - px0 - d.dp(20) - d.uiWidth(gtx, o.label, 14, false) - d.dp(24)
+			if room > d.dp(90) {
+				text := d.fit(gtx, strings.TrimSpace(o.hint), room, 12, false)
+				hw := d.uiWidth(gtx, text, 12, false)
+				d.ui(gtx, right-hw, cy, text, muted, 12, false)
+				right -= hw + d.dp(14)
+			}
+		default:
 			left := d.hintChips(gtx, right, cy, o.hint, selected)
 			if left > px0+(px1-px0)/2 {
 				right = left
@@ -697,6 +714,13 @@ func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
 		}
 		label := d.fit(gtx, o.label, right-px0-d.dp(20), 14, false)
 		d.highlighted(gtx, px0+d.dp(20), cy, label, matchRunes(label, m.input), fg, accent, 14)
+	}
+	if pb := v.previewBox; pb.h > 0 && pb.y == fr.y+1 && pb.x > list.x+list.w {
+		// The rule between the list and the preview runs the full height of the card.
+		edge := (pb.x-2)*d.cellW + d.cellW/2
+		top := d.rowY(fr.y, d.rows) + d.cellH
+		bottom := d.cardRect(fr).Max.Y - max(1, d.dp(1))
+		d.fill(gtx, image.Rect(edge, top, edge+max(1, d.dp(1)), bottom), blend(card, d.color(th.fg, th.fg), 0.22))
 	}
 	if len(m.matches) > list.h && list.h > 0 {
 		trackTop := d.rowY(list.y, d.rows) + d.dp(6)
