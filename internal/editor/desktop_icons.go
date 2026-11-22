@@ -7,6 +7,12 @@ import (
 	"image/color"
 	"path/filepath"
 	"strings"
+
+	"gioui.org/op"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
+
+	"github.com/zhuchops/loom/internal/brand"
 )
 
 type iconID int
@@ -181,28 +187,21 @@ func (d *desktop) fileIcon(cx, cy int, path string) {
 	d.textCenter(cx, cy, mark, st, readable(c, d.c.side, 3.5))
 }
 
-// logo draws the Loom mark: threads woven over and under.
+// logo draws the Loom mark, the same one as on the app icon.
 func (d *desktop) logo(cx, cy int, size float32) {
-	const n = 4
-	s := d.u(size)
-	pitch := s / n
-	half := max(1, pitch*29/100)
-	x0, y0 := cx-pitch*n/2, cy-pitch*n/2
-	warm := [2]color.NRGBA{{R: 0xc8, G: 0x82, B: 0xe7, A: 255}, {R: 0xe0, G: 0x6c, B: 0x8a, A: 255}}
-	cool := [2]color.NRGBA{{R: 0x61, G: 0xaf, B: 0xef, A: 255}, {R: 0x56, G: 0xc6, B: 0xb9, A: 255}}
-	thread := func(pair [2]color.NRGBA, i int) color.NRGBA { return blend(pair[0], pair[1], float32(i)/(n-1)) }
-	for j := range n {
-		y := y0 + pitch*j + pitch/2
-		d.round(image.Rect(x0, y-half, x0+pitch*n, y+half), size, thread(warm, j))
-	}
-	for i := range n {
-		x := x0 + pitch*i + pitch/2
-		d.round(image.Rect(x-half, y0, x+half, y0+pitch*n), size, thread(cool, i))
-		for j := range n {
-			if (i+j)%2 == 1 {
-				y := y0 + pitch*j + pitch/2
-				d.fill(image.Rect(x-half, y-half, x+half, y+half), thread(warm, j))
-			}
+	px := max(1, d.u(size))
+	mark, ok := d.marks[px]
+	if !ok {
+		if d.marks == nil || len(d.marks) > 16 {
+			d.marks = map[int]paint.ImageOp{}
 		}
+		mark = paint.NewImageOp(brand.Mark(px))
+		mark.Filter = paint.FilterNearest
+		d.marks[px] = mark
 	}
+	at := image.Pt(cx-px/2, cy-px/2)
+	defer op.Offset(at).Push(d.gtx.Ops).Pop()
+	defer clip.Rect{Max: image.Pt(px, px)}.Push(d.gtx.Ops).Pop()
+	mark.Add(d.gtx.Ops)
+	paint.PaintOp{}.Add(d.gtx.Ops)
 }

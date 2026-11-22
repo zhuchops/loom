@@ -17,6 +17,7 @@ import (
 	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
 )
@@ -70,6 +71,8 @@ type desktop struct {
 	hasItalic                  bool
 	look                       fontLook
 	clip                       rect
+
+	marks map[int]paint.ImageOp // the logo, drawn once per size
 
 	c    uiColors
 	inks map[[2]color.NRGBA]color.NRGBA

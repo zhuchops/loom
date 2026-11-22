@@ -165,7 +165,7 @@ When you scroll into the middle of a function or block, the lines that open it (
 
 ### Desktop app
 
-`sh packaging/macos/build-app.sh` builds `dist/Loom.app`; pass a folder to build somewhere else. `go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds just the binary (git ignores it). It is the same editor, with the same keys, themes and config as the terminal version, in a native window (Gio, GPU rendered). Only the code is laid out on a character grid; everything around it is laid out in pixels.
+`sh packaging/macos/build-app.sh` builds `dist/Loom.app`; pass a folder to build somewhere else. The icon, two pairs of threads woven into an L, is drawn in code by `internal/brand`; the logo inside the app is the same drawing, simplified at small sizes. `go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds just the binary (git ignores it). It is the same editor, with the same keys, themes and config as the terminal version, in a native window (Gio, GPU rendered). Only the code is laid out on a character grid; everything around it is laid out in pixels.
 
 - **Title bar:** the project (click for recent projects), the branch (click to switch), a search field, and buttons for Source Control, the Command Palette and Settings.
 - **Sidebar:** the file tree with git state, buttons for a new file, a new folder and filtering. Right-click for actions; drag its edge to resize it.
