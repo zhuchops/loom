@@ -17,17 +17,6 @@ var dashboardActions = []struct {
 	{"Open Project", "open-project", "\uf07b"},
 }
 
-// dashInfo is what the dashboard shows, kept so a graphical front end can
-// draw it in its own style.
-type dashInfo struct {
-	box, list       hitBox
-	header          int
-	items           []dashItem
-	selected        int
-	focused, logo   bool
-	project, branch string
-}
-
 // dashItem is one selectable row: a command, or a recent file to open.
 type dashItem struct {
 	label, hint, command, path, dir string
@@ -101,7 +90,7 @@ func (e *editor) showDashboard() {
 func (e *editor) runCommand(id string) {
 	if e.b.dashboard {
 		switch id {
-		case "dashboard", "open-project", "recent-projects", "close-project", "files", "buffers", "palette", "ex", "project-search",
+		case "dashboard", "open-project", "recent-projects", "recent-files", "settings", "theme", "close-project", "files", "buffers", "palette", "ex", "project-search",
 			"explorer", "explorer-popup", "close-explorer", "toggle-sidebar", "directory-jump",
 			"messages", "quit", "keybindings", "profile-vim", "recover-buffers",
 			"jump-back", "jump-forward", "git-panel", "git-branch", "refresh-git", "problems",
@@ -157,6 +146,9 @@ func (e *editor) dashboardBox(box hitBox) hitBox {
 }
 
 func (v *renderer) drawDashboard(e *editor, box hitBox, focused bool) {
+	if v.native {
+		return
+	}
 	items := e.dashboardItems()
 	list := e.dashboardBox(box)
 	header := dashboardHeader(box.h, len(items))
@@ -165,8 +157,6 @@ func (v *renderer) drawDashboard(e *editor, box hitBox, focused bool) {
 	if e.noProject {
 		project = "No project open"
 	}
-	v.dash = dashInfo{box: box, list: list, header: header, items: items, selected: e.dashboardSelection, focused: focused,
-		project: project, branch: e.git.branch, logo: header > 4}
 	if e.git.branch != "" {
 		project += "  \U000f062c " + e.git.branch
 	}

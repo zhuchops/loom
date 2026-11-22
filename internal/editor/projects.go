@@ -87,6 +87,7 @@ func shortPath(path string) string {
 // project commands are unavailable until one is.
 func (e *editor) enterNoProject() {
 	e.noProject = true
+	e.gitToken++ // drop any git result still on its way
 	e.tree.sidebar = false
 	e.tree.rows = nil
 	e.git = gitState{}
@@ -164,6 +165,11 @@ func (e *editor) openProject(dir string) {
 	e.tree = fileTree{sidebar: true, width: 28, expanded: map[string]bool{dir: true}}
 	e.refreshTree("")
 	e.restoreSession(false)
+	if e.recovery != nil {
+		// Crash recovery is kept per project.
+		_ = e.saveRecovery()
+		e.startRecovery()
+	}
 	e.showDashboard()
 	e.refreshGit()
 	rememberProject(dir)
@@ -257,13 +263,17 @@ func (e *editor) needsProject(ids ...string) {
 // chooseProject asks for a folder with the system dialog (Finder on macOS).
 // Elsewhere, or when the dialog is unavailable, it falls back to the menu.
 func (e *editor) chooseProject() {
-	if runtime.GOOS != "darwin" {
-		e.projectMenu()
-		return
-	}
 	start := e.root
 	if e.noProject {
 		start, _ = os.UserHomeDir()
+	}
+	if e.pickFolder != nil {
+		e.pickFolder(start, e.openProject)
+		return
+	}
+	if runtime.GOOS != "darwin" {
+		e.projectMenu()
+		return
 	}
 	e.notify("Choose a folder in Finder…")
 	go func() {

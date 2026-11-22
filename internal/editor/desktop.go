@@ -7,30 +7,22 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"gioui.org/app"
 	"gioui.org/font"
-	"gioui.org/font/gofont"
-	"gioui.org/font/opentype"
-	"gioui.org/io/event"
-	"gioui.org/io/key"
-	"gioui.org/io/pointer"
-	"gioui.org/io/system"
 	"gioui.org/layout"
 	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
-	"gioui.org/widget"
 )
+
+// The desktop front end shares the editor, its commands and its renderer with
+// the terminal build, but only the text panes live on a character grid. The
+// title bar, sidebar, tabs, status bar, pickers, panels and popovers are laid
+// out and hit-tested in pixels.
 
 // MainDesktop runs Loom in a native window and exits the process on failure.
 func MainDesktop() {
@@ -40,11 +32,11 @@ func MainDesktop() {
 			_ = os.Chdir(home)
 		}
 	}
+	platformEnvironment()
 	e, explicit, done, err := prepare()
 	if err == nil && !done {
 		go func() {
-			err = runDesktop(e, explicit)
-			if err != nil {
+			if err := runDesktop(e, explicit); err != nil {
 				fmt.Fprintln(os.Stderr, "loom:", err)
 				os.Exit(1)
 			}
@@ -58,33 +50,58 @@ func MainDesktop() {
 	}
 }
 
-// desktop drives the same editor and renderer as the terminal build, but
-// paints the cell grid with a GPU-rendered monospace font instead of
-// writing escape sequences.
+const defaultCodeSize = 13
+
 type desktop struct {
-	w      *app.Window
-	m      *terminalModel
-	inbox  chan tea.Msg
-	shaper *text.Shaper
+	w     *app.Window
+	m     *terminalModel
+	inbox chan tea.Msg
 
-	fontRegular, fontBold, fontIcon font.Font
-	metric                          unit.Metric
-	sp                              unit.Sp
-	cellW, cellH, lift              int
-	cols, rows                      int
-	focused                         bool
-	scrollX, scrollY                float32
-	skipEdit                        bool
-	leftDown                        bool
+	gtx     layout.Context
+	scratch op.Ops
+	shaper  *text.Shaper
+	sizes   map[measured]image.Point
+	wraps   map[wrapped][]string
 
-	uiFont, uiBold font.Font
-	top, bottom    int // pixel heights of the tab bar and status bar
-	mx, my         int // pointer position in pixels
-	scale          float32
-	scroll         scrollAnim
-	cur            cursorAnim
-	demo           bool
-	width, height  int
+	uiFont, uiStrong, codeFont font.Font
+
+	c    uiColors
+	inks map[[2]color.NRGBA]color.NRGBA
+
+	// The code grid.
+	metric       unit.Metric
+	scale        float32
+	codeSize     float32 // asked for; code is the size that fits the pixel grid
+	code         textStyle
+	cellW, cellH int
+	lift         int
+	cols, rows   int
+
+	geo geometry
+
+	// Pointer handling works on the zones painted in the previous frame.
+	zones      []zone
+	drags      []rect // parts of the title bar that move the window
+	layer      int
+	hoverLayer int
+	grab       *zone
+	mx, my     int
+	wheelX     float32
+	wheelY     float32
+	focused    bool // has asked for keyboard focus
+	active     bool // the window is in front
+
+	tabs      []tabSlot
+	tabScroll int
+	tabShown  *buffer
+
+	list    listState
+	toast   toast
+	dialog  *dialog
+	preview previewCache
+
+	scroll scrollAnim
+	cur    cursorAnim
 }
 
 func runDesktop(e *editor, explicit bool) error {
@@ -92,35 +109,66 @@ func runDesktop(e *editor, explicit bool) error {
 	defer cancel()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	d := &desktop{inbox: make(chan tea.Msg, 256)}
-	d.m = &terminalModel{
-		editor: e,
-		view:   renderer{screen: newTerminalFrame(0, 0)},
-		ctx:    ctx, signals: nil, ticks: ticker.C,
-	}
-	d.w = new(app.Window)
-	width, height := 1200, 780
-	if size := os.Getenv("LOOM_DEMO_SIZE"); size != "" { // for screenshots, e.g. 700x600
-		fmt.Sscanf(size, "%dx%d", &width, &height)
-	}
-	d.w.Option(app.Title("Loom"), app.Size(unit.Dp(width), unit.Dp(height)))
-	d.loadFonts()
+	w := new(app.Window)
+	options := append([]app.Option{
+		app.Title("Loom"),
+		app.Size(1280, 820),
+		app.MinSize(640, 420),
+	}, platformOptions()...)
+	w.Option(options...)
+	d := newDesktop(w, e, ctx, ticker.C)
+	d.platformStart()
 	e.begin(explicit)
 	defer e.finish()
 	d.run(d.m.Init())
 	var ops op.Ops
 	for {
-		switch ev := d.w.Event().(type) {
+		switch ev := w.Event().(type) {
 		case app.DestroyEvent:
-			cancel()
 			return ev.Err
+		case *app.ClosingEvent:
+			if e.quit || !d.unsaved() {
+				// Leave now: a DestroyEvent only comes once AppKit frees the view.
+				return nil
+			}
+			ev.Abort()
+			d.requestQuit()
+			w.Invalidate()
+		case app.ConfigEvent:
+			d.active = ev.Config.Focused
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, ev)
 			d.frame(gtx)
 			ev.Frame(gtx.Ops)
+			if e.quit {
+				return nil
+			}
+		default:
+			d.platformEvent(ev)
 		}
 	}
 }
+
+// newDesktop builds the front end around an editor; tests use it without a
+// window loop.
+func newDesktop(w *app.Window, e *editor, ctx context.Context, ticks <-chan time.Time) *desktop {
+	d := &desktop{
+		w: w, inbox: make(chan tea.Msg, 256), active: true, codeSize: defaultCodeSize,
+		sizes: map[measured]image.Point{}, wraps: map[wrapped][]string{}, inks: map[[2]color.NRGBA]color.NRGBA{},
+	}
+	d.m = &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0), native: true}, ctx: ctx, ticks: ticks}
+	d.loadFonts()
+	return d
+}
+
+// post hands msg to the event loop from any goroutine.
+func (d *desktop) post(msg tea.Msg) {
+	d.inbox <- msg
+	d.w.Invalidate()
+}
+
+// uiCallback runs on the event loop.
+type uiCallback func()
 
 // run executes a Bubble Tea command in the background and queues its result.
 func (d *desktop) run(cmd tea.Cmd) {
@@ -129,21 +177,23 @@ func (d *desktop) run(cmd tea.Cmd) {
 	}
 	go func() {
 		if msg := cmd(); msg != nil {
-			d.inbox <- msg
-			d.w.Invalidate()
+			d.post(msg)
 		}
 	}()
 }
 
 func (d *desktop) send(msg tea.Msg) {
 	switch msg := msg.(type) {
+	case uiCallback:
+		msg()
+		return
 	case tea.BatchMsg:
 		for _, cmd := range msg {
 			d.run(cmd)
 		}
 		return
 	case tea.QuitMsg:
-		d.w.Perform(system.ActionClose)
+		d.m.editor.quit = true
 		return
 	}
 	_, cmd := d.m.Update(msg)
@@ -161,348 +211,172 @@ func (d *desktop) drain() {
 	}
 }
 
-func (d *desktop) loadFonts() {
-	var faces []font.FontFace
-	load := func(path string) []font.FontFace {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-		parsed, err := opentype.ParseCollection(raw)
-		if err != nil {
-			return nil
-		}
-		return parsed
-	}
-	home, _ := os.UserHomeDir()
-	primary := os.Getenv("LOOM_FONT")
-	var main []font.FontFace
-	if primary != "" {
-		main = load(primary)
-	}
-	for _, path := range []string{"/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/Monaco.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"} {
-		if len(main) > 0 {
-			break
-		}
-		main = load(path)
-	}
-	var icons []font.FontFace
-	if matches, _ := filepath.Glob(filepath.Join(home, "Library/Fonts/*NerdFontMono-Regular.*")); len(matches) > 0 {
-		for _, m := range matches {
-			if !strings.Contains(m, "BigBlue") && !strings.Contains(m, "Gohu") {
-				icons = load(m)
-				break
-			}
-		}
-		if len(icons) == 0 {
-			icons = load(matches[0])
-		}
-	}
-	faces = append(faces, main...)
-	faces = append(faces, icons...)
-	faces = append(faces, gofont.Collection()...)
-	d.fontRegular = font.Font{Typeface: "Go Mono"}
-	if len(main) > 0 {
-		d.fontRegular = main[0].Font
-		d.fontRegular.Weight, d.fontRegular.Style = font.Normal, font.Regular
-	}
-	d.uiFont = font.Font{Typeface: "Go"}
-	for _, path := range []string{"/System/Library/Fonts/HelveticaNeue.ttc", "/System/Library/Fonts/Helvetica.ttc", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"} {
-		if ui := load(path); len(ui) > 0 {
-			faces = append(faces, ui...)
-			d.uiFont = ui[0].Font
-			d.uiFont.Weight, d.uiFont.Style = font.Normal, font.Regular
-			break
-		}
-	}
-	d.uiBold = d.uiFont
-	d.uiBold.Weight = font.Bold
-	d.shaper = text.NewShaper(text.WithCollection(faces))
-	d.fontBold = d.fontRegular
-	d.fontBold.Weight = font.Bold
-	d.fontIcon = d.fontRegular
-	if len(icons) > 0 {
-		d.fontIcon = icons[0].Font
-	}
-}
-
-// measure picks a font size whose glyph advance is a whole number of pixels,
-// so a run of text stays aligned with the cell grid.
-func (d *desktop) measure(gtx layout.Context) {
+// measure picks a code size whose advance is a whole number of pixels, so a
+// run of text stays on the cell grid.
+func (d *desktop) measure() {
+	gtx := d.gtx
 	if d.cellW > 0 && gtx.Metric == d.metric {
 		return
 	}
 	d.metric = gtx.Metric
 	d.scale = gtx.Metric.PxPerDp
-	d.sp = 15
-	var w, h int
+	clear(d.sizes)
+	clear(d.wraps)
+
+	const sample = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"
+	d.code = textStyle{size: d.codeSize, mono: true}
+	var size image.Point
 	for range 3 {
-		w, h = d.size(gtx, d.fontRegular, strings.Repeat("M", 200))
-		adv := float64(w) / 200
-		target := math.Round(adv)
-		if target < 1 || math.Abs(adv-target) < 0.01 {
+		size = d.measureText(sample, d.code)
+		advance := float32(size.X) / float32(len(sample))
+		target := float32(int(advance + 0.5))
+		if target < 1 || advance-target < 0.005 && target-advance < 0.005 {
 			break
 		}
-		d.sp = unit.Sp(float64(d.sp) * target / adv)
+		d.code.size *= target / advance
 	}
-	d.cellW = max(1, int(math.Round(float64(w)/200)))
-	d.cellH = h * 135 / 100
-	d.lift = (d.cellH - h) / 2
+	size = d.measureText(sample, d.code)
+	d.cellW = max(1, (size.X+len(sample)/2)/len(sample))
+	d.cellH = max(size.Y, d.u(d.code.size*1.6))
+	d.lift = (d.cellH - size.Y) / 2
 }
 
-func (d *desktop) size(gtx layout.Context, f font.Font, s string) (int, int) {
-	gtx.Constraints = layout.Constraints{Max: image.Pt(1<<20, 1<<20)}
-	macro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: color.NRGBA{A: 255}}.Add(gtx.Ops)
-	call := macro.Stop()
-	m := op.Record(gtx.Ops)
-	dims := widget.Label{MaxLines: 1}.Layout(gtx, d.shaper, f, d.sp, s, call)
-	m.Stop()
-	return dims.Size.X, dims.Size.Y
-}
-
-func (d *desktop) color(c terminalColor, fallback terminalColor) color.NRGBA {
-	switch {
-	case c&defaultFlag != 0:
-		c = fallback
-		if c&defaultFlag != 0 {
-			c = rgb(0x1e222a)
-		}
+func (d *desktop) zoom(delta float32) {
+	if delta == 0 {
+		d.codeSize = defaultCodeSize
+	} else {
+		d.codeSize = max(9, min(26, d.codeSize+delta))
 	}
-	if c&ansiFlag != 0 {
-		r, g, b := ansiRGB(int(c & 0xff))
-		return color.NRGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
-	}
-	r, g, b := c.RGB()
-	return color.NRGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
+	d.cellW = 0
+	d.scroll = scrollAnim{}
 }
 
 func (d *desktop) frame(gtx layout.Context) {
-	d.measure(gtx)
+	d.gtx = gtx
+	d.measure()
 	d.drain()
-	size := gtx.Constraints.Max
-	d.width, d.height = size.X, size.Y
-	zen := d.m.editor.zen
-	d.top, d.bottom = gtx.Dp(38), gtx.Dp(26)
-	chrome := 2
-	if zen {
-		d.top, chrome = 0, 1
+	d.input()
+	e := d.m.editor
+	if c := deriveColors(); c != d.c {
+		d.c = c
+		clear(d.inks)
+		d.platformTheme()
 	}
-	cols, rows := max(1, size.X/d.cellW), max(5, chrome+(size.Y-d.top-d.bottom)/d.cellH)
-	d.bottom = max(d.bottom, size.Y-d.top-(rows-chrome)*d.cellH) // the status bar absorbs the remainder
+	if d.cellW == 0 { // zoomed by input in this frame
+		d.measure()
+	}
+	d.geo = d.arrange(e, gtx.Constraints.Max)
+	cols, rows := max(4, d.geo.grid.Dx()/d.cellW), max(5, d.geo.grid.Dy()/d.cellH)
 	if cols != d.cols || rows != d.rows {
 		d.cols, d.rows = cols, rows
 		d.send(tea.WindowSizeMsg{Width: cols, Height: rows})
 	}
-	d.input(gtx)
-	d.runDemo()
-	d.m.view.draw(d.m.editor)
-	if d.m.editor.quit {
-		d.w.Perform(system.ActionClose)
-	}
-	d.paint(gtx, size)
-	d.m.editor.animating() // keep the frame loop running while animations play
-	if d.m.editor.animating() {
-		d.w.Invalidate()
+	d.m.view.draw(e)
+	d.paint(e)
+	d.inputArea()
+	if e.animating() {
+		gtx.Execute(op.InvalidateCmd{})
 	}
 }
 
-func (d *desktop) input(gtx layout.Context) {
-	tag := d
-	if !d.focused {
-		gtx.Execute(key.FocusCmd{Tag: tag})
-		d.focused = true
+// geometry is where the parts of the window are.
+type geometry struct {
+	window, title, sidebar, tabs, crumbs, editor, status rect
+	dirCard                                              rect
+	grid                                                 rect
+}
+
+func (d *desktop) sidebarShown(e *editor, width int) bool {
+	if e.zen || e.noProject || width < d.u(520) {
+		return false
 	}
-	// Pointer input covers the whole window.
-	area := clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops)
-	event.Op(gtx.Ops, tag)
-	area.Pop()
-	any := key.ModCtrl | key.ModCommand | key.ModShift | key.ModAlt | key.ModSuper
-	filters := []event.Filter{
-		key.FocusFilter{Target: tag},
-		pointer.Filter{Target: tag, Kinds: pointer.Press | pointer.Release | pointer.Move | pointer.Drag | pointer.Scroll,
-			ScrollX: pointer.ScrollRange{Min: -1 << 20, Max: 1 << 20}, ScrollY: pointer.ScrollRange{Min: -1 << 20, Max: 1 << 20}},
-		key.Filter{Focus: tag, Optional: any},
+	return e.tree.sidebar || e.tree.popup || e.tree.focused
+}
+
+func (d *desktop) arrange(e *editor, size image.Point) geometry {
+	w, h := size.X, size.Y
+	g := geometry{window: image.Rectangle{Max: size}}
+	top, bottom, left := d.u(titleHeight), h, 0
+	g.title = image.Rect(0, 0, w, top)
+	if !e.zen {
+		bottom -= d.u(27)
+		g.status = image.Rect(0, bottom, w, h)
 	}
-	for _, name := range []key.Name{key.NameTab, key.NameEscape, key.NameReturn, key.NameEnter, key.NameLeftArrow, key.NameRightArrow,
-		key.NameUpArrow, key.NameDownArrow, key.NameHome, key.NameEnd, key.NamePageUp, key.NamePageDown, key.NameDeleteBackward,
-		key.NameDeleteForward, key.NameSpace} {
-		filters = append(filters, key.Filter{Focus: tag, Name: name, Optional: any})
+	if d.sidebarShown(e, w) {
+		left = min(d.u(float32(max(18, e.tree.width)*9)), w*2/5)
+		g.sidebar = image.Rect(0, top, left, bottom)
 	}
-	for {
-		ev, ok := gtx.Event(filters...)
-		if !ok {
-			break
-		}
-		switch ev := ev.(type) {
-		case key.Event:
-			if ev.State == key.Press {
-				d.key(ev)
-			}
-		case key.EditEvent:
-			d.edit(ev.Text)
-		case pointer.Event:
-			d.pointer(ev)
+	y := top
+	if !e.zen && (len(e.buffers) > 1 || !e.b.dashboard) {
+		g.tabs = image.Rect(left, y, w, y+d.u(36))
+		y = g.tabs.Max.Y
+		if !e.b.dashboard && e.b.path != "" {
+			g.crumbs = image.Rect(left, y, w, y+d.u(26))
+			y = g.crumbs.Max.Y
 		}
 	}
-	d.skipEdit = false
+	g.editor = image.Rect(left, y, w, bottom)
+	inner := g.editor
+	if e.directory != nil {
+		cw, ch := min(d.u(680), w-d.u(40)), min(d.u(500), bottom-top-d.u(40))
+		x, cy := (w-cw)/2, top+(bottom-top-ch)/2
+		g.dirCard = image.Rect(x, cy, x+cw, cy+ch)
+		inner = image.Rect(x+d.u(6), cy+d.u(46), x+cw-d.u(6), cy+ch-d.u(38))
+	}
+	g.grid = image.Rect(inner.Min.X+d.u(4), inner.Min.Y+d.u(4), inner.Max.X-d.u(6), inner.Max.Y)
+	return g
 }
 
-var guiNamedKeys = map[key.Name]rune{
-	key.NameReturn: tea.KeyEnter, key.NameEnter: tea.KeyEnter, key.NameEscape: tea.KeyEscape, key.NameTab: tea.KeyTab,
-	key.NameDeleteBackward: tea.KeyBackspace, key.NameDeleteForward: tea.KeyDelete,
-	key.NameLeftArrow: tea.KeyLeft, key.NameRightArrow: tea.KeyRight, key.NameUpArrow: tea.KeyUp, key.NameDownArrow: tea.KeyDown,
-	key.NameHome: tea.KeyHome, key.NameEnd: tea.KeyEnd, key.NamePageUp: tea.KeyPgUp, key.NamePageDown: tea.KeyPgDown,
-}
+const (
+	layerBase = iota
+	layerPopover
+	layerModal
+	layerToast
+	layerDialog
+)
 
-func (d *desktop) key(ev key.Event) {
-	var mod tea.KeyMod
-	if ev.Modifiers.Contain(key.ModCtrl) || ev.Modifiers.Contain(key.ModCommand) {
-		mod |= tea.ModCtrl
-	}
-	if ev.Modifiers.Contain(key.ModAlt) {
-		mod |= tea.ModAlt
-	}
-	if ev.Modifiers.Contain(key.ModShift) {
-		mod |= tea.ModShift
-	}
-	if code, ok := guiNamedKeys[ev.Name]; ok {
-		d.send(tea.KeyPressMsg(tea.Key{Code: code, Mod: mod}))
-		d.skipEdit = true
-		return
-	}
-	// Plain printable keys arrive as text; only shortcuts are handled here.
-	if mod&(tea.ModCtrl|tea.ModAlt) == 0 {
-		return
-	}
-	d.skipEdit = true
-	if ev.Name == key.NameSpace {
-		d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeySpace, Mod: mod}))
-		return
-	}
-	r, _ := utf8.DecodeRuneInString(strings.ToLower(string(ev.Name)))
-	if utf8.RuneCountInString(string(ev.Name)) != 1 || r == utf8.RuneError {
-		return
-	}
-	d.send(tea.KeyPressMsg(tea.Key{Code: r, Mod: mod}))
-}
+func (d *desktop) paint(e *editor) {
+	d.zones, d.drags, d.tabs = d.zones[:0], d.drags[:0], d.tabs[:0]
+	g := &d.geo
 
-func (d *desktop) edit(s string) {
-	if s == "" || d.skipEdit {
-		return
+	d.layer = layerBase
+	d.fill(g.window, d.c.bg)
+	if e.directory == nil {
+		d.paintEditor(e, g.editor, d.c.bg)
 	}
-	if utf8.RuneCountInString(s) > 1 {
-		d.send(tea.PasteMsg{Content: s})
-		return
-	}
-	r, _ := utf8.DecodeRuneInString(s)
-	if r < 0x20 || r == 0x7f {
-		return
-	}
-	d.send(tea.KeyPressMsg(tea.Key{Code: r, Text: s}))
-}
+	d.paintTitle(e)
+	d.paintSidebar(e)
+	d.paintTabs(e)
+	d.paintCrumbs(e)
+	d.paintStatus(e)
 
-func (d *desktop) pointer(ev pointer.Event) {
-	d.mx, d.my = int(ev.Position.X), int(ev.Position.Y)
-	x, y := d.mx/d.cellW, d.cellRow(d.my)
-	mod := tea.KeyMod(0)
-	if ev.Modifiers.Contain(key.ModShift) {
-		mod |= tea.ModShift
+	d.layer = layerPopover
+	if e.menu == nil && e.panel == nil && e.diff == nil && e.directory == nil {
+		d.paintFind(e)
+		d.paintCompletion(e)
+		d.paintHover(e)
 	}
-	button := tea.MouseNone
+
+	d.layer = layerModal
 	switch {
-	case ev.Buttons.Contain(pointer.ButtonPrimary):
-		button = tea.MouseLeft
-	case ev.Buttons.Contain(pointer.ButtonSecondary):
-		button = tea.MouseRight
-	case ev.Buttons.Contain(pointer.ButtonTertiary):
-		button = tea.MouseMiddle
+	case e.notificationDetail != nil:
+		d.paintDetail(e)
+	case e.menu != nil:
+		d.paintPicker(e)
+	case e.diff != nil:
+		d.paintDiff(e)
+	case e.panel != nil:
+		d.paintGit(e)
+	case e.directory != nil:
+		d.paintDirectory(e)
 	}
-	mouse := tea.Mouse{X: x, Y: y, Button: button, Mod: mod}
-	switch ev.Kind {
-	case pointer.Press:
-		d.leftDown = button == tea.MouseLeft
-		d.send(tea.MouseClickMsg(mouse))
-	case pointer.Release:
-		mouse.Button = tea.MouseLeft
-		d.leftDown = false
-		d.send(tea.MouseReleaseMsg(mouse))
-	case pointer.Move, pointer.Drag:
-		d.send(tea.MouseMotionMsg(mouse))
-	case pointer.Scroll:
-		// One wheel step per three rows of finger travel.
-		d.scrollX += ev.Scroll.X
-		d.scrollY += ev.Scroll.Y
-		step := float32(d.cellH * 3)
-		for d.scrollY >= step {
-			d.scrollY -= step
-			mouse.Button = tea.MouseWheelDown
-			d.send(tea.MouseWheelMsg(mouse))
-		}
-		for d.scrollY <= -step {
-			d.scrollY += step
-			mouse.Button = tea.MouseWheelUp
-			d.send(tea.MouseWheelMsg(mouse))
-		}
-		for d.scrollX >= step {
-			d.scrollX -= step
-			mouse.Button = tea.MouseWheelRight
-			d.send(tea.MouseWheelMsg(mouse))
-		}
-		for d.scrollX <= -step {
-			d.scrollX += step
-			mouse.Button = tea.MouseWheelLeft
-			d.send(tea.MouseWheelMsg(mouse))
-		}
+	if e.menu == nil && e.panel == nil && e.diff == nil && e.notificationDetail == nil {
+		d.paintWhichKey(e)
 	}
-}
 
-func isIcon(s string) bool {
-	r, _ := utf8.DecodeRuneInString(s)
-	return r >= 0xe000 && r <= 0xf8ff || r >= 0xf0000
-}
+	d.layer = layerToast
+	d.paintToast(e)
 
-func (d *desktop) glyph(gtx layout.Context, x, y int, s string, c color.NRGBA, bold bool) {
-	f := d.fontRegular
-	if bold {
-		f = d.fontBold
-	}
-	if isIcon(s) {
-		f = d.fontIcon
-	}
-	defer op.Offset(image.Pt(x, y+d.lift)).Push(gtx.Ops).Pop()
-	macro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: c}.Add(gtx.Ops)
-	call := macro.Stop()
-	gtx.Constraints = layout.Constraints{Max: image.Pt(1<<20, d.cellH*2)}
-	widget.Label{MaxLines: 1}.Layout(gtx, d.shaper, f, d.sp, s, call)
-}
-
-// runDemo feeds the keys in LOOM_DEMO_KEYS (space separated, e.g. "space p")
-// once the first frame has a size. It exists to script screenshots.
-func (d *desktop) runDemo() {
-	keys := os.Getenv("LOOM_DEMO_KEYS")
-	if d.demo || keys == "" || d.cols == 0 {
-		return
-	}
-	d.demo = true
-	for _, k := range strings.Fields(keys) {
-		switch {
-		case k == "space":
-			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeySpace}))
-		case k == "enter":
-			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
-		case k == "down" || k == "up" || k == "tab":
-			code := map[string]rune{"down": tea.KeyDown, "up": tea.KeyUp, "tab": tea.KeyTab}[k]
-			d.send(tea.KeyPressMsg(tea.Key{Code: code}))
-		case k == "esc":
-			d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
-		case strings.HasPrefix(k, "ctrl+") && len(k) == 6:
-			d.send(tea.KeyPressMsg(tea.Key{Code: rune(k[5]), Mod: tea.ModCtrl}))
-		default:
-			for _, r := range k {
-				d.send(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
-			}
-		}
-	}
+	d.layer = layerDialog
+	d.paintDialog()
 }

@@ -6,16 +6,6 @@ import (
 	"strings"
 )
 
-// statusInfo is what the status bar shows, kept so a graphical front end can
-// draw it in its own style.
-type statusInfo struct {
-	mode, profile, file, crumbs, message, keys, branch, language, ending, folder string
-	modeColor                                                                    terminalColor
-	line, column, percent                                                        int
-	problems, dashboard                                                          bool
-	fileErrors, fileWarnings, projectErrors, projectWarnings                     int
-}
-
 func (v *renderer) drawStatus(e *editor, w, h int) {
 	doc := e
 	b := e.b
@@ -42,36 +32,7 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 	if b.external {
 		name += " [disk changed]"
 	}
-	mode := strings.ToUpper(doc.mode)
-	if b.dashboard {
-		mode = "DASHBOARD"
-	}
-	if doc.mode == "select" && b.visualBlock {
-		mode = "VISUAL BLOCK"
-	} else if doc.mode == "select" && b.visualLine {
-		mode = "VISUAL LINE"
-	} else if doc.mode == "select" && doc.cfg.Profile == "vim" {
-		mode = "VISUAL"
-	}
-	if e.tree.focused {
-		mode = "EXPLORER"
-	}
-	if e.menu != nil {
-		mode = "PROMPT"
-	}
-	// NvChad-style statusline: a mode block coloured by mode, the editing
-	// profile on a lighter block, and a coloured position block on the right.
-	modeColor := th.accent
-	switch {
-	case e.menu != nil || e.tree.focused:
-		modeColor = th.yellow
-	case doc.mode == "insert":
-		modeColor = th.purple
-	case doc.mode == "select":
-		modeColor = th.aqua
-	case strings.HasPrefix(doc.mode, "replace"):
-		modeColor = th.orange
-	}
+	mode, modeColor := e.modeBadge()
 	badge := " \uf108 " + mode + " "
 	badgeStyle := baseStyle.Background(modeColor).Foreground(th.badge).Bold(true)
 	profile := " " + strings.ToLower(doc.cfg.Profile) + " "
@@ -98,7 +59,7 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 		right = " \U000f062c " + e.git.branch + "  " + right
 	}
 	folder, folderName := "", ""
-	if w >= 78 {
+	if w >= 78 && !e.noProject {
 		folder, folderName = " \uf07b ", " "+filepath.Base(e.root)+" "
 	}
 	v.screen.FillArea(0, h-1, w, 1, ' ', panelStyle)
@@ -139,21 +100,6 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 	if c := e.breadcrumbs(b); c != "" && e.cfg.StickyScroll {
 		crumbs = c
 	}
-	ending, language := "LF", strings.ToUpper(e.cfg.languageFor(b.path))
-	if b.newline() == "\r\n" {
-		ending = "CRLF"
-	}
-	if language == "" {
-		language = "TEXT"
-	}
-	file, project := countProblems(b.diagnostics), e.projectProblems()
-	v.status = statusInfo{
-		mode: mode, profile: strings.ToLower(doc.cfg.Profile), file: name, crumbs: crumbs, message: e.message, keys: strings.TrimSpace(keys),
-		modeColor: modeColor, branch: e.git.branch, language: language, ending: ending,
-		line: row + 1, column: b.cursor - b.lines[row] + 1, percent: (row + 1) * 100 / len(b.lines), folder: filepath.Base(e.root),
-		problems: e.problemsVisible(b), fileErrors: file.errors, fileWarnings: file.warnings, projectErrors: project.errors, projectWarnings: project.warnings,
-		dashboard: b.dashboard,
-	}
 	if crumbs != "" && w >= 60 {
 		name += "  ›  " + crumbs
 	}
@@ -162,6 +108,38 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 		name = message + "  ·  " + name
 	}
 	v.write(left, h-1, rightX-left, name, panelStyle)
+}
+
+// modeBadge names the current mode and picks the colour it is shown in.
+func (e *editor) modeBadge() (string, terminalColor) {
+	doc := e
+	if e.directory != nil {
+		doc = e.directory.doc
+	}
+	mode, color := strings.ToUpper(doc.mode), th.accent
+	switch {
+	case e.menu != nil:
+		return "PROMPT", th.yellow
+	case e.tree.focused:
+		return "EXPLORER", th.yellow
+	case doc.b.dashboard:
+		mode = "DASHBOARD"
+	case doc.mode == "select" && doc.b.visualBlock:
+		mode = "VISUAL BLOCK"
+	case doc.mode == "select" && doc.b.visualLine:
+		mode = "VISUAL LINE"
+	case doc.mode == "select" && doc.cfg.Profile == "vim":
+		mode = "VISUAL"
+	}
+	switch {
+	case doc.mode == "insert":
+		color = th.purple
+	case doc.mode == "select":
+		color = th.aqua
+	case strings.HasPrefix(doc.mode, "replace"):
+		color = th.orange
+	}
+	return mode, color
 }
 
 // showProblems keeps the counts visible for any file with a language server, even when both are zero.

@@ -65,6 +65,7 @@ func (e *editor) filePreview(path string, row, col int, utf16 bool, problem *dia
 		}
 		b := &buffer{text: []rune(string(text))}
 		b.indexLines()
+		b.path = path
 		target := max(0, row)
 		if target >= len(b.lines) {
 			p.message = strings.TrimSpace(p.message + "\nSource line unavailable in preview")
@@ -95,7 +96,7 @@ func bufferPreview(b *buffer, title string, row, col int, utf16 bool, problem *d
 
 func buildSourcePreview(p itemPreview, b *buffer, row, col int, utf16 bool, problem *diagnostic) itemPreview {
 	// A preview retains the text and line offsets from when it was selected.
-	snapshot := &buffer{text: b.text, lines: append([]int(nil), b.lines...)}
+	snapshot := &buffer{path: b.path, text: b.text, lines: append([]int(nil), b.lines...)}
 	p.source, p.row = snapshot, row
 	p.column = min(max(0, col), b.lineEnd(p.row)-b.lines[p.row])
 	if utf16 {

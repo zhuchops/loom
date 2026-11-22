@@ -44,15 +44,8 @@ type renderer struct {
 	sticky                                      []stickyBox
 	wheelAxis                                   int // 1 vertical, 2 horizontal
 	wheelAt                                     time.Time
-	status                                      statusInfo
-	cards                                       []hitBox // framed popups drawn this frame
-	menuFrame                                   hitBox
-	panelFrame, diffFrame, treeFrame            hitBox // framed panels, for graphical front ends
-	titles                                      []cardTitle
-	whichItems                                  []whichItem
-	find                                        findInfo
-	dash                                        dashInfo
-	tabStart                                    int // first visible tab while scrolled by hand
+	native                                      bool // a graphical front end paints everything except text panes
+	tabStart                                    int  // first visible tab while scrolled by hand
 	tabManual                                   bool
 	tabActive                                   *buffer
 	previews                                    []previewBox
@@ -77,9 +70,6 @@ func (v *renderer) draw(e *editor) {
 	v.screen.Fill(' ', baseStyle)
 	v.screen.HideCursor()
 	v.treeBox, v.menuBox, v.completeBox, v.directoryBox = hitBox{}, hitBox{}, hitBox{}, hitBox{}
-	v.cards, v.menuFrame = v.cards[:0], hitBox{}
-	v.panelFrame, v.diffFrame, v.treeFrame = hitBox{}, hitBox{}, hitBox{}
-	v.titles, v.whichItems, v.find, v.dash = v.titles[:0], v.whichItems[:0], findInfo{}, dashInfo{}
 	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
@@ -88,6 +78,10 @@ func (v *renderer) draw(e *editor) {
 	v.previews = v.previews[:0]
 	v.divider = -1
 	if w < 4 || h < 5 {
+		return
+	}
+	if v.native {
+		v.drawText(e, w, h)
 		return
 	}
 	left := 0
@@ -134,7 +128,6 @@ func (v *renderer) draw(e *editor) {
 		if e.tree.popup || e.tree.focused && left == 0 {
 			v.dim(w, h-1)
 			box := centerBox(w, h, min(68, w-2), min(24, h-2))
-			v.treeFrame = box
 			v.frame(box, "Explorer")
 			v.drawTree(e, hitBox{box.x + 1, box.y + 1, box.w - 2, box.h - 2, 0})
 			v.screen.HideCursor()
@@ -177,6 +170,37 @@ func (v *renderer) draw(e *editor) {
 		}
 	}
 	v.drawDiagnosticHover(e)
+}
+
+// drawText lays out only the text panes, on a grid that covers just the
+// editing area. Tabs, trees, menus and popups belong to the front end.
+func (v *renderer) drawText(e *editor, w, h int) {
+	v.completeBox, v.diagnosticBox = hitBox{}, hitBox{}
+	v.barHits = v.barHits[:0]
+	box := hitBox{0, 0, w, h, 0}
+	switch {
+	case e.directory != nil:
+		v.directoryBox = box
+		v.drawPane(e.directory.doc, e.directory.doc.b, box, true)
+	case e.zen:
+		box.w = min(112, w)
+		box.x = (w - box.w) / 2
+		v.drawPane(e, e.b, box, true)
+		if len(v.panes) > 0 {
+			v.panes[len(v.panes)-1].leaf = e.activePane
+		}
+	default:
+		e.drawLayout(v, box)
+		if v.tabMoving && v.drop.leaf != nil {
+			v.drawDrop()
+		}
+	}
+	if e.menu != nil || e.tree.focused || e.panel != nil || e.diff != nil || e.notificationDetail != nil {
+		v.screen.HideCursor()
+	}
+	if v.diagnosticHover.buffer != nil && !v.hoverValid(e) {
+		v.clearDiagnosticHover()
+	}
 }
 
 func (v *renderer) drawTabs(e *editor, left, width int) {
@@ -543,42 +567,4 @@ func styleAt(tokens []highlight, i *int, offset int) (cellStyle, bool) {
 		return tokens[*i].style, true
 	}
 	return baseStyle, false
-}
-
-// cardTitle is the title of a framed popup.
-type cardTitle struct {
-	box  hitBox
-	text string
-}
-
-// whichItem is one key and its command in the key hint popup.
-type whichItem struct {
-	x, y, keyWidth int
-	key, title     string
-}
-
-// findInfo describes the find bar so a graphical front end can draw it.
-type findInfo struct {
-	on, replace bool
-	box         hitBox
-	fields      []findField
-	toggles     []findToggle
-	count       string
-	countTone   string // "", "muted", "red"
-	countX      int
-	arrows      []findToggle
-	buttons     []findToggle
-	chevron     hitBox
-}
-
-type findField struct {
-	x, y, w           int
-	text, placeholder string
-	active            bool
-}
-
-type findToggle struct {
-	x, y  int
-	label string
-	on    bool
 }

@@ -89,11 +89,7 @@ func (v *renderer) drawDiagnosticHover(e *editor) {
 	if d.buffer == nil || d.message == "" {
 		return
 	}
-	visible := false
-	for _, pane := range v.panes {
-		visible = visible || pane.b == d.buffer
-	}
-	if !diagnosticHoverAllowed(e) || !visible || d.buffer.version != d.version || len(e.completion.items) > 0 {
+	if !v.hoverValid(e) {
 		v.clearDiagnosticHover()
 		return
 	}
@@ -139,4 +135,18 @@ func (v *renderer) drawDiagnosticHover(e *editor) {
 		v.write(x+1, y+height-2, width-2, fmt.Sprintf("%d–%d/%d · Scroll for more", d.scroll+1, d.scroll+rows, len(lines)), mutedStyle.Background(menuStyle.bg))
 	}
 	v.diagnosticBox = box
+}
+
+// hoverValid reports whether the hover still describes text that is on screen.
+func (v *renderer) hoverValid(e *editor) bool {
+	d := &v.diagnosticHover
+	if !diagnosticHoverAllowed(e) || d.buffer.version != d.version || len(e.completion.items) > 0 {
+		return false
+	}
+	for _, pane := range v.panes {
+		if pane.b == d.buffer {
+			return true
+		}
+	}
+	return false
 }

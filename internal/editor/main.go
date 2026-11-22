@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.23.1"
+const version = "0.24.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {

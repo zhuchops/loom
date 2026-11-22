@@ -83,7 +83,7 @@ func TestProjectReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	files := map[string]bool{}
-	e.walkProject(func(path string, text []byte) {
+	e.walkProject(e.root, func(path string, text []byte) {
 		if re.Match(text) {
 			files[path] = true
 		}

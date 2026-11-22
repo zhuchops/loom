@@ -142,13 +142,35 @@ When you scroll into the middle of a function or block, the lines that open it (
 - **Dashboard:** a block-letter logo, the project and git branch, and icon buttons with their shortcuts, followed by your five most recent files. Move with `j`/`k` or the arrow keys, open with Enter or a click.
 - **Status line:** NvChad layout. A mode block coloured by mode (blue normal, purple insert, cyan visual, orange replace, yellow prompt/explorer), the editing profile, file and problems in the middle, and on the right the git branch, language, a folder block with the project name and a coloured cursor-position block. The icons use a Nerd Font.
 
-### Desktop app (preview)
+### Desktop app
 
-`go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds Loom as a native window (Gio, GPU rendered) with the same editor, keys, themes and config as the terminal version.
+`sh packaging/macos/build-app.sh` builds `dist/Loom.app`; pass a folder to build somewhere else. `go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds just the binary. It is the same editor, with the same keys, themes and config as the terminal version, in a native window (Gio, GPU rendered). Only the code is laid out on a character grid; everything around it is laid out in pixels.
 
-The window is drawn as an application rather than a terminal: a taller tab bar with rounded tabs, hover states and vector close buttons; an Explorer sidebar with a section header, vector file and folder icons and rounded selection; a status bar with a coloured mode pill, problem counts, branch and `Ln, Col`; crisp one-pixel dividers and rounded popup frames. Interface text uses the system sans-serif font (Helvetica Neue on macOS), code uses Menlo or the font in `LOOM_FONT`.
+- **Title bar:** the project (click for recent projects), the branch (click to switch), a search field, and buttons for Source Control, the Command Palette and Settings.
+- **Sidebar:** the file tree with git state, buttons for a new file, a new folder and filtering. Right-click for actions; drag its edge to resize it.
+- **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click to close. The path of the file and the current symbol are shown beneath.
+- **Pickers and panels:** the palette, file search with a highlighted preview, settings with switches, Source Control with stage and commit buttons, and a diff with both line numbers.
+- **Messages** appear as a toast at the bottom right. Click one for the history.
+- **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first.
 
-The command palette and other pickers, and the completion list, are drawn as cards: rounded corners, a soft shadow, a search field with an icon, sans-serif rows and rounded selection. The palette highlights the letters you typed, shows shortcuts as keycaps, counts results and has a scrollbar. The Source Control panel, the Explorer popup and the Directory editor have the same treatment (status badges, keycap hints, rounded selection; added and removed diff lines are tinted). The start screen is drawn natively too (the woven Loom mark, project and branch, action buttons with keycaps and your recent files), as are the find and replace bar, the key hint popup, hover documentation and notification text; every popup title uses the interface font. The cursor glides between cells over about 60 ms and visual selections have rounded corners. Scrolling glides by pixel over about 140 ms when the first visible line changes (turn it off with `"animations": false`). `sh packaging/macos/build-app.sh` builds `dist/Loom.app` with an icon (a woven-threads mark drawn by `packaging/macos/icon.go`). Started from Finder it opens in your home folder. Setting `LOOM_DEMO_KEYS="space p"` types those keys at startup, which is handy for screenshots. Only macOS has been tried. Cmd and Ctrl both act as Ctrl; Option acts as Alt.
+| macOS shortcut | Action |
+| --- | --- |
+| `⌘P` / `⇧⌘P` | Go to File / Command Palette |
+| `⌘O` / `⇧⌘O` | Open a file / a project with Finder |
+| `⌘N`, `⌘S`, `⇧⌘S`, `⌘W` | New file, Save, Save As, Close Tab |
+| `⌘Z` / `⇧⌘Z` | Undo / Redo |
+| `⌘X`, `⌘C`, `⌘V`, `⌘A` | Cut, Copy, Paste, Select All |
+| `⌘F`, `⌥⌘F`, `⇧⌘F` | Find, Replace, Find in Project |
+| `⌘B`, `⇧⌘G`, `⇧⌘M` | Sidebar, Source Control, Problems |
+| `⌘L`, `⌘,` | Go to Line, Settings |
+| `⌘=`, `⌘-`, `⌘0` | Code size, until Loom quits |
+| `⌘←` / `⌘→` | Start / end of line |
+
+On macOS, Command belongs to the menu bar and Control to Vim, so `⌘D` is not `Ctrl+D`. Control shortcuts also work on a Russian keyboard layout. Option acts as Alt.
+
+Interface text uses Avenir Next, code uses Menlo or the font file in `LOOM_FONT`. Secondary text and syntax colors are nudged where a theme would make them unreadable. Started from Finder, Loom takes `PATH` from your login shell so language servers and formatters are found. Set `"animations": false` to turn off the gliding cursor and scrolling.
+
+The app is signed ad hoc, not notarized. It has only been used on macOS. The Windows build does not compile yet (`recovery.go` uses a Unix call), and the Linux desktop build is untested.
 
 ### Touchpad scrolling
 
@@ -505,8 +527,10 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `search.go` finds matches (plain, whole word, regex) and caches them per buffer version. `findbar.go` and `findbar_draw.go` are the find and replace panel: its input, its replace actions and its drawing.
 - `notifications.go` keeps the full text of status messages and draws their detail view. `pairs.go` tracks generated delimiters through buffer edits and undo.
 
+`go test -tags desktop ./internal/editor` also paints every screen of the desktop app and drives it with pointer and key events, without opening a window. Set `LOOM_SHOTS=<folder>` to save each screen as a PNG and look at it.
+
 Every change gets a README update and a version bump in `internal/editor/main.go`, committed as `vX.Y.Z`. Run `go test -race ./...` from this directory. Set `LOOM_TEST_GOPLS=1` to enable the tests against `gopls` on PATH. Renderer tests inspect the in-memory frame, and terminal adapter tests send Bubble Tea messages directly.
 
 ## Projects
 
-Loom starts with no project open. The dashboard offers **Open Project** (also `:project [path]` and the command palette), which opens the Finder folder picker on macOS (a built-in folder browser elsewhere); **Recent Projects** lists remembered folders and also accepts a typed path. Opening a project switches the file tree, search, git and language servers to that folder and restores its session. Loom remembers the last open project and reopens it the next time you start it without arguments; **Close Project** clears that memory so the next start is empty again. `loom <dir>` opens a specific folder, and `loom .` opens the current one. File, search and git commands tell you to open a project first when none is open. Switching projects asks you to save unsaved buffers first.
+Loom starts with no project open. The dashboard (the Welcome page in the desktop app) offers **Open Project** (also `:project [path]` and the command palette), which opens the Finder folder picker on macOS (a built-in folder browser elsewhere); **Recent Projects** lists remembered folders and also accepts a typed path. Opening a project switches the file tree, search, git and language servers to that folder and restores its session. Loom remembers the last open project and reopens it the next time you start it without arguments; **Close Project** clears that memory so the next start is empty again. `loom <dir>` opens a specific folder, and `loom .` opens the current one. File, search and git commands tell you to open a project first when none is open. Switching projects asks you to save unsaved buffers first.

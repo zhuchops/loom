@@ -5,252 +5,339 @@ package editor
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"path/filepath"
+	"strconv"
 	"strings"
-
-	"gioui.org/layout"
 )
 
-// blend mixes b over a by t (0..1).
-func blend(a, b color.NRGBA, t float32) color.NRGBA {
-	mix := func(x, y uint8) uint8 { return uint8(float32(x)*(1-t) + float32(y)*t) }
-	return color.NRGBA{mix(a.R, b.R), mix(a.G, b.G), mix(a.B, b.B), 255}
+func (d *desktop) centred(w, h int) rect {
+	g := &d.geo
+	top, bottom := g.title.Max.Y, g.window.Max.Y
+	if !g.status.Empty() {
+		bottom = g.status.Min.Y
+	}
+	w, h = min(w, g.window.Dx()-d.u(32)), min(h, bottom-top-d.u(24))
+	x, y := (g.window.Dx()-w)/2, top+(bottom-top-h)/2
+	return image.Rect(x, y, x+w, y+h)
 }
 
-// chip draws a small keycap-style label and returns its width.
-func (d *desktop) chip(gtx layout.Context, x, cy int, s string, fg, bg color.NRGBA) int {
-	w := d.uiWidth(gtx, s, 11, false)
-	pad := d.dp(6)
-	d.round(gtx, image.Rect(x, cy-d.dp(9), x+w+2*pad, cy+d.dp(9)), d.dp(5), bg, false)
-	d.ui(gtx, x+pad, cy, s, fg, 11, false)
-	return w + 2*pad
-}
-
-// hintChips draws a shortcut such as "Space q  :close" as keycaps, right-aligned
-// at right, and returns the x where it starts.
-func (d *desktop) hintChips(gtx layout.Context, right, cy int, hint string, selected bool) int {
-	if !looksLikeShortcut(hint) {
-		// Search results carry a snippet of code here, not keys.
-		text := d.fit(gtx, strings.TrimSpace(hint), d.dp(280), 12, false)
-		w := d.uiWidth(gtx, text, 12, false)
-		d.ui(gtx, right-w, cy, text, d.color(th.muted, th.fg), 12, false)
-		return right - w - d.dp(10)
-	}
-	bg := blend(d.color(th.menu, th.bg), d.color(th.fg, th.fg), 0.10)
-	if selected {
-		bg = blend(d.color(th.menu, th.bg), d.color(th.fg, th.fg), 0.16)
-	}
-	fg := d.color(th.muted, th.fg)
-	groups := strings.Split(hint, "  ")
-	x := right
-	for i := len(groups) - 1; i >= 0; i-- {
-		tokens := strings.Fields(groups[i])
-		for j := len(tokens) - 1; j >= 0; j-- {
-			w := d.uiWidth(gtx, tokens[j], 11, false) + 2*d.dp(6)
-			x -= w
-			d.chip(gtx, x, cy, tokens[j], fg, bg)
-			x -= d.dp(4)
+// textButton draws a button ending at right and returns where it starts.
+func (d *desktop) textButton(right, cy int, label string, primary bool, click func()) int {
+	u, c := d.u, &d.c
+	r := image.Rect(right-d.width(label, textStrong)-u(22), cy-u(13), right, cy+u(13))
+	hot := d.button(r, click)
+	ink := c.text
+	switch {
+	case primary:
+		fill := c.accent
+		if hot {
+			fill = blend(fill, white, 0.14)
 		}
-		x -= d.dp(8)
+		d.round(r, 6, fill)
+		ink = c.onAccent
+	default:
+		if hot {
+			d.round(r, 6, c.hover)
+		}
+		d.border(r, 6, c.strongLine, d.hairline())
 	}
-	return x
+	d.textCenter((r.Min.X+r.Max.X)/2, cy, label, textStrong, ink)
+	return r.Min.X
 }
 
-// hintLine draws "key description" pairs separated by two spaces, left-aligned.
-func (d *desktop) hintLine(gtx layout.Context, x, cy int, hint string) {
-	bg := blend(d.color(th.menu, th.bg), d.color(th.fg, th.fg), 0.10)
-	muted := d.color(th.muted, th.fg)
-	for _, group := range strings.Split(hint, "  ") {
-		key, desc, _ := strings.Cut(strings.TrimSpace(group), " ")
-		if key == "" {
-			continue
-		}
-		x += d.chip(gtx, x, cy, key, d.color(th.fg, th.fg), bg) + d.dp(5)
-		x += d.ui(gtx, x, cy, desc, muted, 11, false) + d.dp(14)
-	}
-}
-
-// treeRows draws the explorer rows between px0 and px1. firstY is the grid row
-// of the first visible entry and count how many rows fit.
-func (d *desktop) treeRows(gtx layout.Context, e *editor, px0, px1, firstY, count, scroll int) {
-	t := &e.tree
-	muted := d.color(th.muted, th.fg)
-	base := d.color(th.panel, th.bg)
-	if t.popup {
-		base = d.color(th.menu, th.bg)
-	}
-	for i := scroll; i < len(t.rows) && i-scroll < count; i++ {
-		y := firstY + i - scroll
-		row := t.rows[i]
-		py := d.rowY(y, d.rows)
-		cy := py + d.cellH/2
-		hover := d.mx >= px0 && d.mx < px1 && d.my >= py && d.my < py+d.cellH
-		inset := d.dp(6)
-		switch {
-		case i == t.selected && t.focused:
-			d.round(gtx, image.Rect(px0+inset, py+1, px1-inset, py+d.cellH-1), d.dp(6), blend(base, d.color(th.accent, th.fg), 0.18), false)
-		case hover:
-			d.round(gtx, image.Rect(px0+inset, py+1, px1-inset, py+d.cellH-1), d.dp(6), blend(base, d.color(th.fg, th.fg), 0.06), false)
-		}
-		x := px0 + d.dp(14) + row.depth*d.dp(14)
-		fg := d.color(th.fg, th.fg)
-		if row.path == e.b.path {
-			fg = d.color(th.accent, th.fg)
-		}
-		if row.dir {
-			d.chevron(gtx, x+d.dp(5), cy, t.expanded[row.path] || t.filter != "", muted)
-		}
-		x += d.dp(16)
-		iconColor := muted
-		if row.dir {
-			iconColor = d.color(th.accent, th.fg)
-		}
-		d.fileIcon(gtx, x, cy, row.path, row.dir, iconColor)
-		x += d.dp(22)
-		d.ui(gtx, x, cy, d.fit(gtx, filepath.Base(row.path), px1-x-d.dp(26), 13, false), fg, 13, false)
-		if mark := e.git.files[row.path]; mark != 0 {
-			d.ui(gtx, px1-d.dp(20), cy, string(mark), d.color(gitColor(mark), th.fg), 11, true)
-		}
-	}
-}
-
-// cardInterior clears everything inside a card's border.
-func (d *desktop) cardInterior(gtx layout.Context, fr hitBox) image.Rectangle {
-	r := d.columnRect(fr.x+1, fr.x+fr.w-1, fr.y, fr.y+fr.h-1)
-	d.fill(gtx, r, d.color(th.menu, th.bg))
-	return r
-}
-
-func (d *desktop) cardTitle(gtx layout.Context, fr hitBox, r image.Rectangle, title string) {
-	d.ui(gtx, r.Min.X+d.dp(14), d.rowY(fr.y, d.rows)+d.cellH/2+d.dp(2), title, d.color(th.muted, th.fg), 12, true)
-}
-
-// paintTreePopup draws the explorer opened as a popup (Space e).
-func (d *desktop) paintTreePopup(gtx layout.Context, e *editor) {
-	v := &d.m.view
-	fr := v.treeFrame
-	if fr.w == 0 || e.menu != nil {
-		return
-	}
-	r := d.cardInterior(gtx, fr)
-	label := e.tree.status()
-	d.cardTitle(gtx, fr, r, strings.ToUpper(strings.SplitN(label, " ·", 2)[0]))
-	if _, rest, ok := strings.Cut(label, "·"); ok {
-		rest = strings.TrimSpace(rest)
-		d.ui(gtx, r.Max.X-d.dp(14)-d.uiWidth(gtx, rest, 11, false), d.rowY(fr.y, d.rows)+d.cellH/2+d.dp(2), rest, d.color(th.muted, th.fg), 11, false)
-	}
-	tb := v.treeBox
-	d.treeRows(gtx, e, r.Min.X, r.Max.X, tb.y, tb.h, tb.start)
-	d.hintLine(gtx, r.Min.X+d.dp(14), d.rowY(fr.y+fr.h-3, d.rows)+d.cellH/2, "j/k Move  h/l Fold  Enter Open  / Filter  s Sort")
-	d.hintLine(gtx, r.Min.X+d.dp(14), d.rowY(fr.y+fr.h-2, d.rows)+d.cellH/2, "a New  r Rename  m Move  x Cut  p Paste  d Trash")
-}
-
-// paintSourceControl draws the Git panel with status badges and keycaps.
-func (d *desktop) paintSourceControl(gtx layout.Context, e *editor) {
-	v := &d.m.view
-	p := e.panel
-	fr := v.panelFrame
-	if p == nil || fr.w == 0 || e.menu != nil {
-		return
-	}
-	r := d.cardInterior(gtx, fr)
-	muted, fg := d.color(th.muted, th.fg), d.color(th.fg, th.fg)
-	titleY := d.rowY(fr.y, d.rows) + d.cellH/2 + d.dp(2)
-	x := r.Min.X + d.dp(14)
-	x += d.ui(gtx, x, titleY, "SOURCE CONTROL", muted, 12, true) + d.dp(10)
-	if p.branch != "" {
-		d.chip(gtx, x, titleY, p.branch, d.color(th.accent, th.fg), blend(d.color(th.menu, th.bg), d.color(th.accent, th.fg), 0.14))
-	}
+func (d *desktop) paintGit(e *editor) {
+	p, u, c := e.panel, d.u, &d.c
+	d.scrim(func() { e.panel = nil })
 	rows := p.entries()
-	height := max(1, fr.h-5)
-	if len(rows) == 0 {
-		d.ui(gtx, r.Min.X+d.dp(14), d.rowY(fr.y+1, d.rows)+d.cellH/2, "Working tree clean", muted, 13, false)
+	rowH, headH, footH := u(30), u(56), u(38)
+	body := max(u(180), min(u(440), len(rows)*rowH+u(16)))
+	card := d.centred(u(700), headH+body+footH)
+	d.card(card)
+	d.block(card)
+
+	cy := card.Min.Y + headH/2
+	x := card.Min.X + u(18)
+	x += d.text(x, cy, "Source Control", textTitle, c.text) + u(14)
+	right := card.Max.X - u(12)
+	if p.top != "" {
+		right = d.textButton(right, cy, "Commit", p.hasStaged(), func() { e.commitPrompt(p) }) - u(6)
+		right = d.textButton(right, cy, "Push", false, func() { e.gitRemote(p.top, "push") }) - u(6)
+		right = d.textButton(right, cy, "Pull", false, func() { e.gitRemote(p.top, "pull", "--ff-only") }) - u(6)
 	}
-	for i := p.scroll; i < len(rows) && i < p.scroll+height; i++ {
+	if p.branch != "" && right-x > u(60) {
+		name := d.fit(p.branch, right-x-u(44), textBody)
+		box := image.Rect(x, cy-u(12), x+d.width(name, textBody)+u(34), cy+u(12))
+		if d.button(box, e.openBranchPicker) {
+			d.round(box, 6, c.hover)
+		}
+		d.icon(iconBranch, box.Min.X+u(13), cy, 13, c.dim)
+		d.text(box.Min.X+u(24), cy, name, textBody, c.dim)
+	}
+	d.lineH(card.Min.X, card.Max.X, card.Min.Y+headH)
+
+	list := image.Rect(card.Min.X, card.Min.Y+headH+u(8), card.Max.X, card.Max.Y-footH-u(4))
+	mx, my := (list.Min.X+list.Max.X)/2, (list.Min.Y+list.Max.Y)/2
+	switch {
+	case p.top == "":
+		d.textCenter(mx, my, "Reading repository…", textBody, c.dim)
+	case len(rows) == 0:
+		d.icon(iconCheck, mx, my-u(18), 24, c.green)
+		d.textCenter(mx, my+u(12), "No changes. The working tree is clean.", textBody, c.dim)
+	}
+	count := max(1, list.Dy()/rowH)
+	p.scroll = max(0, min(p.scroll, len(rows)-count))
+	if p.selected < p.scroll {
+		p.scroll = p.selected
+		if p.scroll == 1 {
+			p.scroll = 0 // keep the first heading in sight
+		}
+	}
+	if p.selected >= p.scroll+count {
+		p.scroll = p.selected - count + 1
+	}
+	wheel := func(_, dy int) {
+		for range absInt(dy) {
+			p.move(max(-1, min(1, dy)))
+		}
+	}
+	d.zone(zone{r: list, wheel: wheel, step: rowH})
+
+	for i := p.scroll; i < len(rows) && i < p.scroll+count; i++ {
 		row := rows[i]
-		y := fr.y + 1 + i - p.scroll
-		py := d.rowY(y, d.rows)
-		cy := py + d.cellH/2
+		y := list.Min.Y + (i-p.scroll)*rowH
+		mid := y + rowH/2
 		if row.header != "" {
-			d.ui(gtx, r.Min.X+d.dp(14), cy, strings.ToUpper(row.header), muted, 11, true)
+			d.text(card.Min.X+u(18), mid+u(2), strings.ToUpper(row.header), textCaption, c.faint)
 			continue
 		}
-		if i == p.selected {
-			d.round(gtx, image.Rect(r.Min.X+d.dp(6), py+1, r.Max.X-d.dp(6), py+d.cellH-1), d.dp(6), blend(d.color(th.menu, th.bg), d.color(th.accent, th.fg), 0.18), false)
+		line := image.Rect(card.Min.X+u(8), y+d.hairline(), card.Max.X-u(8), y+rowH-d.hairline())
+		d.zone(zone{r: line, wheel: wheel, step: rowH, click: func() {
+			p.selected = i
+			e.openDiffFor(row.change.path)
+		}})
+		hot := d.hot(line)
+		switch {
+		case i == p.selected:
+			d.round(line, 6, c.selected)
+		case hot:
+			d.round(line, 6, c.hover)
 		}
+		d.fileIcon(line.Min.X+u(18), mid, row.change.rel)
+		end := line.Max.X - u(10)
 		mark := row.change.work
 		if row.staged {
 			mark = row.change.index
 		}
-		if mark == ' ' || mark == 0 || row.change.index == '?' {
+		if row.change.index == '?' {
 			mark = '?'
 		}
-		badge := d.color(gitColor(byte(mark)), th.fg)
-		bx := r.Min.X + d.dp(16)
-		d.round(gtx, image.Rect(bx, cy-d.dp(8), bx+d.dp(16), cy+d.dp(8)), d.dp(4), blend(d.color(th.menu, th.bg), badge, 0.22), false)
-		d.ui(gtx, bx+d.dp(4), cy, string(mark), badge, 11, true)
-		name := filepath.Base(row.change.rel)
-		nx := bx + d.dp(26)
-		nx += d.ui(gtx, nx, cy, name, fg, 13, false) + d.dp(8)
+		label := string(mark)
+		if mark == '?' {
+			label = "U"
+		}
+		d.textRight(end, mid, label, textCaption, readable(d.gitInk(mark), c.raised, 3.5))
+		end -= u(22)
+		if hot || i == p.selected {
+			id := iconPlus
+			if row.staged {
+				id = iconMinus
+			}
+			d.iconButton(end-u(10), mid, id, false, func() {
+				p.selected = i
+				e.sourceControlInput(keyInput{key: "s"})
+			})
+		}
+		end -= u(30)
+		nx := line.Min.X + u(34)
+		nx += d.text(nx, mid, d.fit(filepath.Base(row.change.rel), end-nx, textBody), textBody, c.text) + u(8)
 		if dir := filepath.Dir(row.change.rel); dir != "." {
-			d.ui(gtx, nx, cy, d.fit(gtx, dir, r.Max.X-nx-d.dp(14), 12, false), muted, 12, false)
+			d.text(nx, mid, d.fitLeft(dir, max(0, end-nx), textSmall), textSmall, c.faint)
 		}
 	}
-	d.hintLine(gtx, r.Min.X+d.dp(14), d.rowY(fr.y+fr.h-3, d.rows)+d.cellH/2, "s Stage  a Stage all  A Unstage all  d Discard  Enter Diff")
-	d.hintLine(gtx, r.Min.X+d.dp(14), d.rowY(fr.y+fr.h-2, d.rows)+d.cellH/2, "c Commit  p Push  P Pull  b Branch  R Refresh  Esc Close")
+	d.scrollbar(list, p.scroll, count, len(rows))
+
+	foot := card.Max.Y - footH
+	d.lineH(card.Min.X, card.Max.X, foot)
+	pairs := []string{"↵", "diff", "s", "stage", "a", "stage all", "c", "commit", "d", "discard", "esc", "close"}
+	if card.Dx() < u(600) {
+		pairs = []string{"↵", "diff", "s", "stage", "esc", "close"}
+	}
+	d.hints(card.Min.X+u(14), foot+footH/2, false, pairs...)
 }
 
-// paintDiff tints added and removed lines and shows the key hints as keycaps.
-func (d *desktop) paintDiff(gtx layout.Context, e *editor) {
-	v := &d.m.view
-	df := e.diff
-	fr := v.diffFrame
-	if df == nil || fr.w == 0 || e.menu != nil {
-		return
-	}
-	green := color.NRGBA{R: 0x98, G: 0xc3, B: 0x79}
-	red := d.color(th.red, th.fg)
-	for i := df.scroll; i < len(df.lines) && i < df.scroll+df.height; i++ {
-		line := df.lines[i]
-		y := fr.y + 1 + i - df.scroll
-		py := d.rowY(y, d.rows)
-		rect := image.Rect((fr.x+1)*d.cellW, py, (fr.x+fr.w-1)*d.cellW, py+d.cellH)
+// diffNumbers gives the old and new line number of every row of a diff.
+func diffNumbers(lines []string) [][2]int {
+	out := make([][2]int, len(lines))
+	before, after := 0, 0
+	for i, line := range lines {
 		switch {
-		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
-			d.fill(gtx, rect, color.NRGBA{R: green.R, G: green.G, B: green.B, A: 34})
-		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
-			d.fill(gtx, rect, color.NRGBA{R: red.R, G: red.G, B: red.B, A: 34})
 		case strings.HasPrefix(line, "@@"):
-			d.fill(gtx, rect, color.NRGBA{R: 0x56, G: 0xb6, B: 0xc2, A: 24})
-		}
-		if i == df.cursor {
-			d.fill(gtx, image.Rect(rect.Min.X, py, rect.Min.X+d.dp(3), py+d.cellH), d.color(th.accent, th.fg))
+			if f := strings.Fields(line); len(f) >= 3 {
+				first, _, _ := strings.Cut(strings.TrimPrefix(f[1], "-"), ",")
+				second, _, _ := strings.Cut(strings.TrimPrefix(f[2], "+"), ",")
+				before, _ = strconv.Atoi(first)
+				after, _ = strconv.Atoi(second)
+			}
+		case before == 0 && after == 0, strings.HasPrefix(line, `\`): // no hunk yet, or "No newline at end of file"
+		case strings.HasPrefix(line, "+"):
+			out[i][1] = after
+			after++
+		case strings.HasPrefix(line, "-"):
+			out[i][0] = before
+			before++
+		default:
+			out[i] = [2]int{before, after}
+			before++
+			after++
 		}
 	}
-	rowY := d.rowY(fr.y+fr.h-2, d.rows)
-	r := d.columnRect(fr.x+1, fr.x+fr.w-1, fr.y+fr.h-2, fr.y+fr.h-1)
-	d.fill(gtx, r, d.color(th.menu, th.bg))
-	d.hintLine(gtx, r.Min.X+d.dp(14), rowY+d.cellH/2, fmt.Sprint("]c Next hunk  [c Previous  Enter Open  q Close"))
+	return out
 }
 
-// paintDirectoryTitle restyles the title of the directory editor popup.
-func (d *desktop) paintDirectoryTitle(gtx layout.Context, e *editor) {
-	box := d.m.view.directoryBox
-	if e.directory == nil || box.w == 0 || e.menu != nil {
-		return
+func (d *desktop) paintDiff(e *editor) {
+	df, u, c := e.diff, d.u, &d.c
+	d.scrim(func() { e.diff = nil })
+	card := d.centred(u(980), u(620))
+	d.card(card)
+	d.block(card)
+	headH, footH, lineH := u(46), u(38), u(21)
+
+	cy := card.Min.Y + headH/2
+	title := strings.TrimPrefix(df.title, "Diff · ")
+	d.fileIcon(card.Min.X+u(24), cy, title)
+	added, removed := 0, 0
+	numbers := diffNumbers(df.lines)
+	for _, n := range numbers {
+		switch {
+		case n[0] == 0 && n[1] > 0:
+			added++
+		case n[1] == 0 && n[0] > 0:
+			removed++
+		}
 	}
-	fr := hitBox{box.x - 1, box.y - 1, box.w + 2, box.h + 2, 0}
-	r := d.columnRect(fr.x+1, fr.x+fr.w-1, fr.y, fr.y+1)
-	d.fill(gtx, r, d.color(th.menu, th.bg))
-	title := "DIRECTORY  " + e.directory.dir
-	if e.directory.doc.b.dirty() {
-		title += "  \u25cf"
+	d.iconButton(card.Max.X-u(24), cy, iconClose, false, func() { e.diff = nil })
+	right := card.Max.X - u(48)
+	right -= d.textRight(right, cy, fmt.Sprintf("−%d", removed), textStrong, readable(c.red, c.raised, 4)) + u(10)
+	right -= d.textRight(right, cy, fmt.Sprintf("+%d", added), textStrong, readable(c.green, c.raised, 4)) + u(16)
+	x := card.Min.X + u(40)
+	d.text(x, cy, d.fitLeft(title, right-x, textTitle), textTitle, c.text)
+
+	body := image.Rect(card.Min.X+d.hairline(), card.Min.Y+headH, card.Max.X-d.hairline(), card.Max.Y-footH)
+	d.fill(body, c.bg)
+	d.lineH(card.Min.X, card.Max.X, body.Min.Y)
+	count := max(1, (body.Dy()-u(6))/lineH)
+	df.height = count
+	df.cursor = max(0, min(df.cursor, len(df.lines)-1))
+	if df.cursor < df.scroll {
+		df.scroll = df.cursor
 	}
-	d.ui(gtx, r.Min.X+d.dp(14), d.rowY(fr.y, d.rows)+d.cellH/2+d.dp(2), d.fit(gtx, title, r.Dx()-d.dp(28), 12, true), d.color(th.muted, th.fg), 12, true)
+	if df.cursor >= df.scroll+count {
+		df.scroll = df.cursor - count + 1
+	}
+	wheel := func(_, dy int) {
+		last := max(0, len(df.lines)-count)
+		df.scroll = max(0, min(last, df.scroll+dy))
+		df.cursor = max(df.scroll, min(df.cursor, df.scroll+count-1))
+	}
+	d.zone(zone{r: body, wheel: wheel, step: lineH})
+
+	d.clipped(body, func() {
+		col1, col2 := body.Min.X+u(42), body.Min.X+u(80)
+		for i := df.scroll; i < len(df.lines) && i < df.scroll+count; i++ {
+			line, n := strings.ReplaceAll(df.lines[i], "\t", "    "), numbers[i]
+			y := body.Min.Y + u(3) + (i-df.scroll)*lineH
+			mid := y + lineH/2
+			row := image.Rect(body.Min.X, y, body.Max.X, y+lineH)
+			d.zone(zone{r: row, wheel: wheel, step: lineH, click: func() { df.cursor = i }})
+			ink, sign := c.text, ""
+			switch {
+			case strings.HasPrefix(line, "@@"):
+				d.fill(row, c.hunk)
+				ink = readable(c.blue, c.bg, 4)
+			case n[0] == 0 && n[1] > 0:
+				d.fill(row, c.added)
+				sign, line = "+", line[1:]
+			case n[1] == 0 && n[0] > 0:
+				d.fill(row, c.removed)
+				sign, line = "−", line[1:]
+			case n[0] > 0:
+				line = strings.TrimPrefix(line, " ")
+			default:
+				ink = c.dim
+			}
+			if i == df.cursor {
+				d.fill(image.Rect(row.Min.X, y, row.Min.X+u(2), y+lineH), c.accent)
+			}
+			if n[0] > 0 {
+				d.textRight(col1, mid, strconv.Itoa(n[0]), textCode, c.faint)
+			}
+			if n[1] > 0 {
+				d.textRight(col2, mid, strconv.Itoa(n[1]), textCode, c.faint)
+			}
+			d.text(col2+u(12), mid, sign, textCode, ink)
+			if r := []rune(line); len(r) > 240 {
+				line = string(r[:240])
+			}
+			d.text(col2+u(28), mid, line, textCode, ink)
+		}
+		d.scrollbar(body, df.scroll, count, len(df.lines))
+	})
+	d.lineH(card.Min.X, card.Max.X, body.Max.Y)
+	d.hints(card.Min.X+u(14), body.Max.Y+footH/2, false, "]c", "next change", "[c", "previous", "↵", "open here", "esc", "close")
 }
 
-// looksLikeShortcut tells key hints ("Space q  :close", "Ctrl+P") from text.
-func looksLikeShortcut(hint string) bool {
-	return len(hint) <= 32 && !strings.ContainsAny(hint, "(){},;=*")
+func (d *desktop) paintDirectory(e *editor) {
+	u, c, card, dir := d.u, &d.c, d.geo.dirCard, e.directory
+	d.scrim(func() { e.closeDirectory(false) })
+	d.card(card)
+	d.block(card)
+	cy := card.Min.Y + u(23)
+	d.icon(glyphFolderOpen, card.Min.X+u(22), cy, 15, c.accent)
+	right := card.Max.X - u(16)
+	if dir.doc.b.dirty() {
+		right -= d.textRight(right, cy, "Unsaved changes", textSmall, readable(c.yellow, c.raised, 4)) + u(12)
+	}
+	x := card.Min.X + u(38)
+	d.text(x, cy, d.fitLeft(shortPath(dir.dir), right-x, textTitle), textTitle, c.text)
+
+	body := image.Rect(card.Min.X+d.hairline(), card.Min.Y+u(46), card.Max.X-d.hairline(), card.Max.Y-u(38))
+	d.paintEditor(e, body, c.bg)
+	d.lineH(card.Min.X, card.Max.X, body.Min.Y)
+	d.lineH(card.Min.X, card.Max.X, body.Max.Y)
+	d.hints(card.Min.X+u(14), body.Max.Y+u(19), false, "↵", "open", ":w", "apply edits", "esc", "close")
+}
+
+func (d *desktop) paintDetail(e *editor) {
+	n, u, c := e.notificationDetail, d.u, &d.c
+	d.scrim(func() { e.notificationDetail = nil })
+	width := min(u(600), d.geo.window.Dx()-u(32))
+	lineH := u(21)
+	lines := d.wrap(n.text, width-u(40), textBody)
+	card := d.centred(width, u(48+38+24)+min(18, len(lines))*lineH)
+	d.card(card)
+	d.block(card)
+	title := n.title
+	if title == "" {
+		title = "Notification"
+	}
+	d.text(card.Min.X+u(18), card.Min.Y+u(24), d.fit(title, width-u(36), textTitle), textTitle, c.text)
+	d.lineH(card.Min.X, card.Max.X, card.Min.Y+u(48))
+
+	body := image.Rect(card.Min.X, card.Min.Y+u(60), card.Max.X, card.Max.Y-u(50))
+	// The keyboard scrolls by these lines, so they are kept on the editor's state.
+	n.lines, n.rows = lines, max(1, body.Dy()/lineH)
+	n.move(0)
+	d.zone(zone{r: body, wheel: func(_, dy int) { n.move(dy) }, step: lineH})
+	for i := n.scroll; i < len(lines) && i < n.scroll+n.rows; i++ {
+		d.text(card.Min.X+u(18), body.Min.Y+(i-n.scroll)*lineH+lineH/2, lines[i], textBody, c.text)
+	}
+	d.scrollbar(body, n.scroll, n.rows, len(lines))
+
+	foot := card.Max.Y - u(38)
+	d.lineH(card.Min.X, card.Max.X, foot)
+	pairs := []string{"esc", "back"}
+	if n.jump != nil {
+		pairs = []string{"o", "open source", "esc", "back"}
+	}
+	d.hints(card.Min.X+u(14), foot+u(19), false, pairs...)
 }

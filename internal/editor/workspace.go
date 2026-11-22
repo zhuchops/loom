@@ -172,10 +172,11 @@ func (e *editor) projectSearchPrompt(initial string) {
 func (e *editor) projectSearch(query string) {
 	m := &menu{title: "Search: " + query}
 	e.openMenu(m)
+	root := e.root
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		cmd := exec.CommandContext(ctx, "rg", "--no-config", "--sort", "path", "--json", "--fixed-strings", "--color", "never", "--", query, ".")
-		cmd.Dir = e.root
+		cmd.Dir = root
 		out, err := cmd.StdoutPipe()
 		if err == nil {
 			err = cmd.Start()
@@ -197,7 +198,7 @@ func (e *editor) projectSearch(query string) {
 					continue
 				}
 				data := event.Data
-				path := filepath.Join(e.root, data.Path.Text)
+				path := filepath.Join(root, data.Path.Text)
 				label := fmt.Sprintf("%s:%d", strings.TrimPrefix(data.Path.Text, "./"), data.Line)
 				col := utf8.RuneCountInString(data.Lines.Text[:min(data.Matches[0].Start, len(data.Lines.Text))])
 				options = append(options, option{label, strings.TrimSpace(data.Lines.Text), func() { e.jumpTo(path, data.Line-1, col, false) }, e.filePreview(path, data.Line-1, col, false, nil)})
@@ -283,50 +284,55 @@ func (e *editor) scheduleGit() {
 
 func (e *editor) refreshGit() {
 	e.gitToken++
+	if e.noProject {
+		e.git = gitState{}
+		return
+	}
 	token := e.gitToken
 	b := e.b
 	path, version, text := b.path, b.version, string(b.text)
+	root := e.root // the project can change while git runs
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		run := func(args ...string) []byte {
 			c := exec.CommandContext(ctx, "git", args...)
-			c.Dir = e.root
+			c.Dir = root
 			c.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 			out, _ := c.Output()
 			return out
 		}
 		files := map[string]byte{}
-		root := strings.TrimSuffix(string(run("rev-parse", "--show-toplevel")), "\n")
+		top := strings.TrimSuffix(string(run("rev-parse", "--show-toplevel")), "\n")
 		entries := strings.Split(string(run("status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")), "\x00")
 		for _, entry := range entries {
-			if len(entry) < 4 || root == "" {
+			if len(entry) < 4 || top == "" {
 				continue
 			}
-			p := filepath.Join(root, entry[3:])
+			p := filepath.Join(top, entry[3:])
 			state := entry[1]
 			if state == ' ' {
 				state = entry[0]
 			}
-			for within(e.root, p) {
+			for within(root, p) {
 				if files[p] == 0 || files[p] == '?' {
 					files[p] = state
 				}
-				if p == e.root {
+				if p == root {
 					break
 				}
 				p = filepath.Dir(p)
 			}
 		}
 		lines := map[int]byte{}
-		if path != "" && root != "" && within(root, path) {
-			rel, _ := filepath.Rel(root, path)
+		if path != "" && top != "" && within(top, path) {
+			rel, _ := filepath.Rel(top, path)
 			old := run("show", "HEAD:"+filepath.ToSlash(rel))
 			if !strings.ContainsRune(text, 0) && len(text) < 2<<20 {
 				lines = changedLines(string(old), text)
 			}
 		}
-		branch := gitBranch(e.root)
+		branch := gitBranch(root)
 		e.async <- func() {
 			if token == e.gitToken {
 				e.git = gitState{files: files, lines: lines, path: path, version: version, branch: branch}

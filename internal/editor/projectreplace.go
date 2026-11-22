@@ -45,13 +45,13 @@ func projectPattern(find string) (*regexp.Regexp, bool, error) {
 	return re, regex, err
 }
 
-func (e *editor) walkProject(visit func(path string, text []byte)) {
-	_ = filepath.WalkDir(e.root, func(path string, d fs.DirEntry, err error) error {
+func (e *editor) walkProject(root string, visit func(path string, text []byte)) {
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 		if d.IsDir() {
-			if path != e.root && (strings.HasPrefix(d.Name(), ".") || slices.Contains([]string{"node_modules", "vendor", "target"}, d.Name())) {
+			if path != root && (strings.HasPrefix(d.Name(), ".") || slices.Contains([]string{"node_modules", "vendor", "target"}, d.Name())) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -84,10 +84,11 @@ func (e *editor) projectReplacePreview(find, with string) {
 	}
 	m := &menu{title: "Replace in Project", empty: "No matches"}
 	e.openMenu(m)
+	root := e.root
 	go func() {
 		var hits []replaceHit
 		files := map[string]bool{}
-		e.walkProject(func(path string, text []byte) {
+		e.walkProject(root, func(path string, text []byte) {
 			for row, line := range strings.Split(string(text), "\n") {
 				if len(hits) >= 5000 {
 					return

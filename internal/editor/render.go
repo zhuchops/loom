@@ -26,8 +26,6 @@ func centerBox(w, h, width, height int) hitBox {
 }
 
 func (v *renderer) frame(box hitBox, title string) {
-	v.cards = append(v.cards, box)
-	v.titles = append(v.titles, cardTitle{box, title})
 	v.screen.FillArea(box.x, box.y, box.w, box.h, ' ', menuStyle)
 	edge := menuStyle.Foreground(th.accent)
 	v.screen.FillArea(box.x, box.y, box.w, 1, '─', edge)
@@ -90,7 +88,6 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 		height++
 	}
 	box := centerBox(w, h, width, height)
-	v.menuFrame = box
 	v.frame(box, m.title)
 	contentWidth := box.w - 4
 	if sideBySide {
@@ -254,7 +251,6 @@ func (v *renderer) drawWhichKey(e *editor, w, h int) {
 	for i, en := range entries[:shown] {
 		x := box.x + 2 + (i/rows)*(cell+gap)
 		y := box.y + 1 + i%rows
-		v.whichItems = append(v.whichItems, whichItem{x, y, keyWidth, en.key, en.title})
 		v.write(x, y, keyWidth, en.key, keyStyle)
 		v.write(x+keyWidth+3, y, titleWidth, en.title, menuStyle)
 	}
@@ -324,13 +320,7 @@ func (v *renderer) drawCompletion(c completionState, top, bottom int, signature 
 }
 
 func (v *renderer) drawCompletionPreview(item completionItem, list hitBox, top, bottom int) {
-	var docs string
-	if json.Unmarshal(item.Documentation, &docs) != nil {
-		var markup struct{ Value string }
-		_ = json.Unmarshal(item.Documentation, &markup)
-		docs = markup.Value
-	}
-	detail := strings.TrimSpace(item.Detail + "\n" + docs)
+	detail := strings.TrimSpace(item.Detail + "\n" + item.docs())
 	if detail == "" {
 		detail = item.InsertText
 		if item.TextEdit != nil {
@@ -411,4 +401,15 @@ func (e *editor) closeServers() {
 	case <-done:
 	case <-time.After(450 * time.Millisecond):
 	}
+}
+
+// docs is the item's documentation, which servers send as text or as markup.
+func (item completionItem) docs() string {
+	var text string
+	if json.Unmarshal(item.Documentation, &text) != nil {
+		var markup struct{ Value string }
+		_ = json.Unmarshal(item.Documentation, &markup)
+		text = markup.Value
+	}
+	return text
 }

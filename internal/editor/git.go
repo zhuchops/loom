@@ -526,7 +526,6 @@ func (v *renderer) drawSourceControl(e *editor, w, h int) {
 	if p.branch != "" {
 		title += " · " + p.branch
 	}
-	v.panelFrame = box
 	v.frame(box, title)
 	rows := p.entries()
 	height := max(1, box.h-5)
@@ -577,7 +576,6 @@ func (v *renderer) drawDiff(e *editor, w, h int) {
 		v.dim(w, h-1)
 	}
 	box := centerBox(w, h, min(100, w-2), min(30, h-2))
-	v.diffFrame = box
 	v.frame(box, d.title)
 	height := max(1, box.h-3)
 	d.height = height

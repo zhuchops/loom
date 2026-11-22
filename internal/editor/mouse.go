@@ -113,7 +113,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		v.tabManual = true
 		return
 	}
-	if _, h := v.screen.Size(); press && y == h-1 {
+	if _, h := v.screen.Size(); !v.native && press && y == h-1 {
 		e.openNotifications()
 		return
 	}
@@ -248,7 +248,7 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		}
 		b := pane.b
 		if b.dashboard {
-			if press && pane.contains(x, y) {
+			if !v.native && press && pane.contains(x, y) {
 				e.focusPane(pane.leaf)
 				if at := e.dashboardBox(pane.hitBox); at.contains(x, y) {
 					e.dashboardSelection = at.start + y - at.y

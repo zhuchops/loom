@@ -90,8 +90,11 @@ type editor struct {
 	lastFind                    characterFind
 	surroundFlash               surroundFlash
 	dashboardSelection          int
-	noProject, configExplicit   bool
+	noProject                   bool
 	configFile                  string
+	configExplicit              bool
+	// pickFolder, when a front end sets it, shows its own folder dialog.
+	pickFolder func(start string, chosen func(path string))
 }
 
 func newEditor(cfg config, b *buffer, root string) (*editor, error) {
@@ -115,7 +118,7 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 	e.registerCommands()
 	e.registerNativeCommands()
 	e.workspaceCommands()
-	e.needsProject("files", "project-search", "explorer", "explorer-popup", "toggle-sidebar", "git-panel", "git-branch", "refresh-git", "problems", "recent", "close-explorer")
+	e.needsProject("files", "project-search", "explorer", "explorer-popup", "toggle-sidebar", "git-panel", "git-branch", "refresh-git", "problems", "recent-files", "close-explorer")
 	if err := e.registerPlugins(); err != nil {
 		return nil, err
 	}

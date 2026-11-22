@@ -1,0 +1,479 @@
+//go:build desktop
+
+package editor
+
+import (
+	"context"
+	"fmt"
+	"image"
+	"image/png"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"gioui.org/app"
+	"gioui.org/f32"
+	"gioui.org/gpu/headless"
+	"gioui.org/io/input"
+	"gioui.org/io/key"
+	"gioui.org/io/pointer"
+	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/unit"
+
+	"github.com/zhuchops/loom/internal/theme"
+)
+
+// screen drives the real desktop frame without opening a window.
+type screen struct {
+	t     *testing.T
+	d     *desktop
+	e     *editor
+	ops   op.Ops
+	in    input.Router
+	w, h  int
+	scale float32
+}
+
+func (s *screen) frame() {
+	s.ops.Reset()
+	s.d.frame(layout.Context{
+		Ops: &s.ops, Now: time.Now(), Source: s.in.Source(),
+		Metric:      unit.Metric{PxPerDp: s.scale, PxPerSp: s.scale},
+		Constraints: layout.Exact(image.Pt(int(float32(s.w)*s.scale), int(float32(s.h)*s.scale))),
+	})
+	s.in.Frame(&s.ops)
+}
+
+// settle lets git and other background work report back.
+func (s *screen) settle(wait time.Duration) {
+	for end := time.Now().Add(wait); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		s.d.drain()
+	}
+	s.frame()
+	s.frame()
+}
+
+func screenFixture(t *testing.T) string {
+	root := filepath.Join(t.TempDir(), "orbit")
+	files := map[string]string{
+		"README.md":   "# Orbit\n\nA small task service.\n\n- fast\n- simple\n",
+		"go.mod":      "module example.com/orbit\n\ngo 1.24\n",
+		".gitignore":  "bin/\n",
+		"Makefile":    "run:\n\tgo run .\n",
+		"config.yaml": "port: 8080\n",
+		"main.go": "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n\n// routes wires every endpoint of the service.\nfunc routes() *http.ServeMux {\n\tmux := http.NewServeMux()\n" +
+			"\tmux.HandleFunc(\"/health\", func(w http.ResponseWriter, r *http.Request) {\n\t\tfmt.Fprintln(w, \"ok\")\n\t})\n\treturn mux\n}\n\nfunc main() {\n\tconst port = 8080\n" +
+			"\tfmt.Printf(\"listening on %d\\n\", port)\n\tif err := http.ListenAndServe(fmt.Sprintf(\":%d\", port), routes()); err != nil {\n\t\tpanic(err)\n\t}\n}\n",
+		"internal/tasks/handlers.go": "package tasks\n\ntype Handler struct{}\n\nfunc (h Handler) List() []string {\n\treturn nil\n}\n",
+		"internal/tasks/store.go":    "package tasks\n\ntype Store struct{}\n",
+		"web/index.html":             "<!doctype html>\n<title>Orbit</title>\n",
+		"web/app.ts":                 "export const name = 'orbit'\n",
+	}
+	for name, content := range files {
+		p := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, a := range [][]string{{"init", "-q", "-b", "main"}, {"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "init"}} {
+		c := exec.Command("git", a...)
+		c.Dir = root
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Skipf("git: %v %s", err, out)
+		}
+	}
+	os.WriteFile(filepath.Join(root, "config.yaml"), []byte("port: 9090\ndebug: true\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "web/style.css"), []byte("body { margin: 0 }\n"), 0o644)
+	root, _ = filepath.EvalSymlinks(root)
+	return root
+}
+
+// TestDesktopScreens paints every screen. With LOOM_SHOTS=dir it also writes
+// each one to a PNG, without opening a window or touching the user's config.
+func TestDesktopScreens(t *testing.T) {
+	out := os.Getenv("LOOM_SHOTS")
+	type shot struct {
+		name, theme, file string
+		w, h              int
+		none              bool
+		do                func(*screen)
+	}
+	keys := func(k string) func(*screen) { return func(s *screen) { press(s.e, k) } }
+	run := func(id string) func(*screen) { return func(s *screen) { s.e.commands[id].run(s.e) } }
+	const src = "main.go"
+	shots := []shot{
+		{name: "welcome", none: true},
+		{name: "welcome-small", none: true, w: 640, h: 440},
+		{name: "project"},
+		{name: "project-everforest", theme: "everforest"},
+		{name: "editor", file: src},
+		{name: "editor-everforest", file: src, theme: "everforest"},
+		{name: "editor-light", file: src, theme: "solarized-light"},
+		{name: "editor-terminal", file: src, theme: "terminal"},
+		{name: "editor-small", file: src, w: 640, h: 440},
+		{name: "insert", file: src, do: keys("j j j j i")},
+		{name: "visual", file: src, do: keys("8 G V j j")},
+		{name: "tabs", file: src, do: func(s *screen) {
+			for _, f := range []string{"README.md", "config.yaml", "web/app.ts", "web/index.html", "go.mod"} {
+				s.e.open(filepath.Join(s.e.root, f))
+			}
+		}},
+		{name: "split", file: src, do: run("split")},
+		{name: "palette", file: src, do: run("palette")},
+		{name: "palette-everforest", file: src, theme: "everforest", do: run("palette")},
+		{name: "palette-small", file: src, w: 640, h: 440, do: run("palette")},
+		{name: "files", file: src, do: run("files")},
+		{name: "files-dashboard", do: run("files")},
+		{name: "empty", file: src, do: func(s *screen) { run("files")(s); press(s.e, "z q x w") }},
+		{name: "themes", file: src, do: run("theme")},
+		{name: "search", file: src, do: run("project-search")},
+		{name: "buffers", file: src, do: run("buffers")},
+		{name: "keys", file: src, do: run("keybindings")},
+		{name: "projects", none: true, do: run("recent-projects")},
+		{name: "git", file: src, do: run("git-panel")},
+		{name: "diff", file: src, do: func(s *screen) { run("git-panel")(s); s.settle(700 * time.Millisecond); press(s.e, "enter") }},
+		{name: "branch", file: src, do: run("git-branch")},
+		{name: "whichkey", file: src, do: keys("space")},
+		{name: "ex", file: src, do: run("ex")},
+		{name: "explorer", file: src, do: run("explorer")},
+		{name: "directory", file: src, do: run("explorer-popup")},
+		{name: "find", file: src, do: keys("/ f m t")},
+		{name: "toast", file: src, do: func(s *screen) { s.e.notify("Saved main.go") }},
+		{name: "detail", file: src, do: func(s *screen) {
+			s.e.notify("gopls: package example.com/orbit/internal/missing is not in std.\n\nRun go mod tidy to add it.")
+			s.e.openNotifications()
+			press(s.e, "enter")
+		}},
+		{name: "completion", file: src, do: func(s *screen) {
+			press(s.e, "1 8 G i")
+			s.frame()
+			c := &s.e.completion
+			c.items = c.items[:0]
+			for _, it := range []completionItem{{Label: "Printf", Detail: "func(format string, a ...any)"}, {Label: "Println", Detail: "func(a ...any)"}, {Label: "Print", Detail: "func(a ...any)"}} {
+				c.items = append(c.items, it)
+			}
+		}},
+		{name: "hover", file: src, do: func(s *screen) {
+			s.frame()
+			s.d.m.view.diagnosticHover = diagnosticHover{buffer: s.e.b, version: s.e.b.version, x: 48, y: 10, title: "Hover Documentation",
+				message: "func NewServeMux() *ServeMux\n\nNewServeMux allocates and returns a new ServeMux."}
+		}},
+		{name: "confirm", file: src, do: func(s *screen) { press(s.e, "i x esc"); s.d.closeTab(s.e.b) }},
+		{name: "quit", file: src, do: func(s *screen) { press(s.e, "i x esc"); s.d.requestQuit() }},
+		{name: "settings", file: src, do: run("settings")},
+		{name: "zen", file: src, do: run("zen")},
+		{name: "replace", file: src, do: func(s *screen) { run("replace")(s); press(s.e, "f m t") }},
+		{name: "results", file: src, do: func(s *screen) { run("project-search")(s); press(s.e, "f m t enter") }},
+		{name: "markdown", file: "README.md", do: run("markdown-preview")},
+		{name: "signature", file: src, do: func(s *screen) {
+			press(s.e, "1 9 G i")
+			s.e.signature = signatureHint{label: "Printf(format string, a ...any) (n int, err error)", start: 7, end: 20}
+		}},
+		{name: "welcome-light", none: true, theme: "solarized-light"},
+		{name: "palette-light", file: src, theme: "solarized-light", do: run("palette")},
+	}
+	for _, c := range shots {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			name := c.theme
+			if name == "" {
+				name = theme.All[0].Name
+			}
+			if th, ok := theme.Find(name); ok {
+				applyTheme(th)
+			}
+			t.Cleanup(func() { applyTheme(baselineTheme()) })
+
+			root := screenFixture(t)
+			t.Chdir(root)
+			rememberProject(root)
+			cfg := defaultConfig()
+			cfg.AutoComplete = false
+			cfg.RestoreSession = false
+			for k, l := range cfg.Languages {
+				l.Server = nil // no language servers in screenshots
+				cfg.Languages[k] = l
+			}
+			b, err := loadBuffer("")
+			if err != nil {
+				t.Fatal(err)
+			}
+			e, err := newEditor(cfg, b, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.none {
+				e.enterNoProject()
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			d := newDesktop(new(app.Window), e, ctx, nil)
+			e.begin(false)
+			defer e.finish()
+			d.run(d.m.Init())
+			e.refreshGit()
+			if c.file != "" {
+				e.open(filepath.Join(root, c.file))
+			}
+			s := &screen{t: t, d: d, e: e, w: c.w, h: c.h, scale: 2}
+			if s.w == 0 {
+				s.w, s.h = 1200, 760
+			}
+			s.frame()
+			s.settle(150 * time.Millisecond)
+			if c.do != nil {
+				c.do(s)
+			}
+			s.settle(500 * time.Millisecond)
+			if out == "" {
+				return
+			}
+			size := image.Pt(s.w*2, s.h*2)
+			win, err := headless.NewWindow(size.X, size.Y)
+			if err != nil {
+				t.Skip(err)
+			}
+			defer win.Release()
+			if err := win.Frame(&s.ops); err != nil {
+				t.Fatal(err)
+			}
+			img := image.NewRGBA(image.Rectangle{Max: size})
+			if err := win.Screenshot(img); err != nil {
+				t.Fatal(err)
+			}
+			f, err := os.Create(filepath.Join(out, fmt.Sprintf("%s.png", strings.ReplaceAll(c.name, "/", "-"))))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			if err := png.Encode(f, img); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func openScreen(t *testing.T) *screen {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	root := screenFixture(t)
+	t.Chdir(root)
+	cfg := defaultConfig()
+	cfg.AutoComplete, cfg.RestoreSession = false, false
+	for k, l := range cfg.Languages {
+		l.Server = nil
+		cfg.Languages[k] = l
+	}
+	b, err := loadBuffer("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := newEditor(cfg, b, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	d := newDesktop(new(app.Window), e, ctx, nil)
+	e.begin(false)
+	d.run(d.m.Init())
+	t.Cleanup(func() { cancel(); e.finish() })
+	s := &screen{t: t, d: d, e: e, w: 1000, h: 640, scale: 2}
+	s.frame()
+	s.frame() // the first frame only asks for focus
+	return s
+}
+
+func (s *screen) mouse(kind pointer.Kind, x, y int, b pointer.Buttons, scroll f32.Point) {
+	s.in.Queue(pointer.Event{Kind: kind, Source: pointer.Mouse, Position: f32.Pt(float32(x), float32(y)), Buttons: b, Scroll: scroll})
+	s.frame()
+}
+
+func (s *screen) click(r image.Rectangle) {
+	x, y := (r.Min.X+r.Max.X)/2, (r.Min.Y+r.Max.Y)/2
+	s.mouse(pointer.Move, x, y, 0, f32.Point{})
+	s.mouse(pointer.Press, x, y, pointer.ButtonPrimary, f32.Point{})
+	s.mouse(pointer.Release, x, y, 0, f32.Point{})
+	s.frame()
+}
+
+func (s *screen) treeRow(name string) image.Rectangle {
+	for i, row := range s.e.tree.rows {
+		if filepath.Base(row.path) == name {
+			r := s.d.geo.sidebar
+			top := r.Min.Y + s.d.u(36) + (i-s.e.tree.scroll)*s.d.u(25)
+			return image.Rect(r.Min.X+s.d.u(10), top, r.Max.X-s.d.u(10), top+s.d.u(25))
+		}
+	}
+	s.t.Fatalf("%s is not in the tree", name)
+	return image.Rectangle{}
+}
+
+func (s *screen) typeText(text string) {
+	for _, r := range text {
+		s.in.Queue(key.EditEvent{Text: string(r)})
+		s.frame()
+	}
+}
+
+func (s *screen) key(name key.Name, mods key.Modifiers) {
+	s.in.Queue(key.Event{Name: name, Modifiers: mods, State: key.Press})
+	s.frame()
+}
+
+func TestDesktopPointer(t *testing.T) {
+	s := openScreen(t)
+	e, d := s.e, s.d
+	var long strings.Builder
+	for i := range 300 {
+		fmt.Fprintf(&long, "line %d\n", i)
+	}
+	if err := os.WriteFile(filepath.Join(e.root, "long.txt"), []byte(long.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.refreshTree("")
+	s.frame()
+
+	s.click(s.treeRow("long.txt"))
+	if filepath.Base(e.b.path) != "long.txt" {
+		t.Fatalf("clicking the sidebar opened %q", e.b.path)
+	}
+
+	o := d.geo.grid.Min
+	x, y := o.X+d.cellW*14, o.Y+d.cellH*4+d.cellH/2
+	s.click(image.Rect(x-1, y-1, x+1, y+1))
+	if row := e.b.rowAt(e.b.cursor); row != 4 {
+		t.Fatalf("clicking the fifth line put the cursor on row %d", row)
+	}
+	if e.tree.focused {
+		t.Fatal("clicking the text left the sidebar focused")
+	}
+
+	s.mouse(pointer.Scroll, x, y, 0, f32.Pt(0, float32(12*d.cellH)))
+	if e.b.top < 8 {
+		t.Fatalf("the wheel scrolled to line %d", e.b.top)
+	}
+
+	s.click(s.treeRow("main.go"))
+	if filepath.Base(e.b.path) != "main.go" || len(d.tabs) != 3 {
+		t.Fatalf("got %q with %d tabs", e.b.path, len(d.tabs))
+	}
+
+	// Drag the last tab in front of the first.
+	from, to := d.tabs[2].r, d.tabs[0].r
+	cy := (from.Min.Y + from.Max.Y) / 2
+	s.mouse(pointer.Press, from.Min.X+d.u(40), cy, pointer.ButtonPrimary, f32.Point{})
+	s.mouse(pointer.Move, to.Min.X+d.u(5), cy, pointer.ButtonPrimary, f32.Point{})
+	s.mouse(pointer.Release, to.Min.X+d.u(5), cy, 0, f32.Point{})
+	if filepath.Base(e.buffers[0].path) != "main.go" {
+		t.Fatal("dragging did not reorder the tabs")
+	}
+
+	s.frame()
+	for _, tab := range d.tabs {
+		if tab.b == e.b {
+			s.click(image.Rect(tab.r.Max.X-d.u(22), tab.r.Min.Y, tab.r.Max.X-d.u(14), tab.r.Max.Y))
+		}
+	}
+	for _, b := range e.buffers {
+		if filepath.Base(b.path) == "main.go" {
+			t.Fatal("the close button did not close the tab")
+		}
+	}
+
+	// A click outside a popup dismisses it and does not reach what is beneath.
+	e.openPalette()
+	s.frame()
+	before := e.b
+	s.click(s.treeRow("main.go"))
+	if e.menu != nil || e.b != before {
+		t.Fatal("a click outside the palette went through it")
+	}
+}
+
+func TestDesktopKeyboard(t *testing.T) {
+	s := openScreen(t)
+	e := s.e
+	e.open(filepath.Join(e.root, "main.go"))
+	s.frame()
+
+	s.typeText("i")
+	s.typeText("привет, мир")
+	if e.mode != "insert" || !strings.HasPrefix(string(e.b.text), "привет, мирpackage") {
+		t.Fatalf("typing gave %q", string(e.b.text[:20]))
+	}
+	// Return and the letter after it can land in the same frame.
+	s.in.Queue(key.Event{Name: key.NameReturn, State: key.Press}, key.EditEvent{Text: "x"})
+	s.frame()
+	if !strings.HasPrefix(string(e.b.text), "привет, мир\nxpackage") {
+		t.Fatalf("a letter typed straight after Return was lost: %q", string(e.b.text[:24]))
+	}
+	s.key(key.NameEscape, 0)
+	if e.mode != "normal" {
+		t.Fatal("Esc did not leave insert mode")
+	}
+
+	s.key("З", key.ModCtrl) // Ctrl+P on a Russian layout
+	if e.menu == nil || e.menu.title != "Go to File" {
+		t.Fatal("Ctrl+P on a Russian layout did not open Go to File")
+	}
+	s.key(key.NameEscape, 0)
+
+	s.d.requestQuit()
+	s.frame()
+	if s.d.dialog == nil || e.quit {
+		t.Fatal("quitting with unsaved changes did not ask")
+	}
+	s.typeText("x")
+	s.key(key.NameEscape, 0)
+	if s.d.dialog != nil || e.quit {
+		t.Fatal("Esc did not cancel quitting")
+	}
+}
+
+func TestDesktopSaveAsReplaces(t *testing.T) {
+	s := openScreen(t)
+	e := s.e
+	s.d.newFile()
+	e.handle(keyInput{paste: "fresh\n"})
+	target := filepath.Join(e.root, "config.yaml")
+	s.d.writeTo(e.b, target)
+	if got, err := os.ReadFile(target); err != nil || string(got) != "fresh\n" || e.b.dirty() {
+		t.Fatalf("Save As wrote %q (%v)", got, err)
+	}
+}
+
+func BenchmarkDesktopFrame(b *testing.B) {
+	root := b.TempDir()
+	path := filepath.Join(root, "big.go")
+	if err := os.WriteFile(path, []byte("package big\n"+strings.Repeat("func f(a, b int) int { return a + b } // adds two numbers\n", 10000)), 0o644); err != nil {
+		b.Fatal(err)
+	}
+	b.Setenv("XDG_STATE_HOME", b.TempDir())
+	cfg := defaultConfig()
+	for k, l := range cfg.Languages {
+		l.Server = nil
+		cfg.Languages[k] = l
+	}
+	buf, err := loadBuffer(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	e, err := newEditor(cfg, buf, root)
+	if err != nil {
+		b.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := &screen{d: newDesktop(new(app.Window), e, ctx, nil), e: e, w: 1440, h: 900, scale: 2}
+	for b.Loop() {
+		s.frame()
+	}
+}

@@ -320,14 +320,15 @@ func (e *editor) openBuffers() {
 func (e *editor) openFiles() {
 	m := &menu{title: "Go to File"}
 	e.openMenu(m)
+	root := e.root
 	go func() {
 		var options []option
-		err := filepath.WalkDir(e.root, func(path string, d fs.DirEntry, err error) error {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
 			if d.IsDir() {
-				if path != e.root && (strings.HasPrefix(d.Name(), ".") || slices.Contains([]string{"node_modules", "vendor", "target"}, d.Name())) {
+				if path != root && (strings.HasPrefix(d.Name(), ".") || slices.Contains([]string{"node_modules", "vendor", "target"}, d.Name())) {
 					return filepath.SkipDir
 				}
 				return nil
@@ -335,7 +336,7 @@ func (e *editor) openFiles() {
 			if !d.Type().IsRegular() {
 				return nil
 			}
-			rel, err := filepath.Rel(e.root, path)
+			rel, err := filepath.Rel(root, path)
 			if err != nil {
 				return nil
 			}
