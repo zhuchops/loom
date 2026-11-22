@@ -142,6 +142,10 @@ When you scroll into the middle of a function or block, the lines that open it (
 - **Dashboard:** a block-letter logo, the project and git branch, and icon buttons with their shortcuts, followed by your five most recent files. Move with `j`/`k` or the arrow keys, open with Enter or a click.
 - **Status line:** NvChad layout. A mode block coloured by mode (blue normal, purple insert, cyan visual, orange replace, yellow prompt/explorer), the editing profile, file and problems in the middle, and on the right the git branch, language, a folder block with the project name and a coloured cursor-position block. The icons use a Nerd Font.
 
+### Desktop app (preview)
+
+`go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds Loom as a native window (Gio, GPU rendered). It runs the same editor, keys, themes and config as the terminal version, and draws the cell grid with a real font. It uses Menlo (or the font in `LOOM_FONT`), a Nerd Font Mono from `~/Library/Fonts` for icons, and Go Mono as a fallback. Cmd and Ctrl both act as Ctrl; Option acts as Alt. This is a first step: only macOS has been tried, and window chrome (pixel-smooth scrolling, proportional UI) is still the terminal layout.
+
 ### Touchpad scrolling
 
 A swipe scrolls along one axis only. The first direction of a swipe wins, and the sideways drift of your finger is ignored until the wheel pauses for about 150 ms. This applies everywhere that scrolls: editors, the explorer, pickers and previews.

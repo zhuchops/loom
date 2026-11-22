@@ -26,6 +26,15 @@ func runTerminal(e *editor, explicitFile bool) error {
 		view:   renderer{screen: newTerminalFrame(0, 0)},
 		ctx:    ctx, signals: signals, ticks: ticker.C,
 	}
+	e.begin(explicitFile)
+	_, err := tea.NewProgram(model, tea.WithoutSignalHandler()).Run()
+	cancel()
+	e.finish()
+	return err
+}
+
+// begin restores the previous session and starts background services.
+func (e *editor) begin(explicitFile bool) {
 	e.loadRecent()
 	e.restoreSession(explicitFile)
 	if !explicitFile {
@@ -35,8 +44,10 @@ func runTerminal(e *editor, explicitFile bool) error {
 		e.refreshGit()
 	}
 	e.startRecovery()
-	_, err := tea.NewProgram(model, tea.WithoutSignalHandler()).Run()
-	cancel()
+}
+
+// finish stops background services and saves state for the next start.
+func (e *editor) finish() {
 	e.invalidateCompletion()
 	e.closeServers()
 	e.saveSession()
@@ -47,7 +58,6 @@ func runTerminal(e *editor, explicitFile bool) error {
 			_ = e.saveRecovery()
 		}
 	}
-	return err
 }
 
 type dragTickMsg struct{}
