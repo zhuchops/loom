@@ -66,6 +66,7 @@ func rememberProject(root string) {
 	}
 	_ = os.WriteFile(projectsPath(), []byte(strings.Join(list, "\n")+"\n"), 0o644)
 	_ = os.WriteFile(lastProjectPath(), []byte(root+"\n"), 0o644)
+	rememberOpenSession(root)
 }
 
 func forgetLastProject() { _ = os.Remove(lastProjectPath()) }
@@ -93,16 +94,16 @@ func (e *editor) enterNoProject() {
 	e.git = gitState{}
 }
 
-// resetWorkspace tears down everything tied to the current project. It
-// refuses while there are unsaved changes.
+// resetWorkspace empties the only session, to close its project or to open
+// one in a blank one. It refuses while there are unsaved changes.
 func (e *editor) resetWorkspace() bool {
 	if e.directory != nil && e.directory.doc.b.dirty() {
-		e.notify("Write or discard directory edits before switching projects")
+		e.notify("Write or discard directory edits before closing the project")
 		return false
 	}
 	for _, b := range e.buffers {
 		if b.dirty() && !b.dashboard {
-			e.notify("Save or discard unsaved buffers before switching projects")
+			e.notify("Save or discard unsaved buffers before closing the project")
 			return false
 		}
 	}
@@ -127,6 +128,8 @@ func (e *editor) resetWorkspace() bool {
 	return true
 }
 
+// openProject shows dir's session, starting one if there is none. A blank
+// start page becomes the project instead of staying behind.
 func (e *editor) openProject(dir string) {
 	if dir == "~" || strings.HasPrefix(dir, "~/") {
 		home, _ := os.UserHomeDir()
@@ -142,39 +145,59 @@ func (e *editor) openProject(dir string) {
 		e.notify("Not a folder: " + dir)
 		return
 	}
+	h := e.hub
+	if e != h.current {
+		// A folder dialog can answer after another session was shown.
+		h.current.openProject(dir)
+		return
+	}
 	if !e.noProject && dir == e.root {
 		e.showDashboard()
+		return
+	}
+	if open := h.find(dir); open != nil {
+		h.show(open)
+		return
+	}
+	if !e.blank() {
+		e.startSession(dir)
+		return
+	}
+	if err := os.Chdir(dir); err != nil {
+		e.notify("Can't open " + shortPath(dir) + ": " + err.Error())
 		return
 	}
 	if !e.resetWorkspace() {
 		return
 	}
-	if err := os.Chdir(dir); err != nil {
-		e.notify(err.Error())
-	}
 	e.root, e.noProject = dir, false
 	e.followConfig()
 	e.tree = fileTree{sidebar: true, width: 28, expanded: map[string]bool{dir: true}}
 	e.refreshTree("")
-	e.restoreSession(false)
+	e.resumeWork()
 	if e.recovery != nil {
 		// Crash recovery is kept per project.
 		_ = e.saveRecovery()
 		e.startRecovery()
 	}
-	e.showDashboard()
 	e.refreshGit()
 	rememberProject(dir)
 	e.notify("Opened " + shortPath(dir))
 }
 
 func (e *editor) closeProject() {
+	if h := e.hub; len(h.live) > 1 {
+		h.closeSession(e)
+		return
+	}
 	if e.noProject {
 		return
 	}
+	root := e.root
 	if !e.resetWorkspace() {
 		return
 	}
+	forgetOpenSession(root)
 	home, _ := os.UserHomeDir()
 	if home == "" {
 		home = "/"
@@ -296,12 +319,19 @@ func appleQuote(s string) string {
 // followConfig applies the config of the project just switched to, and drops
 // what the last one set.
 func (e *editor) followConfig() {
+	if e.syncConfig() {
+		e.relativeNumbers = e.cfg.RelativeNumbers
+	}
+}
+
+// syncConfig reloads the config for the folder this session is in.
+func (e *editor) syncConfig() bool {
 	cfg, err := loadConfig(e.cfg.path, e.cfg.explicit, e.configRoot())
 	if err != nil {
 		e.notify(err.Error())
 		// Keep going with just the user's settings, not the last project's.
 		if cfg, err = readConfig(e.cfg.path, e.cfg.explicit); err != nil {
-			return
+			return false
 		}
 	}
 	cfg.Profile = e.cfg.Profile
@@ -311,7 +341,7 @@ func (e *editor) followConfig() {
 	}
 	if err != nil {
 		e.notify("Config: " + err.Error())
-		return
+		return false
 	}
-	e.relativeNumbers = cfg.RelativeNumbers
+	return true
 }

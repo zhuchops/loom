@@ -142,7 +142,7 @@ func defaultConfig() config {
 				"w": "word", "b": "back-word", "e": "word-end", "0": "home", "$": "end", "g g": "top", "G": "bottom",
 				"space f": "files", "space /": "project-search", "space e": "explorer", "space x": "explorer-popup",
 				"space p": "palette", "space s": "toggle-sidebar", "space S": "close-explorer",
-				"space b": "buffers", "space w": "save", "space a": "code-actions", "space r": "rename-symbol",
+				"space b": "buffers", "space tab": "sessions", "space w": "save", "space a": "code-actions", "space r": "rename-symbol",
 				"space d": "file-problems", "space D": "problems", "space N": "messages",
 				"g o": "directory-jump", "g t": "tab-next", "g T": "tab-prev", "g S": "split-join",
 				"space t h": "tab-left", "space t l": "tab-right", "space t 0": "tab-first", "space t $": "tab-last", "space t x": "close-tab",

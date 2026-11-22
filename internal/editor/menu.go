@@ -24,6 +24,7 @@ type menu struct {
 	exact                       func(string) bool
 	suggestions                 func(string) []option
 	confirmation                bool
+	remove                      map[string]func() // what Ctrl+X does, by the option's hint
 	hidePreview                 bool
 	details                     bool // Hover selects an entry; Enter opens its full text.
 	hovering                    bool
@@ -99,8 +100,10 @@ func matchRank(o option, query string) int {
 		return 2
 	case strings.Contains(label, query):
 		return 3
+	case fuzzyMatch(label, query):
+		return 4
 	}
-	return 4
+	return 5 // only the hint matches
 }
 func fuzzyMatch(text, query string) bool {
 	for _, r := range query {
@@ -141,6 +144,10 @@ func (e *editor) menuInput(in keyInput) {
 			m.matches[m.selected].run()
 		} else if m.submit != nil {
 			m.submit(m.input)
+		}
+	case "ctrl+x":
+		if m.remove != nil {
+			e.removeSelected()
 		}
 	case "ctrl+u":
 		m.input = ""
@@ -186,6 +193,7 @@ var exAliases = map[string]string{
 	"close-split": ":close", "only-pane": ":only", "split-join": ":split-join",
 	"messages":    ":messages",
 	"dashboard":   ":dashboard",
+	"sessions":    ":sessions",
 	"lsp-restart": ":lsp-restart",
 }
 

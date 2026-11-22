@@ -58,6 +58,7 @@ const defaultUISize = 13 // the size the interface is designed at
 type desktop struct {
 	w     *app.Window
 	m     *terminalModel
+	shown *editor // the session the state below belongs to
 	inbox chan tea.Msg
 
 	gtx     layout.Context
@@ -130,7 +131,7 @@ func runDesktop(e *editor, explicit bool) error {
 	d := newDesktop(w, e, ctx, ticker.C)
 	d.platformStart()
 	e.begin(explicit)
-	defer e.finish()
+	defer e.hub.finish()
 	d.askAboutConfig()
 	d.run(d.m.Init())
 	var ops op.Ops
@@ -139,7 +140,7 @@ func runDesktop(e *editor, explicit bool) error {
 		case app.DestroyEvent:
 			return ev.Err
 		case *app.ClosingEvent:
-			if e.quit || !d.unsaved() {
+			if d.m.editor.quit || !d.unsaved() {
 				// Leave now: a DestroyEvent only comes once AppKit frees the view.
 				return nil
 			}
@@ -152,7 +153,7 @@ func runDesktop(e *editor, explicit bool) error {
 			gtx := app.NewContext(&ops, ev)
 			d.frame(gtx)
 			ev.Frame(gtx.Ops)
-			if e.quit {
+			if d.m.editor.quit {
 				return nil
 			}
 		default:
@@ -169,6 +170,8 @@ func newDesktop(w *app.Window, e *editor, ctx context.Context, ticks <-chan time
 		sizes: map[measured]image.Point{}, wraps: map[wrapped][]string{}, inks: map[[2]color.NRGBA]color.NRGBA{},
 	}
 	d.m = &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0), native: true}, ctx: ctx, ticks: ticks}
+	d.m.attach()
+	d.shown = e
 	d.loadFonts()
 	e.settingsPage = d.toggleSettings
 	return d
@@ -296,7 +299,11 @@ func (d *desktop) frame(gtx layout.Context) {
 	d.measure()
 	d.drain()
 	d.input()
+	d.run(d.m.settle()) // a click can switch sessions without going through Update
 	e := d.m.editor
+	if e != d.shown {
+		d.follow(e)
+	}
 	if c := deriveColors(); c != d.c {
 		d.c = c
 		clear(d.inks)
@@ -315,6 +322,18 @@ func (d *desktop) frame(gtx layout.Context) {
 	if e.animating() {
 		gtx.Execute(op.InvalidateCmd{})
 	}
+}
+
+// follow drops what was on screen for the session that was shown before.
+func (d *desktop) follow(e *editor) {
+	d.shown = e
+	d.settings = nil
+	d.scroll, d.cur = scrollAnim{}, cursorAnim{}
+	d.list, d.preview = listState{}, previewCache{}
+	d.tabScroll, d.tabShown = 0, nil
+	d.grab = nil
+	// Its older messages aren't news.
+	d.toast = toast{seen: d.m.switchedAt}
 }
 
 // geometry is where the parts of the window are.

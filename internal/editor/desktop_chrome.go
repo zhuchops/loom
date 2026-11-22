@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 
 	"gioui.org/io/pointer"
@@ -58,12 +59,23 @@ func (d *desktop) paintTitle(e *editor) {
 		name = filepath.Base(e.root)
 	}
 	name = d.fit(name, u(170), textStrong)
-	box := place(x, x+d.width(name, textStrong)+u(34))
-	if d.button(box, func() { d.command("projects") }) {
+	count, countW := "", 0
+	if n := len(e.hub.live); n > 1 {
+		count = strconv.Itoa(n)
+		countW = max(u(17), d.width(count, textCaption)+u(10)) + u(6)
+	}
+	box := place(x, x+d.width(name, textStrong)+countW+u(34))
+	if d.button(box, func() { d.command("sessions") }) {
 		d.round(box, 6, c.hover)
 	}
 	tx := box.Min.X + u(9)
 	tx += d.text(tx, cy, name, textStrong, c.text)
+	if countW > 0 {
+		pill := image.Rect(tx+u(6), cy-u(8), tx+countW, cy+u(8))
+		d.round(pill, 8, c.selected)
+		d.textCenter((pill.Min.X+pill.Max.X)/2, cy, count, textCaption, readable(c.accent, c.selected, 4.5))
+		tx = pill.Max.X
+	}
 	d.icon(iconDown, tx+u(11), cy, 11, c.dim)
 	left := box.Max.X + u(4)
 

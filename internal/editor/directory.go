@@ -127,7 +127,7 @@ func (e *editor) directoryInput(in keyInput) {
 		doc.prefix = ""
 		e.openPalette()
 		return
-	case "directory-jump", "messages":
+	case "directory-jump", "messages", "sessions":
 		doc.prefix = ""
 		e.commands[id].run(e)
 		return

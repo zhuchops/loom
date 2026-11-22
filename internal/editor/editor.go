@@ -91,6 +91,11 @@ type editor struct {
 	surroundFlash               surroundFlash
 	dashboardSelection          int
 	noProject                   bool
+	// hub holds the sessions; this editor is one of them.
+	hub        *sessionHub
+	closed     chan struct{} // closed with the session
+	leftTheme  string        // what highlights were drawn with when it was left
+	leftItalic bool
 	// configProblem is why Loom had to start without some of the config.
 	configProblem error
 	// settingsPage, when a front end sets it, shows its own settings window.
@@ -113,6 +118,9 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 	e.activePane = e.layout
 	e.relativeNumbers = cfg.RelativeNumbers
 	italicComments = cfg.ItalicComments
+	e.hub = &sessionHub{current: e, live: []*editor{e}}
+	e.closed = make(chan struct{})
+	e.regs = map[rune]register{}
 	e.languageWake = make(chan int, 4)
 	e.gitWake = make(chan struct{}, 1)
 	e.tree = fileTree{sidebar: true, width: 28, expanded: map[string]bool{root: true}}
@@ -911,7 +919,8 @@ func (e *editor) playMacro(name string) {
 	}()
 	for range n {
 		for _, key := range keys {
-			if e.quit {
+			// The keys are meant for the session they started in.
+			if e.quit || e.hub != nil && e.hub.current != e {
 				return
 			}
 			e.handle(key)
@@ -1006,9 +1015,26 @@ func (e *editor) tryQuit(force bool) {
 			}
 		}
 	}
+	if h := e.hub; h != nil {
+		for _, other := range h.unsaved() {
+			if other == e {
+				continue
+			}
+			// :q! speaks for what is on screen, never for a session out of sight.
+			if force {
+				e.notify("Unsaved changes in session " + other.sessionName() + ". :qa! quits and discards every session")
+			} else if h.show(other) {
+				other.notify("This session has unsaved changes. Save them, then quit again")
+			}
+			return
+		}
+		h.quitAll(force)
+		return
+	}
 	e.discardRecovery = force
 	e.quit = true
 }
+
 func (e *editor) ex(line string) {
 	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), ":"))
 	if e.directoryEx(line) || e.exAddress(line) || e.runExRange(line) {
@@ -1152,7 +1178,13 @@ func (e *editor) ex(line string) {
 	case "qa", "qall":
 		e.tryQuit(false)
 	case "qa!", "qall!":
-		e.tryQuit(true)
+		if e.directory != nil || e.hub == nil {
+			e.tryQuit(true)
+		} else {
+			e.hub.quitAll(true)
+		}
+	case "sessions":
+		e.sessionsMenu("", 0)
 	case "q!", "quit!":
 		e.tryQuit(true)
 	case "noh", "nohlsearch":

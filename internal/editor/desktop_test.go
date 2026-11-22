@@ -227,6 +227,9 @@ func TestDesktopScreens(t *testing.T) {
 			o.CursorNormal, o.ItalicComments = "underline", true
 		})},
 		{name: "zen", file: src, do: run("zen")},
+		{name: "sessions", file: src, theme: "everforest", do: withSessions("")},
+		{name: "sessions-search", file: src, theme: "solarized-light", do: withSessions("bil")},
+		{name: "sessions-small", file: src, w: 640, h: 440, do: withSessions("")},
 		{name: "path-everforest", file: "internal/tasks/handlers.go", theme: "everforest", do: keys("G k k")},
 		{name: "path-light", file: "internal/tasks/handlers.go", theme: "solarized-light", do: keys("G k k")},
 		{name: "path-scopes", file: src, theme: "everforest", do: keys("1 2 G")},
@@ -652,5 +655,96 @@ func TestPathBarTextReadsInEveryTheme(t *testing.T) {
 		if got := contrast(readable(d.c.dim, band, 4.5), band); got < 4.4 {
 			t.Errorf("%s: folders at %.2f", th.Name, got)
 		}
+	}
+}
+
+// withSessions opens two more projects, leaves one unsaved and shows the
+// switcher from the first.
+func withSessions(query string) func(*screen) {
+	return func(s *screen) {
+		first, parent := s.d.m.editor, s.t.TempDir()
+		// Switching loads the theme that was chosen, so choose this one.
+		if err := os.MkdirAll(filepath.Dir(themeStatePath()), 0o755); err != nil {
+			s.t.Fatal(err)
+		}
+		if err := os.WriteFile(themeStatePath(), []byte(th.name), 0o644); err != nil {
+			s.t.Fatal(err)
+		}
+		for _, name := range []string{"billing-api", "design-system"} {
+			dir := filepath.Join(parent, name)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				s.t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+				s.t.Fatal(err)
+			}
+			s.d.m.editor.openProject(dir)
+			e := s.d.m.editor
+			e.open(filepath.Join(e.root, "main.go"))
+			if name == "billing-api" {
+				e.handle(keyInput{key: "x"})
+			}
+		}
+		h := first.hub
+		h.show(first)
+		first.sessionsMenu(query, 0)
+		s.frame()
+	}
+}
+
+func TestDesktopSessions(t *testing.T) {
+	s := openScreen(t)
+	d, first := s.d, s.e
+	withSessions("")(s)
+	h := first.hub
+	i := slices.IndexFunc(h.live, func(e *editor) bool { return filepath.Base(e.root) == "billing-api" })
+	if i < 0 {
+		t.Fatal("billing-api has no session")
+	}
+	billing := h.live[i]
+
+	// Enter goes to the session before this one, and the window follows.
+	s.key(key.NameReturn, 0)
+	s.frame()
+	if d.m.editor == first || d.shown != d.m.editor || filepath.Base(d.m.editor.root) != "design-system" {
+		t.Fatalf("Enter showed %s", d.m.editor.root)
+	}
+
+	// Typing finds one, and a click picks it.
+	d.command("sessions")
+	s.frame()
+	s.typeText("blg")
+	m := d.m.editor.menu
+	if m == nil || len(m.matches) == 0 || m.matches[0].label != "billing-api" {
+		t.Fatal("the switcher didn't find billing-api")
+	}
+	s.key(key.NameReturn, 0)
+	s.frame()
+	if d.m.editor != billing {
+		t.Fatalf("picked %s", d.m.editor.root)
+	}
+
+	// Typing lands in the session on screen and nowhere else.
+	before := first.b.version
+	s.typeText("x")
+	if first.b.version != before {
+		t.Fatal("typing reached a session out of sight")
+	}
+
+	// Quitting sees the sessions out of sight, and Save All saves them.
+	h.show(first)
+	s.frame()
+	d.requestQuit()
+	if d.dialog == nil || first.quit || !strings.Contains(d.dialog.body, "billing-api") {
+		t.Fatal("quitting didn't ask about a session out of sight")
+	}
+	save := d.dialog.choices[0].run
+	d.dialog = nil
+	save()
+	if !d.m.editor.quit || billing.unsavedCount() != 0 {
+		t.Fatal("Save All didn't save and quit")
+	}
+	if raw, err := os.ReadFile(filepath.Join(billing.root, "main.go")); err != nil || string(raw) == "package main\n" {
+		t.Fatalf("billing-api wasn't written: %q (%v)", raw, err)
 	}
 }

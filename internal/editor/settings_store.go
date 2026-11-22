@@ -286,7 +286,7 @@ func (e *editor) setLanguageSetting(lang, key string, value any) error {
 
 // Commands that 0.17 doesn't have. A binding to one in config.json would stop
 // that version from starting.
-var addedCommands = []string{"open-project", "close-project", "recent-projects"}
+var addedCommands = []string{"open-project", "close-project", "recent-projects", "sessions"}
 
 // bindingScope is where a change made for one mode belongs.
 func (e *editor) bindingScope(mode string) string {

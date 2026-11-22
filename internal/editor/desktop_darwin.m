@@ -70,12 +70,13 @@ static void buildMenus(void) {
 	item(m, @"Open File…", @"open-file", @"o", cmd);
 	item(m, @"Open Project…", @"open-project", @"o", shift);
 	item(m, @"Recent Projects…", @"projects", @"", 0);
+	item(m, @"Switch Session…", @"sessions", @"k", cmd);
 	[m addItem:[NSMenuItem separatorItem]];
 	item(m, @"Save", @"save", @"s", cmd);
 	item(m, @"Save As…", @"save-as", @"s", shift);
 	[m addItem:[NSMenuItem separatorItem]];
 	item(m, @"Close Tab", @"close-tab", @"w", cmd);
-	item(m, @"Close Project", @"close-project", @"", 0);
+	item(m, @"Close Session", @"close-project", @"", 0);
 
 	m = submenu(bar, @"Edit");
 	item(m, @"Undo", @"undo", @"z", cmd);

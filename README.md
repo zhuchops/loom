@@ -167,7 +167,7 @@ The chain of functions and blocks around the cursor, like `Server › Handle ›
 
 `sh packaging/macos/build-app.sh` builds `dist/Loom.app`; pass a folder to build somewhere else. The icon, two pairs of threads woven into an L, is drawn in code by `internal/brand`; the logo inside the app is the same drawing, simplified at small sizes. `go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds just the binary (git ignores it). It is the same editor, with the same keys, themes and config as the terminal version, in a native window (Gio, GPU rendered). Only the code is laid out on a character grid; everything around it is laid out in pixels.
 
-- **Title bar:** the project (click for recent projects), the branch (click to switch), a search field, and buttons for Source Control, the Command Palette and Settings.
+- **Title bar:** the project and how many sessions are open (click to switch), the branch (click to switch), a search field, and buttons for Source Control, the Command Palette and Settings.
 - **Sidebar:** the file tree with git state, buttons for a new file, a new folder and filtering. Right-click for actions; drag its edge to resize it.
 - **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click to close. A tinted bar beneath shows the file's path and the functions and blocks around the cursor.
 - **Pickers and panels:** the palette, file search with a highlighted preview, settings with switches, Source Control with stage and commit buttons, and a diff with both line numbers.
@@ -178,6 +178,7 @@ The chain of functions and blocks around the cursor, like `Server › Handle ›
 | --- | --- |
 | `⌘P` / `⇧⌘P` | Go to File / Command Palette |
 | `⌘O` / `⇧⌘O` | Open a file / a project with Finder |
+| `⌘K` | Switch session |
 | `⌘N`, `⌘S`, `⇧⌘S`, `⌘W` | New file, Save, Save As, Close Tab |
 | `⌘Z` / `⇧⌘Z` | Undo / Redo |
 | `⌘X`, `⌘C`, `⌘V`, `⌘A` | Cut, Copy, Paste, Select All |
@@ -284,7 +285,7 @@ Tabs are numbered in the tab bar. A split opens another view of the current buff
 
 Drag the divider between two panes with the mouse to resize them, and double-click it to even the split out. Panes keep a minimum size, and sizes are saved with the session.
 
-Ex commands include `:split [file]`, `:vsplit [file]`, `:close`, `:only`, `:tabnext [number]`, `:tabprev`, `:tabfirst`, `:tablast`, `:tabmove [+/-]N`, and `:tabclose`. **Close Pane** (`:close`) closes the active tab when only one pane is open. **Close Tab** (`:tabclose` or `:close tab`) closes the active buffer tab. A bare `:tabmove` moves the tab to the end. An unsigned position is zero-based. `:q` closes the active pane when several are open. `:qa` quits the editor. Set line numbers with `:set rnu`, `:set nornu`, or `:set rnu!`. Relative numbering keeps the current line's absolute number visible.
+Ex commands include `:split [file]`, `:vsplit [file]`, `:close`, `:only`, `:tabnext [number]`, `:tabprev`, `:tabfirst`, `:tablast`, `:tabmove [+/-]N`, and `:tabclose`. **Close Pane** (`:close`) closes the active tab when only one pane is open. **Close Tab** (`:tabclose` or `:close tab`) closes the active buffer tab. A bare `:tabmove` moves the tab to the end. An unsigned position is zero-based. `:q` closes the active pane when several are open. `:qa` quits the editor once no session has unsaved changes; `:qa!` quits and discards them in all of them. Set line numbers with `:set rnu`, `:set nornu`, or `:set rnu!`. Relative numbering keeps the current line's absolute number visible.
 
 Zen mode shows the active pane with a centered text area and the status line. Toggling it off reveals the same split layout, tabs, and sidebar.
 
@@ -542,6 +543,7 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `workspace.go` owns the ordered buffer tabs and session persistence. Closing a pane leaves its buffer open. Closing a tab replaces that buffer in every pane that was showing it. Session loading accepts the older two-pane format and prunes missing files.
 - `directory.go` runs the modal engine on a scratch listing. Newline tags associate edited rows with original entries, and a reserved tag identifies the parent row. A write first validates the plan, then stages sources and rolls back failed filesystem moves. Navigation checks for unapplied edits.
 - `language.go`, `lsp.go`, and `actions.go` handle LSP transport and edits. Worker goroutines send callbacks to the editor event loop. Workspace edits validate versions and disk content before applying edits.
+- `sessions.go` keeps an editor per open project and switches the front end between them. Only the shown one sets the working directory, theme and tab width; the event loop keeps serving the others.
 - `disk.go` and `recovery.go` implement conflict review and per-session snapshots. The editor event loop is the owner of UI state.
 - `theme.go` applies a theme from `internal/theme` to the renderer's styles and saves the choice. `mdpreview.go` draws the Markdown preview pane, which `panes.go` stores as a leaf that never takes focus. `tabdrag.go` handles dragging a tab into a split.
 - `fold.go` computes indentation folds, `symbols.go` the symbol pickers, `pathcomplete.go` file-name completion, and `tree.go` the explorer, including its filter and sort.
@@ -554,4 +556,14 @@ Every change gets a README update and a version bump in `internal/editor/main.go
 
 ## Projects
 
-Loom starts with no project open. The dashboard (the Welcome page in the desktop app) offers **Open Project** (also `:project [path]` and the command palette), which opens the Finder folder picker on macOS (a built-in folder browser elsewhere); **Recent Projects** lists remembered folders and also accepts a typed path. Opening a project switches the file tree, search, git and language servers to that folder and restores its session. Loom remembers the last open project and reopens it the next time you start it without arguments; **Close Project** clears that memory so the next start is empty again. `loom <dir>` opens a specific folder, and `loom .` opens the current one. File, search and git commands tell you to open a project first when none is open. Switching projects asks you to save unsaved buffers first.
+Loom starts with no project open. The dashboard (the Welcome page in the desktop app) offers **Open Project** (also `:project [path]` and the command palette), which opens the Finder folder picker on macOS (a built-in folder browser elsewhere); **Recent Projects** lists remembered folders and also accepts a typed path. Opening a project switches the file tree, search, git and language servers to that folder and restores its session. Loom remembers the last open project and reopens it the next time you start it without arguments; **Close Project** on the last open session clears that memory so the next start is empty again. `loom <dir>` opens a specific folder, and `loom .` opens the current one. File, search and git commands tell you to open a project first when none is open.
+
+### Sessions
+
+Every project you open gets a session of its own, and any number can be open at once. Each keeps its tabs, splits, unsaved changes, undo, language servers and git state while you work in another, so switching never asks you to save. Registers, macros and what you copied are shared.
+
+**Space Tab**, `:sessions`, `⌘K` or a click on the project's name opens the fuzzy switcher. The previous session comes first, so Space Tab then Enter flips between two. Under the open sessions are **New Session…** and your recent projects; a typed path works too. **Ctrl+X** closes the selected session, which refuses while it has unsaved changes. Close Project does the same for the one on screen and goes to the one before it.
+
+Open sessions are listed again after a restart, and each starts with its saved tabs when you first switch to it, so language servers run only for the ones you have used. The list is `open-sessions` in `~/.local/state/loom`. Crash recovery covers all of them.
+
+Quitting looks at every session: `:q` takes you to the first with unsaved changes, `:q!` never discards changes in a session out of sight, and `:qa!` discards them all. The desktop app's Save All saves in every session.

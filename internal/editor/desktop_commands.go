@@ -192,7 +192,12 @@ func (d *desktop) openFile() {
 	if e.b.path != "" {
 		start = filepath.Dir(e.b.path)
 	}
-	if !d.pickPath(pickFile, start, func(path string) { e.open(path) }) {
+	opened := func(path string) {
+		if e.hub.show(e) {
+			e.open(path)
+		}
+	}
+	if !d.pickPath(pickFile, start, opened) {
 		e.openMenu(&menu{title: "Open File", hidePreview: true, submit: func(path string) { e.open(path) }})
 	}
 }
@@ -217,7 +222,12 @@ func (d *desktop) saveAs() {
 		start = filepath.Dir(b.path)
 	}
 	// The system panel has already asked before replacing a file.
-	if !d.pickPath(pickSave, start, func(path string) { d.writeTo(b, path) }) {
+	saved := func(path string) {
+		if e.hub.show(e) {
+			d.writeTo(b, path)
+		}
+	}
+	if !d.pickPath(pickSave, start, saved) {
 		e.openMenu(&menu{title: "Save As", hidePreview: true, submit: func(path string) {
 			if path != "" && slices.Contains(e.buffers, b) {
 				e.switchBuffer(b)
@@ -302,50 +312,66 @@ func (d *desktop) closeTab(b *buffer) {
 	}
 }
 
-func (d *desktop) unsaved() bool {
-	e := d.m.editor
-	if e.directory != nil && e.directory.doc.b.dirty() {
-		return true
-	}
-	return slices.ContainsFunc(e.buffers, func(b *buffer) bool { return !b.dashboard && b.dirty() })
-}
+func (d *desktop) unsaved() bool { return len(d.m.editor.hub.unsaved()) > 0 }
 
 func (d *desktop) requestQuit() {
-	e := d.m.editor
-	if !d.unsaved() {
-		e.quit = true
+	h := d.m.editor.hub
+	waiting := h.unsaved()
+	if len(waiting) == 0 {
+		h.quitAll(false)
 		return
+	}
+	body := "Some files have changes that haven't been saved."
+	if len(h.live) > 1 {
+		var names []string
+		for _, e := range waiting {
+			names = append(names, e.sessionName())
+		}
+		body = "Unsaved changes in these sessions: " + strings.Join(names, ", ") + "."
 	}
 	d.dialog = &dialog{
 		title: "Save your changes before quitting?",
-		body:  "Some files have changes that haven't been saved.",
+		body:  body,
 		choices: []dialogChoice{
 			{"Save All", func() {
-				if e.directory != nil && e.directory.doc.b.dirty() {
-					e.notify("Apply or discard the directory edits first")
-					return
+				if d.saveEverySession() {
+					h.quitAll(false)
 				}
-				e.menu, e.directory = nil, nil
-				for _, b := range slices.Clone(e.buffers) {
-					if b.dashboard || !b.dirty() {
-						continue
-					}
-					e.switchBuffer(b)
-					if b.path == "" {
-						d.saveAs()
-						return
-					}
-					e.save()
-					if b.dirty() {
-						return // the editor is showing why it could not save
-					}
-				}
-				e.quit = true
 			}},
-			{"Don't Save", func() { e.discardRecovery, e.quit = true, true }},
+			{"Don't Save", func() { h.quitAll(true) }},
 			{"Cancel", nil},
 		},
 	}
+}
+
+// saveEverySession saves in each session as if it were on screen, which is
+// what formatters need. It stops, showing the session, where it can't.
+func (d *desktop) saveEverySession() bool {
+	for _, e := range d.m.editor.hub.unsaved() {
+		if !e.hub.show(e) {
+			return false
+		}
+		if e.directory != nil && e.directory.doc.b.dirty() {
+			e.notify("Apply or discard the directory edits first")
+			return false
+		}
+		e.menu, e.directory = nil, nil
+		for _, b := range slices.Clone(e.buffers) {
+			if b.dashboard || !b.dirty() {
+				continue
+			}
+			e.switchBuffer(b)
+			if b.path == "" {
+				d.saveAs()
+				return false
+			}
+			e.save()
+			if b.dirty() {
+				return false // the editor is showing why it could not save
+			}
+		}
+	}
+	return true
 }
 
 type pickKind int

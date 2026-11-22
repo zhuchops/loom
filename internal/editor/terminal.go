@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 	"unicode"
@@ -26,10 +27,11 @@ func runTerminal(e *editor, explicitFile bool) error {
 		view:   renderer{screen: newTerminalFrame(0, 0)},
 		ctx:    ctx, signals: signals, ticks: ticker.C,
 	}
+	model.attach()
 	e.begin(explicitFile)
 	_, err := tea.NewProgram(model, tea.WithoutSignalHandler()).Run()
 	cancel()
-	e.finish()
+	e.hub.finish()
 	return err
 }
 
@@ -87,6 +89,10 @@ type terminalModel struct {
 	hoverTarget     hoverTarget
 	hoverToken      uint64
 	cancelHover     context.CancelFunc
+
+	waiting    map[*editor]bool // sessions whose events are being waited for
+	switched   bool
+	switchedAt time.Time
 }
 
 type completionReady uint64
@@ -96,10 +102,22 @@ type editorCallback func()
 type diskTick struct{}
 type flashExpired struct{}
 
-// The command only waits for events. All editor mutations run in Update on
+// sessionEvent is work reported by a session, which may be out of sight.
+type sessionEvent struct {
+	e   *editor
+	msg tea.Msg
+}
+
+// attach has the model follow the session that is shown.
+func (m *terminalModel) attach() {
+	m.editor.hub.onShow = func(e *editor) {
+		m.editor, m.switched, m.switchedAt = e, true, time.Now()
+	}
+}
+
+// The commands only wait for events. All editor mutations run in Update on
 // the same goroutine as input handling, including async service callbacks.
-func (m *terminalModel) waitForEditor() tea.Msg {
-	e := m.editor
+func (m *terminalModel) waitForSystem() tea.Msg {
 	select {
 	case <-m.ctx.Done():
 		return nil
@@ -107,18 +125,102 @@ func (m *terminalModel) waitForEditor() tea.Msg {
 		return tea.QuitMsg{}
 	case <-m.ticks:
 		return diskTick{}
-	case token := <-e.completionWake:
-		return completionReady(token)
-	case token := <-e.languageWake:
-		return languageReady(token)
-	case <-e.gitWake:
-		return gitReady{}
-	case fn := <-e.async:
-		return editorCallback(fn)
 	}
 }
 
-func (m *terminalModel) Init() tea.Cmd { return m.waitForEditor }
+func (m *terminalModel) waitForSession(e *editor) tea.Cmd {
+	ctx := m.ctx
+	return func() tea.Msg {
+		var msg tea.Msg
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-e.closed:
+			return nil
+		case token := <-e.completionWake:
+			msg = completionReady(token)
+		case token := <-e.languageWake:
+			msg = languageReady(token)
+		case <-e.gitWake:
+			msg = gitReady{}
+		case fn := <-e.async:
+			msg = editorCallback(fn)
+		}
+		return sessionEvent{e, msg}
+	}
+}
+
+// waitForNewSessions starts listening to sessions that have just started.
+func (m *terminalModel) waitForNewSessions() tea.Cmd {
+	if m.ctx == nil || m.editor.hub == nil {
+		return nil
+	}
+	if m.waiting == nil {
+		m.waiting = map[*editor]bool{}
+	}
+	var cmds []tea.Cmd
+	for _, e := range m.editor.hub.live {
+		if !m.waiting[e] {
+			m.waiting[e] = true
+			cmds = append(cmds, m.waitForSession(e))
+		}
+	}
+	for e := range m.waiting {
+		if !slices.Contains(m.editor.hub.live, e) {
+			delete(m.waiting, e)
+		}
+	}
+	return tea.Batch(cmds...)
+}
+
+// settle finishes a switch once the input that caused it has been handled.
+func (m *terminalModel) settle() tea.Cmd {
+	if !m.switched {
+		return nil
+	}
+	m.switched = false
+	old := &m.view
+	m.view = renderer{screen: old.screen, native: old.native, leftDown: old.leftDown}
+	if m.cancelSignature != nil {
+		m.cancelSignature()
+	}
+	if m.cancelHover != nil {
+		m.cancelHover()
+	}
+	m.signatureToken++
+	m.hoverToken++
+	m.signatureTarget, m.hoverTarget = signatureTarget{}, hoverTarget{}
+	return m.waitForNewSessions()
+}
+
+func (m *terminalModel) Init() tea.Cmd {
+	return tea.Batch(m.waitForSystem, m.waitForNewSessions())
+}
+
+// serve handles what one session reported, shown or not.
+func (m *terminalModel) serve(ev sessionEvent) tea.Cmd {
+	e := ev.e
+	select {
+	case <-e.closed:
+		return nil
+	default:
+	}
+	switch msg := ev.msg.(type) {
+	case completionReady:
+		if uint64(msg) == e.completion.token {
+			e.requestCompletion(1, e.completion.trigger)
+		}
+	case languageReady:
+		if int(msg) == e.languageToken {
+			e.refreshLanguage()
+		}
+	case gitReady:
+		e.refreshGit()
+	case editorCallback:
+		msg()
+	}
+	return m.waitForSession(e)
+}
 
 func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	e := m.editor
@@ -159,11 +261,8 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.dragTicking = false
 		}
-	case completionReady:
-		if uint64(msg) == e.completion.token {
-			e.requestCompletion(1, e.completion.trigger)
-		}
-		next = m.waitForEditor
+	case sessionEvent:
+		next = m.serve(msg)
 	case signatureReady:
 		next = m.requestSignature(uint64(msg))
 	case hoverReady:
@@ -183,23 +282,16 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.token == m.signatureToken && msg.session.ctx.Err() == nil {
 			e.signature = msg.hint
 		}
-	case languageReady:
-		if int(msg) == e.languageToken {
-			e.refreshLanguage()
-		}
-		next = m.waitForEditor
-	case gitReady:
-		e.refreshGit()
-		next = m.waitForEditor
-	case editorCallback:
-		msg()
-		next = m.waitForEditor
 	case diskTick:
 		e.checkDisk()
-		if err := e.saveRecovery(); err != nil {
-			e.notify("Recovery: " + err.Error())
+		if e.hub != nil {
+			e.hub.saveRecovery()
 		}
-		next = m.waitForEditor
+		next = m.waitForSystem
+	}
+	if m.switched {
+		next = tea.Batch(next, m.settle())
+		e, flash = m.editor, m.editor.surroundFlash.until
 	}
 	if e.quit {
 		return m, tea.Quit

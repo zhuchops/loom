@@ -142,6 +142,8 @@ func pickerPlaceholder(m *menu, k pickerKind) string {
 		return "Text to find in this project…"
 	case strings.HasPrefix(m.title, "Open Project"):
 		return "Search, or type a path…"
+	case m.remove != nil:
+		return "Switch to a project, or type a path…"
 	case strings.HasPrefix(m.title, "Go to Line"):
 		return "Line number…"
 	case k.prompt:
@@ -288,6 +290,8 @@ func (d *desktop) paintPicker(e *editor) {
 		d.hints(card.Min.X+u(14), fy, false, "↵", "confirm", "esc", "cancel")
 	case m.details:
 		d.hints(card.Min.X+u(14), fy, false, "↑↓", "navigate", "↵", "details", "esc", "close")
+	case m.remove != nil:
+		d.hints(card.Min.X+u(14), fy, false, "↑↓", "navigate", "↵", "switch", "Ctrl+X", "close session", "esc", "cancel")
 	default:
 		d.hints(card.Min.X+u(14), fy, false, "↑↓", "navigate", "↵", "select", "esc", "close")
 	}
@@ -378,6 +382,20 @@ func (d *desktop) paintPickerList(e *editor, m *menu, k pickerKind, r rect, rowH
 				label += " •"
 			}
 			hit = matchRunes(label, m.input)
+		case m.remove != nil:
+			id, ink := glyphFolderOpen, c.accent
+			parts := strings.Split(hint, sessionSep)
+			switch parts[0] {
+			case "":
+				id = iconNewFolder
+			case "recent":
+				id, ink = glyphFolder, c.faint
+			}
+			d.icon(id, x+u(6), cy, 14, ink)
+			x += u(22)
+			if hint != "" {
+				detail, hint = parts[len(parts)-1], strings.Join(parts[:len(parts)-1], sessionSep)
+			}
 		case m.title == "Switch Branch":
 			d.icon(iconBranch, x+u(6), cy, 13, c.dim)
 			x += u(22)

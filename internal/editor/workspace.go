@@ -21,6 +21,7 @@ func (e *editor) workspaceCommands() {
 	e.add("split-join", "Toggle Split Join", func(e *editor) { e.toggleSplitJoin() })
 	e.add("open-project", "Open Project", func(e *editor) { e.chooseProject() })
 	e.add("recent-projects", "Recent Projects", func(e *editor) { e.projectMenu() })
+	e.add("sessions", "Switch Session", func(e *editor) { e.sessionsMenu("", 0) })
 	e.add("close-project", "Close Project", func(e *editor) { e.closeProject() })
 	e.add("dashboard", "Open Dashboard", func(e *editor) { e.showDashboard() })
 	e.add("explorer-popup", "Open Explorer Popup", func(e *editor) { e.openDirectory("") })
@@ -408,7 +409,7 @@ type savedSession struct {
 	Width           int
 }
 
-func (e *editor) sessionPath() string {
+func stateRoot() string {
 	root := os.Getenv("XDG_STATE_HOME")
 	if root == "" {
 		home, _ := os.UserHomeDir()
@@ -417,7 +418,15 @@ func (e *editor) sessionPath() string {
 	if root == "" || root == ".local/state" {
 		return ""
 	}
-	return filepath.Join(root, "loom", fmt.Sprintf("%x.json", sha256.Sum256([]byte(e.root))))
+	return filepath.Join(root, "loom")
+}
+
+func (e *editor) sessionPath() string {
+	root := stateRoot()
+	if root == "" {
+		return ""
+	}
+	return filepath.Join(root, fmt.Sprintf("%x.json", sha256.Sum256([]byte(e.root))))
 }
 
 func (e *editor) restoreSession(explicit bool) {

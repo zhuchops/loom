@@ -142,6 +142,9 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 	if m.details {
 		v.write(box.x+2, box.y+box.h-1, box.w-4, " Enter Details · Esc Close ", menuStyle)
 	}
+	if m.remove != nil {
+		v.write(box.x+2, box.y+box.h-1, min(box.w-4, 48), " Enter Switch · Ctrl+X Close · Esc Cancel ", menuStyle)
+	}
 	if m.confirmation {
 		v.screen.HideCursor()
 		return

@@ -8,7 +8,7 @@ import (
 
 // Ex commands that have no palette command of their own. Others are shown through their command.
 var exCommands = []struct{ syntax, title string }{
-	{"wq", "Save and Quit"}, {"q!", "Quit Without Saving"}, {"noh", "Clear Search Highlight"},
+	{"wq", "Save and Quit"}, {"q!", "Quit Without Saving"}, {"noh", "Clear Search Highlight"}, {"qa!", "Quit and Discard All Sessions"},
 }
 
 func exAddress(line string) (row int, ok bool) {

@@ -181,21 +181,32 @@ func TestSettingsFollowASymlink(t *testing.T) {
 }
 
 func TestProjectSettingsWin(t *testing.T) {
-	e, _ := configEditor(t, "")
-	project := t.TempDir()
-	os.WriteFile(filepath.Join(project, ".loom.json"), []byte(`{"tab_size": 8, "theme": "nord"}`), 0o644)
-	t.Chdir(project)
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	e.openProject(project)
-	if e.cfg.TabSize != 8 || th.name != "nord" || !e.projectSets("tab_size") {
-		t.Fatalf("project settings not applied: %d %s", e.cfg.TabSize, th.name)
-	}
-	if e.setSetting("tab_size", 2.0) == nil {
-		t.Fatal("changed a setting the project decides")
-	}
-	e.closeProject()
-	if e.cfg.TabSize != 4 || th.name == "nord" || e.projectSets("tab_size") {
-		t.Fatalf("the project's settings outlived it: %d %s", e.cfg.TabSize, th.name)
+	// A project opens in the blank session, or in one of its own beside others.
+	for _, blank := range []bool{true, false} {
+		e, _ := configEditor(t, "")
+		if blank {
+			e.b.text = nil
+			e.b.indexLines()
+			e.b.saved = ""
+			e.enterNoProject()
+		}
+		project := t.TempDir()
+		os.WriteFile(filepath.Join(project, ".loom.json"), []byte(`{"tab_size": 8, "theme": "nord"}`), 0o644)
+		t.Chdir(project)
+		t.Setenv("XDG_STATE_HOME", t.TempDir())
+		e.openProject(project)
+		e = e.hub.current
+		if e.cfg.TabSize != 8 || th.name != "nord" || !e.projectSets("tab_size") {
+			t.Fatalf("blank %v: project settings not applied: %d %s", blank, e.cfg.TabSize, th.name)
+		}
+		if e.setSetting("tab_size", 2.0) == nil {
+			t.Fatal("changed a setting the project decides")
+		}
+		e.closeProject()
+		e = e.hub.current
+		if e.cfg.TabSize != 4 || th.name == "nord" || e.projectSets("tab_size") {
+			t.Fatalf("blank %v: the project's settings outlived it: %d %s", blank, e.cfg.TabSize, th.name)
+		}
 	}
 }
 
