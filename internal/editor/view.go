@@ -48,7 +48,11 @@ type renderer struct {
 	cards                                       []hitBox // framed popups drawn this frame
 	menuFrame                                   hitBox
 	panelFrame, diffFrame, treeFrame            hitBox // framed panels, for graphical front ends
-	tabStart                                    int    // first visible tab while scrolled by hand
+	titles                                      []cardTitle
+	whichItems                                  []whichItem
+	find                                        findInfo
+	dash                                        dashInfo
+	tabStart                                    int // first visible tab while scrolled by hand
 	tabManual                                   bool
 	tabActive                                   *buffer
 	previews                                    []previewBox
@@ -75,6 +79,7 @@ func (v *renderer) draw(e *editor) {
 	v.treeBox, v.menuBox, v.completeBox, v.directoryBox = hitBox{}, hitBox{}, hitBox{}, hitBox{}
 	v.cards, v.menuFrame = v.cards[:0], hitBox{}
 	v.panelFrame, v.diffFrame, v.treeFrame = hitBox{}, hitBox{}, hitBox{}
+	v.titles, v.whichItems, v.find, v.dash = v.titles[:0], v.whichItems[:0], findInfo{}, dashInfo{}
 	v.previewBox = hitBox{}
 	v.tabs = v.tabs[:0]
 	v.panes = v.panes[:0]
@@ -538,4 +543,42 @@ func styleAt(tokens []highlight, i *int, offset int) (cellStyle, bool) {
 		return tokens[*i].style, true
 	}
 	return baseStyle, false
+}
+
+// cardTitle is the title of a framed popup.
+type cardTitle struct {
+	box  hitBox
+	text string
+}
+
+// whichItem is one key and its command in the key hint popup.
+type whichItem struct {
+	x, y, keyWidth int
+	key, title     string
+}
+
+// findInfo describes the find bar so a graphical front end can draw it.
+type findInfo struct {
+	on, replace bool
+	box         hitBox
+	fields      []findField
+	toggles     []findToggle
+	count       string
+	countTone   string // "", "muted", "red"
+	countX      int
+	arrows      []findToggle
+	buttons     []findToggle
+	chevron     hitBox
+}
+
+type findField struct {
+	x, y, w           int
+	text, placeholder string
+	active            bool
+}
+
+type findToggle struct {
+	x, y  int
+	label string
+	on    bool
 }

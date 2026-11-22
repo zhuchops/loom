@@ -38,6 +38,7 @@ func (v *renderer) drawFindBar(e *editor) {
 	}
 	box := hitBox{pane.x + pane.w - w - 1, pane.y, w, h, 0}
 	v.frame(box, title)
+	v.find = findInfo{on: true, replace: bar.showReplace, box: box}
 
 	res := e.matches(e.b)
 	inner := box.w - 2
@@ -56,10 +57,12 @@ func (v *renderer) drawFindBar(e *editor) {
 	if bar.showReplace {
 		chevron = "▾"
 	}
+	v.find.chevron = hitBox{x0, y1, 3, 1, 0}
 	v.write(x0, y1, 2, chevron, menuStyle.Foreground(th.muted))
 	hit(x0, y1, 3, "toggle-replace")
 
 	field := func(x, y int, text, placeholder string, active bool, action string) {
+		v.find.fields = append(v.find.fields, findField{x, y, fieldW, text, placeholder, active})
 		style := baseStyle.Background(th.panel)
 		v.screen.FillArea(x, y, fieldW, 1, ' ', style)
 		shown := tailToWidth(text, fieldW-2)
@@ -79,6 +82,7 @@ func (v *renderer) drawFindBar(e *editor) {
 
 	// Toggles: match case, whole word, regular expression.
 	toggle := func(x int, label string, on bool, action string) {
+		v.find.toggles = append(v.find.toggles, findToggle{x, y1, label, on})
 		style := menuStyle.Foreground(th.muted)
 		if on {
 			style = menuStyle.Background(th.active).Foreground(th.accent).Bold(true)
@@ -108,12 +112,17 @@ func (v *renderer) drawFindBar(e *editor) {
 			}
 			count = fmt.Sprintf("%d of %d", cur+1, len(res.spans))
 		}
+		v.find.count, v.find.countX = count, cx+max(0, countW-cellWidth(count)-1)
+		if res.err != nil || len(res.spans) == 0 && bar.find != "" {
+			v.find.countTone = "red"
+		}
 		v.write(cx+max(0, countW-cellWidth(count)-1), y1, countW, count, style)
 	}
 
 	// Previous, next and close.
 	ax := cx + countW
 	arrow := func(x int, glyph, action string) {
+		v.find.arrows = append(v.find.arrows, findToggle{x, y1, glyph, false})
 		v.write(x, y1, 3, " "+glyph+" ", menuStyle)
 		hit(x, y1, 3, action)
 	}
@@ -125,6 +134,7 @@ func (v *renderer) drawFindBar(e *editor) {
 		field(fx, y2, bar.replace, "Replace", bar.field == 1, "focus-replace")
 		button := func(x int, label, action string) int {
 			style := menuStyle.Foreground(th.accent)
+			v.find.buttons = append(v.find.buttons, findToggle{x, y2, label, false})
 			v.write(x, y2, cellWidth(label), label, style)
 			hit(x, y2, cellWidth(label), action)
 			return cellWidth(label)

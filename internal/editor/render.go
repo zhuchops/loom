@@ -27,6 +27,7 @@ func centerBox(w, h, width, height int) hitBox {
 
 func (v *renderer) frame(box hitBox, title string) {
 	v.cards = append(v.cards, box)
+	v.titles = append(v.titles, cardTitle{box, title})
 	v.screen.FillArea(box.x, box.y, box.w, box.h, ' ', menuStyle)
 	edge := menuStyle.Foreground(th.accent)
 	v.screen.FillArea(box.x, box.y, box.w, 1, '─', edge)
@@ -253,6 +254,7 @@ func (v *renderer) drawWhichKey(e *editor, w, h int) {
 	for i, en := range entries[:shown] {
 		x := box.x + 2 + (i/rows)*(cell+gap)
 		y := box.y + 1 + i%rows
+		v.whichItems = append(v.whichItems, whichItem{x, y, keyWidth, en.key, en.title})
 		v.write(x, y, keyWidth, en.key, keyStyle)
 		v.write(x+keyWidth+3, y, titleWidth, en.title, menuStyle)
 	}

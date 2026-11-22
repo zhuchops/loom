@@ -535,8 +535,17 @@ func (d *desktop) paint(gtx layout.Context, size image.Point) {
 	}
 	// A hairline above the status bar.
 	d.fill(gtx, image.Rect(0, d.height-d.bottom, size.X, d.height-d.bottom+1), d.color(th.border, th.border))
+	d.paintDashboard(gtx, e)
+	d.paintTitles(gtx)
 	d.paintMenu(gtx, e)
 	d.paintCompletion(gtx, e)
+	if v := &d.m.view; e.notificationDetail != nil && len(v.cards) > 0 {
+		d.paintProse(gtx, f, v.cards[len(v.cards)-1])
+	} else if v.diagnosticBox.w > 0 {
+		d.paintProse(gtx, f, v.diagnosticBox)
+	}
+	d.paintWhichKey(gtx, e)
+	d.paintFindBar(gtx, e)
 	d.paintTreePopup(gtx, e)
 	d.paintDirectoryTitle(gtx, e)
 	d.paintSourceControl(gtx, e)
@@ -622,6 +631,9 @@ func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
 	card := d.color(th.menu, th.bg)
 	block := d.columnRect(x0, x1, inputRow, max(list.y+list.h, inputRow+1))
 	d.fill(gtx, block, card)
+	// The input sits on its own darker band, separated from the list by a rule.
+	inputBand := d.columnRect(x0, x1, inputRow, inputRow+1)
+	d.fill(gtx, inputBand, blend(card, d.color(th.bg, th.bg), 0.5))
 	muted, fg := d.color(th.muted, th.fg), d.color(th.fg, th.fg)
 	accent := d.color(th.accent, th.fg)
 	px0, px1 := block.Min.X, block.Max.X
@@ -657,7 +669,7 @@ func (d *desktop) paintMenu(gtx layout.Context, e *editor) {
 	}
 	d.chip(gtx, px1-d.dp(14)-d.uiWidth(gtx, "esc", 11, false)-2*d.dp(6), cy, "esc", muted, blend(card, d.color(th.fg, th.fg), 0.08))
 	rule := d.rowY(inputRow, d.rows) + d.cellH
-	d.fill(gtx, image.Rect(px0, rule-1, px1, rule), d.color(th.border, th.border))
+	d.fill(gtx, image.Rect(px0, rule-max(1, d.dp(1)), px1, rule), blend(card, d.color(th.fg, th.fg), 0.22))
 	if len(m.matches) == 0 && m.empty != "" {
 		d.ui(gtx, px0+d.dp(16), d.rowY(list.y, d.rows)+d.cellH/2, m.empty, muted, 13, false)
 	}

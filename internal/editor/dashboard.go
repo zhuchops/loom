@@ -15,6 +15,17 @@ var dashboardActions = []struct {
 	{"Command Palette", "palette", "\uf120"},
 }
 
+// dashInfo is what the dashboard shows, kept so a graphical front end can
+// draw it in its own style.
+type dashInfo struct {
+	box, list       hitBox
+	header          int
+	items           []dashItem
+	selected        int
+	focused, logo   bool
+	project, branch string
+}
+
 // dashItem is one selectable row: a command, or a recent file to open.
 type dashItem struct {
 	label, hint, command, path string
@@ -89,9 +100,9 @@ func (e *editor) dashboardInput(key string) bool {
 	items := e.dashboardItems()
 	e.dashboardSelection = min(e.dashboardSelection, len(items)-1)
 	switch key {
-	case "j", "down", "ctrl+n":
+	case "j", "down":
 		e.dashboardSelection = min(len(items)-1, e.dashboardSelection+1)
-	case "k", "up", "ctrl+p":
+	case "k", "up":
 		e.dashboardSelection = max(0, e.dashboardSelection-1)
 	case "enter":
 		if item := items[e.dashboardSelection]; item.path != "" {
@@ -129,6 +140,8 @@ func (v *renderer) drawDashboard(e *editor, box hitBox, focused bool) {
 	header := dashboardHeader(box.h, len(items))
 	top := list.y - header
 	project := filepath.Base(e.root)
+	v.dash = dashInfo{box: box, list: list, header: header, items: items, selected: e.dashboardSelection, focused: focused,
+		project: filepath.Base(e.root), branch: e.git.branch, logo: header > 4}
 	if e.git.branch != "" {
 		project += "  \U000f062c " + e.git.branch
 	}
