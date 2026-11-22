@@ -5,6 +5,7 @@ package editor
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -430,12 +431,20 @@ func (d *desktop) dragTab(e *editor, b *buffer) {
 	}
 }
 
+// pathFill is the band behind the path bar, tinted so it stands apart from
+// both the tabs and the code.
+func (d *desktop) pathFill() color.NRGBA { return blend(d.c.bg, d.c.accent, 0.12) }
+
+// paintCrumbs draws the path of the file being edited.
 func (d *desktop) paintCrumbs(e *editor) {
 	r, u, c := d.geo.crumbs, d.u, &d.c
 	if r.Empty() {
 		return
 	}
-	d.fill(r, c.bg)
+	band := d.pathFill()
+	d.fill(r, band)
+	d.fill(image.Rect(r.Min.X, r.Max.Y-d.hairline(), r.Max.X, r.Max.Y), blend(band, c.accent, 0.4))
+
 	path := shortPath(e.b.path)
 	if !e.noProject && within(e.root, e.b.path) {
 		if rel, err := filepath.Rel(e.root, e.b.path); err == nil {
@@ -443,31 +452,41 @@ func (d *desktop) paintCrumbs(e *editor) {
 		}
 	}
 	parts := strings.Split(strings.Trim(filepath.ToSlash(path), "/"), "/")
-	if len(parts) > 5 {
-		parts = append([]string{"…"}, parts[len(parts)-4:]...)
+	dirs, name := parts[:len(parts)-1], parts[len(parts)-1]
+
+	x, cy, right := r.Min.X+u(14), (r.Min.Y+r.Max.Y)/2, r.Max.X-u(14)
+	mark := u(24) // the file's icon, ahead of its name
+	dirs = d.fitFolders(dirs, right-x-mark-d.width(name, textPathFile))
+	folder, chevron := readable(c.dim, band, 4.5), readable(c.dim, band, 3)
+	for _, dir := range dirs {
+		x += d.text(x, cy, dir, textPath, folder)
+		d.icon(iconRight, x+u(11), cy, 11, chevron)
+		x += u(22)
 	}
-	symbol := ""
-	if e.cfg.StickyScroll {
-		symbol = e.breadcrumbs(e.b)
-	}
-	if symbol != "" {
-		parts = append(parts, symbol)
-	}
-	x, cy := r.Min.X+u(14), (r.Min.Y+r.Max.Y)/2
-	for i, part := range parts {
-		if i > 0 {
-			d.icon(iconRight, x+u(6), cy, 9, c.faint)
-			x += u(15)
+	d.fileIcon(x+u(9), cy, e.b.path)
+	x += mark
+	d.text(x, cy, d.fit(name, right-x, textPathFile), textPathFile, readable(c.text, band, 4.5))
+}
+
+// fitFolders drops folders from the front until they fit in w, so the file's
+// name is the last thing to be cut.
+func (d *desktop) fitFolders(dirs []string, w int) []string {
+	used := func(list []string) int {
+		n := 0
+		for _, s := range list {
+			n += d.width(s, textPath) + d.u(22)
 		}
-		col := c.dim
-		if i == len(parts)-1 {
-			col = c.text
-		}
-		x += d.text(x, cy, d.fit(part, r.Max.X-x-u(10), textSmall), textSmall, col) + u(2)
-		if x > r.Max.X-u(30) {
-			break
+		return n
+	}
+	if used(dirs) <= w {
+		return dirs
+	}
+	for i := 1; i <= len(dirs); i++ {
+		if short := append([]string{"…"}, dirs[i:]...); used(short) <= w {
+			return short
 		}
 	}
+	return nil
 }
 
 func (d *desktop) paintStatus(e *editor) {

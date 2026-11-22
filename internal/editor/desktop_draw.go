@@ -42,6 +42,9 @@ var (
 	textInput   = textStyle{size: 15.5}
 	textHero    = textStyle{size: 30, strong: true}
 	textCode    = textStyle{size: 12, mono: true}
+
+	textPath     = textStyle{size: 14.5}
+	textPathFile = textStyle{size: 14.5, strong: true}
 )
 
 type measured struct {

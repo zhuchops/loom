@@ -177,6 +177,9 @@ func (s *settingsView) rows(e *editor) []settingsRow {
 		for _, page := range settingPages {
 			first := true
 			for _, set := range settingList {
+				if set.terminal {
+					continue
+				}
 				if set.page == page.id && matches(page.title, set.group, set.title, set.help, set.key, strings.Join(set.choices, " ")) {
 					if first {
 						heading(page.title)
@@ -241,6 +244,9 @@ func (s *settingsView) rows(e *editor) []settingsRow {
 			rows = append(rows, settingsRow{kind: rowPreview})
 		}
 		for _, set := range settingList {
+			if set.terminal {
+				continue
+			}
 			if set.page != page {
 				continue
 			}

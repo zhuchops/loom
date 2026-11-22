@@ -227,6 +227,9 @@ func TestDesktopScreens(t *testing.T) {
 			o.CursorNormal, o.ItalicComments = "underline", true
 		})},
 		{name: "zen", file: src, do: run("zen")},
+		{name: "path-everforest", file: "internal/tasks/handlers.go", theme: "everforest", do: keys("G k k")},
+		{name: "path-light", file: "internal/tasks/handlers.go", theme: "solarized-light", do: keys("G k k")},
+		{name: "path-narrow", file: "internal/tasks/handlers.go", w: 640, h: 440, do: changeOptions(func(o *options) { o.UIFontSize = 18 })},
 		{name: "replace", file: src, do: func(s *screen) { run("replace")(s); press(s.e, "f m t") }},
 		{name: "results", file: src, do: func(s *screen) { run("project-search")(s); press(s.e, "f m t enter") }},
 		{name: "markdown", file: "README.md", do: run("markdown-preview")},
@@ -615,5 +618,37 @@ func TestDesktopSettings(t *testing.T) {
 	d.zoom(1)
 	if got, err := readConfig(e.userConfigPath(), false); err != nil || got.FontSize != 14.5 {
 		t.Fatalf("zoom wasn't saved: %v (%v)", got.FontSize, err)
+	}
+}
+
+func TestPathBarKeepsTheFileName(t *testing.T) {
+	s := openScreen(t)
+	s.frame()
+	s.d.gtx.Ops = &s.d.scratch
+	dirs := []string{"internal", "users", "handlers", "v2"}
+	if got := s.d.fitFolders(dirs, 1<<20); !slices.Equal(got, dirs) {
+		t.Fatalf("with room: %v", got)
+	}
+	room := s.d.width("…", textPath) + s.d.width("v2", textPath) + 2*s.d.u(22)
+	if got := s.d.fitFolders(dirs, room); !slices.Equal(got, []string{"…", "v2"}) {
+		t.Fatalf("short of room: %v", got)
+	}
+	if got := s.d.fitFolders(dirs, 0); len(got) != 0 {
+		t.Fatalf("no room: %v", got)
+	}
+}
+
+func TestPathBarTextReadsInEveryTheme(t *testing.T) {
+	t.Cleanup(func() { applyTheme(baselineTheme()) })
+	for _, th := range theme.All {
+		applyTheme(th)
+		d := &desktop{c: deriveColors()}
+		band := d.pathFill()
+		if band == d.c.bg {
+			t.Errorf("%s: the path bar doesn't stand out", th.Name)
+		}
+		if got := contrast(readable(d.c.dim, band, 4.5), band); got < 4.4 {
+			t.Errorf("%s: folders at %.2f", th.Name, got)
+		}
 	}
 }

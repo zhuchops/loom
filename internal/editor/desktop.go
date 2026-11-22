@@ -349,7 +349,7 @@ func (d *desktop) arrange(e *editor, size image.Point) geometry {
 		g.tabs = image.Rect(left, y, w, y+d.u(36))
 		y = g.tabs.Max.Y
 		if !e.b.dashboard && e.b.path != "" && e.cfg.PathBar {
-			g.crumbs = image.Rect(left, y, w, y+d.u(26))
+			g.crumbs = image.Rect(left, y, w, y+d.u(36))
 			y = g.crumbs.Max.Y
 		}
 	}

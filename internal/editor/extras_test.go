@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,24 +99,42 @@ func TestProjectReplace(t *testing.T) {
 	}
 }
 
-func TestStickyHeaderDraws(t *testing.T) {
-	text := "func Big() {\n" + strings.Repeat("\tx := 1\n", 80) + "}\n"
-	e := testEditor(t, "vim", text)
-	v := &renderer{screen: newTerminalFrame(80, 24)}
-	e.b.cursor = e.b.lines[40]
-	v.draw(e)
-	if len(v.sticky) == 0 || v.sticky[0].rows[0] != 0 {
-		t.Fatalf("expected the function line pinned: %+v", v.sticky)
+// Nothing may cover the code: every row of a pane shows its own line.
+func TestNothingIsPinnedOverTheCode(t *testing.T) {
+	var src strings.Builder
+	src.WriteString("func Big() {\n\tif ok {\n\t\treturn run(func() {\n")
+	for i := range 80 {
+		fmt.Fprintf(&src, "\t\t\tstep%02d()\n", i)
 	}
-	line := ""
-	sb := v.sticky[0]
-	for x := sb.x; x < sb.x+30; x++ {
-		c, _, _ := v.screen.Get(x, sb.y)
-		line += c
+	src.WriteString("\t\t})\n\t}\n}\n")
+	for _, scrolloff := range []int{0, 1, 5} {
+		e := testEditor(t, "vim", src.String())
+		e.cfg.Scrolloff = scrolloff
+		v := &renderer{screen: newTerminalFrame(80, 24)}
+		check := func(row int) {
+			t.Helper()
+			e.b.cursor = e.b.lines[row]
+			v.draw(e)
+			for _, pane := range v.panes {
+				for i := range 3 {
+					line := pane.b.top + i
+					want := strings.TrimSpace(string(pane.b.text[pane.b.lines[line]:pane.b.lineEnd(line)]))
+					var got strings.Builder
+					for x := pane.x + pane.gutter; x < pane.x+pane.w; x++ {
+						c, _, _ := v.screen.Get(x, pane.y+i)
+						got.WriteString(c)
+					}
+					if !strings.Contains(got.String(), want) {
+						t.Fatalf("scrolloff %d, cursor %d: row %d shows %q, want %q", scrolloff, row, i, got.String(), want)
+					}
+				}
+			}
+		}
+		for row := range 83 { // down the file, then back up
+			check(row)
+		}
+		for row := 82; row >= 0; row-- {
+			check(row)
+		}
 	}
-	if !strings.Contains(line, "func Big") {
-		t.Fatalf("header not drawn: %q", line)
-	}
-	press(e, "G")
-	v.draw(e)
 }

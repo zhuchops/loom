@@ -90,7 +90,7 @@ The desktop app has a settings window. Type to search all of it, move with the a
 | Appearance | Default color theme (`theme`), animations (`animations`) |
 | Fonts, code | `font_family`, `font_size`, `font_weight`, `font_bold_weight`, `line_height`, `letter_spacing`, `font_ligatures`, `italic_comments`, `font_fallback` |
 | Fonts, interface | `ui_font_family`, `ui_font_size` (scales the whole interface), `ui_font_weight` |
-| Editor | `line_numbers`, `relative_numbers`, `highlight_line`, `indent_guides`, `tab_size`, `indent_style`, `scrolloff`, `sticky_scroll`, `smooth_scroll`, `auto_complete`, `auto_pairs`, `hover_docs` |
+| Editor | `line_numbers`, `relative_numbers`, `highlight_line`, `indent_guides`, `tab_size`, `indent_style`, `scrolloff`, `sticky_scroll` (terminal), `smooth_scroll`, `auto_complete`, `auto_pairs`, `hover_docs` |
 | Cursor | `cursor_normal`, `cursor_insert` (`block`, `bar` or `underline`), `cursor_blink`, `cursor_glide` |
 | Interface | `path_bar`, `status_bar`, `scrollbar` |
 | Files | `format_on_save`, `organize_imports`, `reopen_project`, `restore_session` |
@@ -140,9 +140,9 @@ Alt (Option) combinations are now recognised, so you can bind `alt+up`, `alt+x` 
 
 `Ctrl+V` selects a rectangle. `y`, `d`, `x` and `c` act on it; `I` and `A` insert at its left or right edge and repeat what you type on every line when you press Esc. Pasting a block pastes its lines as ordinary text.
 
-### Sticky scroll and breadcrumbs
+### Breadcrumbs
 
-When you scroll into the middle of a function or block, the lines that open it (up to three) stay pinned to the top of the pane; click one to jump there. The status line shows the chain of enclosing scopes at the cursor, like `Server › Handle › if ok`. Scopes come from indentation, so it works in every language. Turn it off with `"sticky_scroll": false` or in Settings. While it is on the cursor keeps at least three lines clear of the top edge.
+In the terminal the status line shows the chain of scopes around the cursor, like `Server › Handle › if ok`. Scopes come from indentation, so it works in every language. Turn it off with `"sticky_scroll": false` or in Settings (the key keeps its old name so existing configs still load). The desktop app shows only the file's path, in a tinted bar under the tabs. Nothing is pinned over the code in either.
 
 ### Recent files, jump list, project replace
 

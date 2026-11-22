@@ -97,7 +97,7 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 		left += v.drawProblems(e, b, left, h-1, rightX-left) + 2
 	}
 	crumbs := ""
-	if c := e.breadcrumbs(b); c != "" && e.cfg.StickyScroll {
+	if c := e.breadcrumbs(b); c != "" && e.cfg.Breadcrumbs {
 		crumbs = c
 	}
 	if crumbs != "" && w >= 60 {
