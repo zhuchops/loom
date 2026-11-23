@@ -32,6 +32,106 @@ type menu struct {
 	previewIndex, previewScroll int
 	previewReady                bool
 	preview                     itemPreview
+	// caretBack is how many runes of input follow the caret. Counting from
+	// the end keeps the caret there when code sets input directly.
+	caretBack int
+}
+
+// caret is the rune index of the caret in the input.
+func (m *menu) caret() int {
+	n := utf8.RuneCountInString(m.input)
+	m.caretBack = max(0, min(m.caretBack, n))
+	return n - m.caretBack
+}
+
+// inputParts splits the input at the caret.
+func (m *menu) inputParts() (before, after string) {
+	r := []rune(m.input)
+	at := m.caret()
+	return string(r[:at]), string(r[at:])
+}
+
+// wordBefore and wordAfter are where Alt+Left and Alt+Right put the caret.
+func wordBefore(r []rune, at int) int {
+	for at > 0 && !isWordRune(r[at-1]) {
+		at--
+	}
+	for at > 0 && isWordRune(r[at-1]) {
+		at--
+	}
+	return at
+}
+
+func wordAfter(r []rune, at int) int {
+	for at < len(r) && !isWordRune(r[at]) {
+		at++
+	}
+	for at < len(r) && isWordRune(r[at]) {
+		at++
+	}
+	return at
+}
+
+// moveCaret puts the caret at rune index at.
+func (m *menu) moveCaret(at int) {
+	n := utf8.RuneCountInString(m.input)
+	m.caretBack = n - max(0, min(at, n))
+}
+
+// caretInput edits the input around the caret. It reports whether the key
+// was one of its own.
+func (m *menu) caretInput(in keyInput) bool {
+	r := []rune(m.input)
+	at := m.caret()
+	switch in.key {
+	case "left", "ctrl+b":
+		m.moveCaret(at - 1)
+	case "right", "ctrl+f":
+		m.moveCaret(at + 1)
+	case "home", "ctrl+a":
+		m.moveCaret(0)
+	case "end", "ctrl+e":
+		m.moveCaret(len(r))
+	case "alt+left", "ctrl+left", "alt+b":
+		m.moveCaret(wordBefore(r, at))
+	case "alt+right", "ctrl+right", "alt+f":
+		m.moveCaret(wordAfter(r, at))
+	case "backspace":
+		if at > 0 {
+			m.input = string(r[:at-1]) + string(r[at:])
+			m.filter()
+		}
+	case "alt+backspace", "ctrl+w":
+		if from := wordBefore(r, at); from < at {
+			m.input = string(r[:from]) + string(r[at:])
+			m.filter()
+		}
+	case "delete", "ctrl+d":
+		if at < len(r) {
+			m.input = string(r[:at]) + string(r[at+1:])
+			m.caretBack--
+			m.filter()
+		}
+	case "ctrl+u":
+		m.input = string(r[at:]) // clears what is before the caret
+		m.filter()
+	case "ctrl+k":
+		m.input, m.caretBack = string(r[:at]), 0
+		m.filter()
+	default:
+		text := in.paste
+		if text == "" {
+			if ch, ok := inputRune(in.key); ok {
+				text = string(ch)
+			}
+		}
+		if text == "" {
+			return false
+		}
+		m.input = string(r[:at]) + strings.ReplaceAll(text, "\n", " ") + string(r[at:])
+		m.filter()
+	}
+	return true
 }
 
 func (e *editor) openMenu(m *menu) {
@@ -149,25 +249,8 @@ func (e *editor) menuInput(in keyInput) {
 		if m.remove != nil {
 			e.removeSelected()
 		}
-	case "ctrl+u":
-		m.input = ""
-		m.filter()
-	case "backspace":
-		if m.input != "" {
-			_, size := utf8.DecodeLastRuneInString(m.input)
-			m.input = m.input[:len(m.input)-size]
-			m.filter()
-		}
 	default:
-		if in.paste != "" {
-			m.input += strings.ReplaceAll(in.paste, "\n", " ")
-			m.filter()
-			return
-		}
-		if r, ok := inputRune(in.key); ok {
-			m.input += string(r)
-			m.filter()
-		}
+		m.caretInput(in)
 	}
 }
 

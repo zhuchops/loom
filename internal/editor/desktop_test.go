@@ -167,6 +167,12 @@ func TestDesktopScreens(t *testing.T) {
 		{name: "branch", file: src, do: run("git-branch")},
 		{name: "whichkey", file: src, do: keys("space")},
 		{name: "ex", file: src, do: run("ex")},
+		{name: "rename-caret", file: src, do: func(s *screen) {
+			s.e.openMenu(&menu{title: "Rename Symbol", input: "handleIncomingWebhookRequestForBillingAccount", exact: func(string) bool { return true }, submit: func(string) {}})
+			for range 22 {
+				s.e.handle(keyInput{key: "left"})
+			}
+		}},
 		{name: "explorer", file: src, do: run("explorer")},
 		{name: "directory", file: src, do: run("explorer-popup")},
 		{name: "find", file: src, do: keys("/ f m t")},
