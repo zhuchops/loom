@@ -748,3 +748,12 @@ func TestDesktopSessions(t *testing.T) {
 		t.Fatalf("billing-api wasn't written: %q (%v)", raw, err)
 	}
 }
+
+func TestElixirFileMarks(t *testing.T) {
+	d := &desktop{}
+	for _, path := range []string{"a.ex", "test/a_test.exs", "mix.exs", "page.html.heex"} {
+		if mark, _ := d.fileMark(path); mark == "" {
+			t.Errorf("%s has no icon", path)
+		}
+	}
+}

@@ -126,6 +126,8 @@ func (d *desktop) fileMark(path string) (string, color.NRGBA) {
 	switch strings.ToLower(filepath.Base(path)) {
 	case "makefile", "dockerfile":
 		return "#", c.orange
+	case "mix.exs", "mix.lock":
+		return "EX", c.purple
 	case "go.mod", "go.sum", "go.work":
 		return "GO", c.purple
 	case ".gitignore", ".gitattributes", ".gitmodules":
@@ -170,6 +172,10 @@ func (d *desktop) fileMark(path string) (string, color.NRGBA) {
 		return "LU", c.blue
 	case ".swift":
 		return "SW", c.orange
+	case ".ex", ".exs":
+		return "EX", c.purple
+	case ".heex", ".eex", ".leex":
+		return "<>", c.purple
 	}
 	return "", c.dim
 }
