@@ -56,6 +56,16 @@ loom-desktop
 
 If the build stops on a missing header, install the development package that provides it and run the command again.
 
+### The web view window (in progress)
+
+A second desktop front end, built on [Wails](https://wails.io), is being written to replace the Gio window. It draws the interface in the system web view (WebKit on macOS and Linux), which brings real translucency and blurred "glass" popups. It is not finished yet: so far it shows the text panes with their colors and cursor and takes keys, typing (including input methods), the mouse and the wheel. Build it with:
+
+```sh
+go build -tags wails,production -o loom-wails ./cmd/loom-wails
+```
+
+It needs cgo; on Linux also the WebKitGTK development files (`webkit2gtk-4.1` on current distributions, built with the extra tag `webkit2_41`) and GTK 3. For checking the front end without a keyboard, `LOOM_DEMO=script` names a file of lines such as `keys space f`, `type text`, `run palette` and `sleep 300` that the window plays once it is up.
+
 To build from a source checkout:
 
 ```sh
