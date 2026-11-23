@@ -757,3 +757,65 @@ func TestElixirFileMarks(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopOpensWhatALaterLaunchSends(t *testing.T) {
+	state, err := os.MkdirTemp("/tmp", "ls") // short: a socket path has a length limit
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(state) })
+	t.Setenv("XDG_STATE_HOME", state)
+	s := openScreen(t)
+	d, first := s.d, s.e
+	withSessions("")(s)
+	h := first.hub
+	var billing, design *editor
+	for _, e := range h.live {
+		switch filepath.Base(e.root) {
+		case "billing-api":
+			billing = e
+		case "design-system":
+			design = e
+		}
+	}
+	// A file goes to the project that holds it, even when another is shown.
+	h.show(design)
+	notes := filepath.Join(billing.root, "NOTES.txt")
+	if err := os.WriteFile(notes, []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	d.openRequested(openRequest{Cwd: design.root, Paths: []string{"../billing-api/NOTES.txt"}})
+	if h.current != billing || h.current.b.path != resolveOpenPath("/", notes) {
+		t.Fatalf("shown %s, buffer %q", h.current.root, h.current.b.path)
+	}
+	// A folder opens as a session, or shows the one it already has.
+	n := len(h.live)
+	d.openRequested(openRequest{Cwd: "/", Paths: []string{design.root}})
+	if h.current != design || len(h.live) != n {
+		t.Fatalf("an open folder was not shown: %s, %d sessions", h.current.root, len(h.live))
+	}
+	fresh := filepath.Join(t.TempDir(), "fresh")
+	if err := os.MkdirAll(fresh, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	d.openRequested(openRequest{Cwd: "/", Paths: []string{fresh}})
+	if len(h.live) != n+1 || filepath.Base(h.current.root) != "fresh" {
+		t.Fatalf("a new folder did not become a session: %d sessions", len(h.live))
+	}
+
+	// The socket carries a request from a second launch to the first.
+	got := make(chan openRequest, 1)
+	listenForRequests(func(r openRequest) { got <- r })
+	if !forwardToRunning([]string{"a.txt", "dir"}) {
+		t.Fatal("a running Loom did not take the launch")
+	}
+	if r := <-got; len(r.Paths) != 2 || r.Cwd == "" {
+		t.Fatalf("request = %+v", r)
+	}
+	// With -new a process neither sends nor listens.
+	newWindow = true
+	defer func() { newWindow = false }()
+	if info, err := os.Stat(ipcSocket()); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("socket: %v %v", info, err)
+	}
+}

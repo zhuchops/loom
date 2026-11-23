@@ -238,6 +238,19 @@ Interface text uses Avenir Next and code Menlo until you pick others in Settings
 
 The app is signed ad hoc, not notarized. It has only been used on macOS. The Windows build does not compile yet (`recovery.go` uses a Unix call), and the Linux desktop build is untested.
 
+#### Opening files and projects from a terminal
+
+The desktop app is a single window. Starting it again with a path hands the path to the window that is already open and exits at once:
+
+```sh
+loom-desktop ./notes.txt       # a file opens in the project it belongs to, or in the shown one
+loom-desktop ~/code/api        # a folder opens as a session, or shows the one it already has
+loom-desktop                   # just brings the open window forward
+loom-desktop -new ./notes.txt  # a window of its own (-n works too)
+```
+
+A file goes to the open session whose folder holds it (the deepest one), and the window comes to the front. A folder that is not open yet becomes a new session. If no window is open, the first launch opens one, and later launches find it. Relative paths and `~` count from where you typed the command. The hand-over uses a socket named `desktop.sock` in Loom's state folder (`~/.local/state/loom`), readable only by you; a window started with `-new` does not take it. With `-config` a launch always opens its own window. On macOS the binary inside the bundle is `Loom.app/Contents/MacOS/loom`, so a shell alias or a symlink to it gives a command: `ln -s /Applications/Loom.app/Contents/MacOS/loom ~/.local/bin/loom-app`. `open -a Loom file` only brings the app forward; it does not pass the file.
+
 ### Touchpad scrolling
 
 A swipe scrolls along one axis only. The first direction of a swipe wins, and the sideways drift of your finger is ignored until the wheel pauses for about 150 ms. This applies everywhere that scrolls: editors, the explorer, pickers and previews.

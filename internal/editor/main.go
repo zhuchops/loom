@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.27.1"
+const version = "0.28.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
@@ -33,6 +33,10 @@ func prepare(tolerant bool) (e *editor, explicit bool, done bool, err error) {
 	path := flag.String("config", "", "path to a JSON config")
 	showVersion := flag.Bool("version", false, "print the editor version")
 	dump := flag.Bool("dump-config", false, "print the default JSON config")
+	if tolerant {
+		flag.BoolVar(&newWindow, "new", false, "open in a new window instead of an already open one")
+		flag.BoolVar(&newWindow, "n", false, "same as -new")
+	}
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Usage: loom [flags] [file or directory]")
 		flag.PrintDefaults()
@@ -44,6 +48,9 @@ func prepare(tolerant bool) (e *editor, explicit bool, done bool, err error) {
 	}
 	if *dump {
 		return nil, false, true, printConfig()
+	}
+	if tolerant && !newWindow && *path == "" && forwardToRunning(flag.Args()) {
+		return nil, false, true, nil // an open window took it
 	}
 	if flag.NArg() > 1 {
 		flag.Usage()

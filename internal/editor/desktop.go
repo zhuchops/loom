@@ -130,6 +130,7 @@ func runDesktop(e *editor, explicit bool) error {
 	w.Option(options...)
 	d := newDesktop(w, e, ctx, ticker.C)
 	d.platformStart()
+	d.serveLaunches()
 	e.begin(explicit)
 	defer e.hub.finish()
 	d.askAboutConfig()
