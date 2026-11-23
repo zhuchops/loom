@@ -49,6 +49,7 @@ func (b *Bridge) chrome() map[string]any {
 	if b.dialog != nil {
 		ui["dialog"] = b.dialog
 	}
+	b.popups(ui)
 	return ui
 }
 
@@ -240,6 +241,9 @@ func (b *Bridge) Act(name string, i int, s string) {
 }
 
 func (b *Bridge) act(name string, i int, s string) {
+	if b.popupAct(name, i, s) {
+		return
+	}
 	e := b.m.editor
 	t := &e.tree
 	inTree := i >= 0 && i < len(t.rows)

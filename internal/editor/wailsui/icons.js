@@ -1,6 +1,11 @@
 // The interface's icons, drawn on a 16 by 16 grid as in the Gio front end.
 'use strict';
 
+// Errors in the page go to Loom's log, as there are no developer tools.
+window.addEventListener('error', (e) => {
+  try { window.go.editor.Bridge.Log(`${e.message} at ${e.filename}:${e.lineno}:${e.colno}`); } catch (_) { /* not ready */ }
+});
+
 const iconPaths = {
   search: 'C7,7,4.5 L10.2,10.2,14,14',
   folder: 'L2,12.8,2,3.5,6,3.5,7.6,5.3,14,5.3,14,12.8,2,12.8,2,11',

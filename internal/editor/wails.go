@@ -5,10 +5,10 @@ package editor
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
-	"image/png"
 	"embed"
+	"encoding/base64"
 	"fmt"
+	"image/png"
 	"io/fs"
 	"os"
 	"time"
@@ -65,6 +65,8 @@ type Bridge struct {
 	cols, rows int
 	frame      frameState
 	dialog     *dialog
+	list       listState
+	preview    previewCache
 }
 
 func runWails(e *editor, explicit bool) error {
@@ -232,3 +234,7 @@ func (b *Bridge) Logo(size int) string {
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
 }
+
+// Log writes a message from the page to standard error, which the detached
+// app sends to its log file.
+func (b *Bridge) Log(msg string) { fmt.Fprintln(os.Stderr, "loom: page:", msg) }

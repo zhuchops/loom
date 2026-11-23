@@ -96,7 +96,7 @@ function drawRow(y, runs) {
   const chars = [];
   const frag = document.createDocumentFragment();
   const ground = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-  for (const [text, x, cells, fg, bg, flags, under] of runs) {
+  for (const [text, x, cells, fg, bg, flags, under] of runs || []) {
     const span = document.createElement('span');
     let cls = 'run';
     if (flags & 1) cls += ' b';
