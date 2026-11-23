@@ -247,7 +247,10 @@ loom-desktop ./notes.txt       # a file opens in the project it belongs to, or i
 loom-desktop ~/code/api        # a folder opens as a session, or shows the one it already has
 loom-desktop                   # just brings the open window forward
 loom-desktop -new ./notes.txt  # a window of its own (-n works too)
+loom-desktop -foreground .     # keep the terminal attached and print the log there (-f works too)
 ```
+
+Started from a terminal, `loom-desktop` runs in the background: the prompt comes back after a moment and the log goes to `desktop.log` in the state folder (`~/.local/state/loom`), which each start replaces. If it cannot start, because of a bad flag or a config it cannot use, the message is printed in the terminal and the exit status is 1. Use `-foreground` to debug, or when a service manager wants the process to stay. Started from Finder or a launcher it has no terminal and nothing changes.
 
 A file goes to the open session whose folder holds it (the deepest one), and the window comes to the front. A folder that is not open yet becomes a new session. If no window is open, the first launch opens one, and later launches find it. Relative paths and `~` count from where you typed the command. The hand-over uses a socket named `desktop.sock` in Loom's state folder (`~/.local/state/loom`), readable only by you; a window started with `-new` does not take it. With `-config` a launch always opens its own window. On macOS the binary inside the bundle is `Loom.app/Contents/MacOS/loom`, so a shell alias or a symlink to it gives a command: `ln -s /Applications/Loom.app/Contents/MacOS/loom ~/.local/bin/loom-app`. `open -a Loom file` only brings the app forward; it does not pass the file.
 

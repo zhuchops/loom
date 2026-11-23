@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.28.0"
+const version = "0.28.1"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
@@ -36,6 +36,8 @@ func prepare(tolerant bool) (e *editor, explicit bool, done bool, err error) {
 	if tolerant {
 		flag.BoolVar(&newWindow, "new", false, "open in a new window instead of an already open one")
 		flag.BoolVar(&newWindow, "n", false, "same as -new")
+		flag.BoolVar(&foreground, "foreground", false, "stay attached to the terminal and print the log there")
+		flag.BoolVar(&foreground, "f", false, "same as -foreground")
 	}
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Usage: loom [flags] [file or directory]")
@@ -51,6 +53,11 @@ func prepare(tolerant bool) (e *editor, explicit bool, done bool, err error) {
 	}
 	if tolerant && !newWindow && *path == "" && forwardToRunning(flag.Args()) {
 		return nil, false, true, nil // an open window took it
+	}
+	if tolerant {
+		if done, err := detachFromTerminal(); done || err != nil {
+			return nil, false, true, err
+		}
 	}
 	if flag.NArg() > 1 {
 		flag.Usage()

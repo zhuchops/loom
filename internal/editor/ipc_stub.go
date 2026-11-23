@@ -6,3 +6,7 @@ package editor
 var newWindow bool
 
 func forwardToRunning([]string) bool { return false }
+
+var foreground bool
+
+func detachFromTerminal() (bool, error) { return false, nil }
