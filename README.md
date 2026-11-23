@@ -58,7 +58,7 @@ If the build stops on a missing header, install the development package that pro
 
 ### The web view window (in progress)
 
-A second desktop front end, built on [Wails](https://wails.io), is being written to replace the Gio window. It draws the interface in the system web view (WebKit on macOS and Linux), which brings real translucency and blurred "glass" popups. It is not finished yet: so far it shows the text panes with their colors and cursor and takes keys, typing (including input methods), the mouse and the wheel. Build it with:
+A second desktop front end, built on [Wails](https://wails.io), is being written to replace the Gio window. It draws the interface in the system web view (WebKit on macOS and Linux), which brings real translucency and blurred "glass" popups. It is not finished yet: so far it has the text panes with their colors and cursor; keys, typing (including input methods), the mouse and the wheel; the title bar (sidebar toggle, project and session switcher, branch, the search field, Source Control, palette and settings buttons), the file sidebar with git marks, filtering and a draggable edge, tabs (click, middle-click or × to close, drag to reorder), the path bar, the status bar, the save-and-quit questions and the system Open and Save panels. The title bar, sidebar, tabs and status bar are translucent, so on macOS the desktop shows through them, blurred. Build it with:
 
 ```sh
 go build -tags wails,production -o loom-wails ./cmd/loom-wails

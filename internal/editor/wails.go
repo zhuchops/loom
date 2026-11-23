@@ -3,7 +3,10 @@
 package editor
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"image/png"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -16,6 +19,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	wrt "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"github.com/zhuchops/loom/internal/brand"
 )
 
 // The Wails front end keeps the editor, its commands and its renderer in Go,
@@ -35,6 +40,7 @@ func MainWails() {
 			_ = os.Chdir(home)
 		}
 	}
+	platformEnvironment()
 	e, explicit, done, err := prepare(true)
 	if err == nil && !done {
 		err = runWails(e, explicit)
@@ -58,6 +64,7 @@ type Bridge struct {
 	started    bool
 	cols, rows int
 	frame      frameState
+	dialog     *dialog
 }
 
 func runWails(e *editor, explicit bool) error {
@@ -93,6 +100,7 @@ func newBridge(e *editor, ctx context.Context, explicit bool) *Bridge {
 	b := &Bridge{inbox: make(chan tea.Msg, 256), calls: make(chan func(), 256), ticker: time.NewTicker(time.Second), explicit: explicit}
 	b.m = &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0), native: true}, ctx: ctx, ticks: b.ticker.C}
 	b.m.attach()
+	e.pickFolder = func(start string, chosen func(string)) { b.pick(pickFolder, start, chosen) }
 	return b
 }
 
@@ -215,3 +223,12 @@ func (b *Bridge) Redraw() { b.call(func() {}) }
 
 // uiCallback runs on the editor's goroutine.
 type uiCallback func()
+
+// Logo is the Loom mark as a PNG data URL, for the Welcome tab.
+func (b *Bridge) Logo(size int) string {
+	var out bytes.Buffer
+	if err := png.Encode(&out, brand.Mark(max(16, min(512, size)))); err != nil {
+		return ""
+	}
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
+}

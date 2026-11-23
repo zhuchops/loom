@@ -155,6 +155,8 @@ function applyFrame(f) {
 
 function applyUI(ui) {
   state.ui = ui;
+  applyChrome(ui);
+  requestAnimationFrame(fit); // the chrome may have changed the room for text
 }
 
 // ---- Keyboard -------------------------------------------------------------
@@ -259,7 +261,8 @@ $('editor').addEventListener('wheel', (e) => {
 
 new ResizeObserver(() => { if (state.look) fit(); }).observe(grid);
 
-function start() {
+async function start() {
+  try { state.logo = await bridge().Logo(64); } catch (e) { state.logo = ''; }
   window.runtime.EventsOn('frame', applyFrame);
   focusInput();
   // The first frame brings the look; until then use the defaults to start.

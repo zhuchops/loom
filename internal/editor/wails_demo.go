@@ -11,7 +11,7 @@ import (
 
 // playDemo runs the script named by LOOM_DEMO once the window is up, so the
 // front end can be checked without touching the keyboard. Each line is
-// "keys a b ctrl+p", "type text", "run command-id" or "sleep 300".
+// "keys a b ctrl+p", "type text", "run command-id", "open path" or "sleep 300".
 func (b *Bridge) playDemo() {
 	path := os.Getenv("LOOM_DEMO")
 	if path == "" {
@@ -38,6 +38,8 @@ func (b *Bridge) playDemo() {
 						c.run(b.m.editor)
 					}
 				})
+			case "open":
+				b.call(func() { b.m.editor.open(rest) })
 			case "sleep":
 				ms, _ := strconv.Atoi(rest)
 				time.Sleep(time.Duration(ms) * time.Millisecond)

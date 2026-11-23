@@ -7,21 +7,12 @@ import (
 	"image"
 	"image/color"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 
 	"gioui.org/io/pointer"
 )
-
-// shortcutText shows the platform's own spelling of a window shortcut.
-func shortcutText(mac, other string) string {
-	if runtime.GOOS == "darwin" {
-		return mac
-	}
-	return other
-}
 
 func (d *desktop) iconButton(cx, cy int, id iconID, on bool, click func()) {
 	h := d.u(12)
@@ -289,16 +280,6 @@ func (d *desktop) paintSidebar(e *editor) {
 type tabSlot struct {
 	r rect
 	b *buffer
-}
-
-func bufferName(b *buffer) string {
-	switch {
-	case b.dashboard:
-		return "Welcome"
-	case b.path == "":
-		return "Untitled"
-	}
-	return filepath.Base(b.path)
 }
 
 func (d *desktop) paintTabs(e *editor) {
@@ -621,20 +602,4 @@ func (d *desktop) paintStatus(e *editor) {
 	if b.external {
 		segment("Changed on disk", func() { d.command("save") })
 	}
-}
-
-func languageName(id string) string {
-	names := map[string]string{
-		"": "Plain Text", "go": "Go", "mod": "Go Module", "gomod": "Go Module", "md": "Markdown", "markdown": "Markdown",
-		"js": "JavaScript", "javascript": "JavaScript", "ts": "TypeScript", "typescript": "TypeScript", "tsx": "TSX", "jsx": "JSX",
-		"py": "Python", "python": "Python", "rs": "Rust", "rust": "Rust", "yml": "YAML", "yaml": "YAML", "json": "JSON",
-		"html": "HTML", "css": "CSS", "sh": "Shell", "c": "C", "cpp": "C++", "toml": "TOML", "sql": "SQL",
-		"asm": "Assembly", "cmake": "CMake", "csharp": "C#", "dockerfile": "Dockerfile", "graphql": "GraphQL",
-		"javascriptreact": "JavaScript JSX", "makefile": "Makefile", "ocaml": "OCaml", "php": "PHP", "proto": "Protocol Buffers",
-		"shellscript": "Shell", "dingo": "Dingo", "elixir": "Elixir", "ex": "Elixir", "exs": "Elixir", "heex": "HEEx", "typescriptreact": "TypeScript TSX", "xml": "XML",
-	}
-	if name, ok := names[strings.ToLower(id)]; ok {
-		return name
-	}
-	return humanize(id)
 }

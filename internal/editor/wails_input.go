@@ -101,6 +101,21 @@ var latinKeys = func() map[rune]rune {
 // Key is a key press that is not plain typing.
 func (b *Bridge) Key(ev KeyEvent) {
 	b.call(func() {
+		if q := b.dialog; q != nil {
+			n := len(q.Choices)
+			switch ev.Key {
+			case "Escape":
+				b.Answer(-1)
+			case "Enter":
+				b.Answer(q.Selected)
+			case "Tab", "ArrowLeft":
+				// Buttons run right to left, the default on the right.
+				q.Selected = (q.Selected + 1) % n
+			case "ArrowRight":
+				q.Selected = (q.Selected + n - 1) % n
+			}
+			return
+		}
 		if k, ok := webKey(ev); ok {
 			b.send(tea.KeyPressMsg(k))
 		}

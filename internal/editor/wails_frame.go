@@ -3,6 +3,7 @@
 package editor
 
 import (
+	"encoding/json"
 	"fmt"
 	"image/color"
 	"strings"
@@ -27,13 +28,13 @@ type cellRun []any
 // gridFrame is one update for the web view. Rows maps a row index to its
 // runs; only changed rows are present.
 type gridFrame struct {
-	Cols   int                 `json:"cols"`
-	Rows   int                 `json:"rows"`
-	Grid   map[int][]cellRun   `json:"grid,omitempty"`
-	Cursor *cursorState        `json:"cursor"`
-	Theme  map[string]string   `json:"theme,omitempty"`
-	Look   map[string]any      `json:"look,omitempty"`
-	UI     map[string]any      `json:"ui,omitempty"`
+	Cols   int               `json:"cols"`
+	Rows   int               `json:"rows"`
+	Grid   map[int][]cellRun `json:"grid,omitempty"`
+	Cursor *cursorState      `json:"cursor"`
+	Theme  map[string]string `json:"theme,omitempty"`
+	Look   map[string]any    `json:"look,omitempty"`
+	UI     map[string]any    `json:"ui,omitempty"`
 }
 
 type cursorState struct {
@@ -86,6 +87,7 @@ func (b *Bridge) render() {
 	if c := deriveColors(); c != b.frame.colors || b.frame.inks == nil {
 		b.frame.colors, b.frame.inks, b.frame.rows = c, map[[2]color.NRGBA]color.NRGBA{}, nil
 		out.Theme = themeVars(c)
+		b.frame.ui = "" // the chrome's colours changed with the theme
 	}
 	o := &e.cfg.options
 	look := map[string]any{
@@ -123,6 +125,10 @@ func (b *Bridge) render() {
 			shape = cfg.CursorInsert
 		}
 		out.Cursor = &cursorState{X: f.cursorX, Y: f.cursorY, Shape: shape, Blink: cfg.CursorBlink}
+	}
+	ui := b.chrome()
+	if data, err := json.Marshal(ui); err == nil && string(data) != b.frame.ui {
+		b.frame.ui, out.UI = string(data), ui
 	}
 	wrt.EventsEmit(b.app, "frame", out)
 }
