@@ -43,10 +43,22 @@ func (e *editor) invalidateCompletion() {
 	c.selected = 0
 }
 
-// autoTriggerAt reports whether a letter sits before the cursor. Only then may
-// the popup open on its own; punctuation such as { , ( never opens it.
+// autoTriggerAt reports whether a letter, or a dot that follows a name or a
+// closing bracket (IO.), sits before the cursor. Only then may the popup open
+// on its own; punctuation such as { , ( never opens it.
 func autoTriggerAt(b *buffer) bool {
-	return b.cursor > 0 && unicode.IsLetter(b.text[b.cursor-1])
+	if b.cursor == 0 {
+		return false
+	}
+	last := b.text[b.cursor-1]
+	if unicode.IsLetter(last) {
+		return true
+	}
+	if last != '.' || b.cursor < 2 {
+		return false
+	}
+	before := b.text[b.cursor-2]
+	return unicode.IsLetter(before) || before == '_' || before == ')' || before == ']'
 }
 
 // wordStartAt is where the identifier ending at cursor begins.
@@ -253,6 +265,9 @@ func (e *editor) requestCompletion(trigger int, char string) {
 		}
 		return
 	}
+	if char == "." && len(s.triggers) > 0 && !slices.Contains(s.triggers, ".") {
+		return // this server does not complete after a dot
+	}
 	if e.completion.running {
 		e.completion.queued, e.completion.queuedTrigger = true, char
 		return
@@ -410,7 +425,8 @@ func takesArguments(item completionItem) bool {
 	detail := detailTag.ReplaceAllString(strings.TrimSpace(item.Detail), "")
 	open := strings.IndexByte(detail, '(')
 	if open < 0 {
-		return true
+		// Some servers give the signature only in the label: run() or run(x).
+		return !strings.HasSuffix(item.Label, "()")
 	}
 	return !strings.HasPrefix(strings.TrimSpace(detail[open+1:]), ")")
 }

@@ -9,7 +9,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf16"
@@ -231,7 +233,40 @@ func (s *languageSession) complete(doc document, trigger int, char string) ([]co
 		}
 		items = list.Items
 	}
-	return slices.DeleteFunc(items, func(item completionItem) bool { return item.InsertTextFormat == 2 }), nil
+	return plainCompletions(items), nil
+}
+
+var snippetPlaceholder = regexp.MustCompile(`\$\{\d+(?::([^}]*))?\}|\$\d+`)
+
+// plainCompletions drops snippet items, which the editor cannot expand, but
+// keeps calls such as puts(${1:item}) as the bare name: accepting one adds the
+// brackets and leaves the cursor between them.
+func plainCompletions(items []completionItem) []completionItem {
+	out := items[:0]
+	for _, item := range items {
+		if item.InsertTextFormat == 2 {
+			call := item.Kind == 2 || item.Kind == 3 || item.Kind == 4
+			text := item.InsertText
+			if item.TextEdit != nil {
+				text = item.TextEdit.NewText
+			}
+			name, _, found := strings.Cut(text, "(")
+			if !call || !found || name == "" || snippetPlaceholder.MatchString(name) {
+				continue
+			}
+			if item.TextEdit != nil {
+				edit := *item.TextEdit
+				edit.NewText = name
+				item.TextEdit = &edit
+			}
+			if item.InsertText != "" {
+				item.InsertText = name
+			}
+			item.InsertTextFormat = 1
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func (s *languageSession) didSave(doc document) {

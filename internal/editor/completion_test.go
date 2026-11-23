@@ -137,3 +137,37 @@ func TestCompletionNoArgumentsPutsCursorAfterBrackets(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionOpensAfterDot(t *testing.T) {
+	e := testEditor(t, "vim", "")
+	e.b.path = "/tmp/x.ex"
+	press(e, "i")
+	press(e, "I O . ")
+	e.b.cursor = len(e.b.text) // "IO."
+	if !autoTriggerAt(e.b) {
+		t.Fatalf("a dot after a name should trigger completion: %q", string(e.b.text))
+	}
+	for _, text := range []string{"1.", "..", ". ", " ."} {
+		e.b.text, e.b.cursor = []rune(text), len([]rune(text))
+		if autoTriggerAt(e.b) && text != ". " {
+			t.Errorf("%q should not trigger completion", text)
+		}
+	}
+}
+
+func TestSnippetCallsBecomePlainCompletions(t *testing.T) {
+	items := plainCompletions([]completionItem{
+		{Label: "puts(item)", Kind: 3, InsertTextFormat: 2, TextEdit: &textEdit{NewText: "puts(${1:item})"}},
+		{Label: "for", Kind: 15, InsertTextFormat: 2, InsertText: "for ${1:x} in ${2:y} do\n$0\nend"},
+		{Label: "plain", Kind: 1},
+	})
+	if got := labels(items); got != "puts(item),plain" {
+		t.Fatalf("items = %s", got)
+	}
+	if items[0].TextEdit.NewText != "puts" || items[0].InsertTextFormat != 1 {
+		t.Fatalf("call not flattened: %+v", items[0].TextEdit)
+	}
+	if takesArguments(completionItem{Label: "run()", Detail: "(function)"}) {
+		t.Error("run() takes no arguments")
+	}
+}
