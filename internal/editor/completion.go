@@ -279,10 +279,16 @@ func (e *editor) requestCompletion(trigger int, char string) {
 	cursor := e.b.cursor
 	go func() {
 		items, err := s.complete(doc, trigger, char)
-		if doc.language == "dingo" && len(items) == 0 {
+		if doc.language == "dingo" {
 			// The server works from the last generated Go file.
-			if extra := unimportedCompletions([]rune(doc.text), cursor); len(extra) > 0 {
-				items, err = extra, nil
+			text := []rune(doc.text)
+			if len(items) == 0 {
+				if extra := unimportedCompletions(text, cursor); len(extra) > 0 {
+					items, err = extra, nil
+				}
+			}
+			if err == nil || len(items) > 0 {
+				items = append(items, bareWordCompletions(text, cursor, items)...)
 			}
 		}
 		e.async <- func() {

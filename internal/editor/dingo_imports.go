@@ -109,6 +109,59 @@ func importedPath(text string) string {
 	return ""
 }
 
+// dingoKeywords are offered as completions in .dingo files.
+var dingoKeywords = strings.Fields("break case chan const continue default defer else enum fallthrough for func go goto guard if import in interface let map match package range return select struct switch type var where")
+
+// stdPackageNames lists the standard packages not yet imported whose name
+// starts with prefix, as completion items that add the import when accepted.
+func stdPackageNames(prefix, source string) []completionItem {
+	stdImportPaths("") // load the list
+	var out []completionItem
+	for name, paths := range stdPackages.byEnd {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		for _, path := range paths {
+			if !strings.Contains(source, `"`+path+`"`) {
+				out = append(out, completionItem{Label: name, Kind: 9, Detail: "package " + path, FilterText: name, importPath: path})
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b completionItem) int { return strings.Compare(a.Label+a.Detail, b.Label+b.Detail) })
+	return out
+}
+
+// bareWordCompletions adds what dingo-lsp lacks for a word that is not after
+// a dot: keywords, and standard packages that are not imported yet.
+func bareWordCompletions(text []rune, cursor int, have []completionItem) []completionItem {
+	start := cursor
+	for start > 0 && isWordRune(text[start-1]) {
+		start--
+	}
+	if start == cursor || start > 0 && text[start-1] == '.' {
+		return nil
+	}
+	prefix := strings.ToLower(string(text[start:cursor]))
+	seen := map[string]bool{}
+	for _, item := range have {
+		seen[item.Label] = true
+	}
+	var out []completionItem
+	for _, word := range dingoKeywords {
+		if strings.HasPrefix(word, prefix) && !seen[word] {
+			out = append(out, completionItem{Label: word, Kind: 14, Detail: "keyword", FilterText: word})
+		}
+	}
+	if len(prefix) >= 2 {
+		for _, item := range stdPackageNames(prefix, string(text)) {
+			if !seen[item.Label] {
+				out = append(out, item)
+			}
+		}
+	}
+	return out
+}
+
 func isWordRune(r rune) bool { return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) }
 
 // packageBeforeDot finds `name` in `name.pre|`, where | is the cursor.

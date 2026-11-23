@@ -99,3 +99,57 @@ func TestServerImportEditIsMovedIntoTheFile(t *testing.T) {
 		t.Fatalf("text = %q, want %q", string(b.text), want)
 	}
 }
+
+func TestDingoBareWordCompletions(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go command")
+	}
+	src := "package main\n\nfunc main() {\n    pac\n}\n"
+	cursor := strings.Index(src, "pac") + 3
+	items := bareWordCompletions([]rune(src), cursor, nil)
+	labels := map[string]completionItem{}
+	for _, item := range items {
+		labels[item.Label+"|"+item.Detail] = item
+	}
+	if _, ok := labels["package|keyword"]; !ok {
+		t.Error("the keyword package is missing")
+	}
+	// A package whose name starts with the prefix, with its import path.
+	src = "package main\n\nfunc main() {\n    strin\n}\n"
+	items = bareWordCompletions([]rune(src), strings.Index(src, "strin")+5, nil)
+	found := false
+	for _, item := range items {
+		if item.Label == "strings" && item.importPath == "strings" && item.Kind == 9 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("strings package not offered: %d items", len(items))
+	}
+	// Not after a dot, not for what is already known, not for what is imported.
+	if got := bareWordCompletions([]rune("x.pac"), 5, nil); got != nil {
+		t.Errorf("offered %d items after a dot", len(got))
+	}
+	if got := bareWordCompletions([]rune("import \"strings\"\nstrin"), 20, nil); len(got) != 0 {
+		for _, item := range got {
+			if item.Label == "strings" {
+				t.Error("an imported package was offered")
+			}
+		}
+	}
+	// Accepting adds the import.
+	b := &buffer{text: []rune(src), path: "/tmp/m.dingo"}
+	b.indexLines()
+	b.cursor = strings.Index(src, "strin") + 5
+	for _, item := range items {
+		if item.Label == "strings" {
+			if err := applyCompletionAt(b, item, wordStartAt(b, b.cursor)); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+	}
+	if want := "package main\n\nimport \"strings\"\n\nfunc main() {\n    strings\n}\n"; string(b.text) != want {
+		t.Fatalf("text = %q", string(b.text))
+	}
+}
