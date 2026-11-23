@@ -32,6 +32,7 @@ func (p position) before(q position) bool {
 
 // contains reports whether p lies in r, its end included.
 func (r lspRange) contains(p position) bool { return !p.before(r.Start) && !r.End.before(p) }
+
 type textEdit struct {
 	Range   *lspRange `json:"range"`
 	Insert  *lspRange `json:"insert"`

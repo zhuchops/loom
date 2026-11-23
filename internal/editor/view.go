@@ -49,6 +49,8 @@ type renderer struct {
 	tabActive                                   *buffer
 	previews                                    []previewBox
 	barHits                                     []barHit
+	fields                                      []fieldHit // text fields drawn this frame
+	fieldDrag                                   *fieldHit  // the field being selected in
 	paneDividers                                []paneDivider
 	paneDrag                                    *paneDivider // Divider being dragged, with the area it splits.
 	tabDrag, tabPrev                            *buffer      // Tab being dragged, and the tab that was active before the press.
@@ -107,7 +109,7 @@ func (v *renderer) draw(e *editor) {
 	if v.tabMoving && v.drop.leaf != nil {
 		v.drawDrop()
 	}
-	v.barHits = v.barHits[:0]
+	v.barHits, v.fields = v.barHits[:0], v.fields[:0]
 	if e.bar != nil && e.directory == nil {
 		v.drawFindBar(e)
 	}
@@ -174,7 +176,7 @@ func (v *renderer) draw(e *editor) {
 // editing area. Tabs, trees, menus and popups belong to the front end.
 func (v *renderer) drawText(e *editor, w, h int) {
 	v.completeBox, v.diagnosticBox = hitBox{}, hitBox{}
-	v.barHits = v.barHits[:0]
+	v.barHits, v.fields = v.barHits[:0], v.fields[:0]
 	box := hitBox{0, 0, w, h, 0}
 	switch {
 	case e.directory != nil:

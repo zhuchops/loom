@@ -43,27 +43,16 @@ func (d *desktop) paintFind(e *editor) {
 	}
 	d.iconButton(x0+u(18), cy, toggle, false, func() { e.barAction("toggle-replace") })
 
-	field := func(r rect, value, placeholder, action string, active bool, reserve int) {
+	field := func(r rect, value *string, f *lineField, placeholder, action string, active bool, reserve int) {
 		d.round(r, 6, c.well)
 		line := c.line
 		if active {
 			line = c.accent
 		}
 		d.border(r, 6, line, d.hairline())
-		d.zone(zone{r: r, cursor: pointer.CursorText, click: func() { e.barAction(action) }})
-		x, mid, room := r.Min.X+u(9), (r.Min.Y+r.Max.Y)/2, r.Dx()-u(20)-reserve
-		if value == "" {
-			d.text(x+u(2), mid, d.fit(placeholder, room, textBody), textBody, c.faint)
-		} else {
-			w := d.width(d.fitLeft(value, room, textBody), textBody)
-			if active && bar.fresh {
-				d.fill(image.Rect(x-u(1), mid-u(9), x+w+u(1), mid+u(9)), c.selection)
-			}
-			x += d.text(x, mid, d.fitLeft(value, room, textBody), textBody, c.text)
-		}
-		if active {
-			d.caret(x+u(1), mid, u(15))
-		}
+		x, mid := r.Min.X+u(9), (r.Min.Y+r.Max.Y)/2
+		d.paintField(image.Rect(r.Min.X, r.Min.Y, r.Max.X-reserve, r.Max.Y), x, mid, r.Max.X-u(11)-reserve,
+			func() string { return *value }, f, active, textBody, u(15), placeholder, func() { e.barAction(action) })
 	}
 
 	right := card.Max.X - u(6)
@@ -86,7 +75,7 @@ func (d *desktop) paintFind(e *editor) {
 	if find.Dx()-reserve < u(80) {
 		count, reserve = "", len(options)*u(25)+u(8)
 	}
-	field(find, bar.find, "Find", "focus-find", bar.field == 0, reserve)
+	field(find, &bar.find, &bar.findField, "Find", "focus-find", bar.field == 0, reserve)
 	x := find.Max.X - u(4)
 	for _, o := range options {
 		r := image.Rect(x-u(23), cy-u(10.5), x, cy+u(10.5))
@@ -114,7 +103,7 @@ func (d *desktop) paintFind(e *editor) {
 		cy2 := cy + u(36)
 		end := d.textButton(card.Max.X-u(10), cy2, "All", false, func() { e.barAction("all") }) - u(6)
 		end = d.textButton(end, cy2, "Replace", false, func() { e.barAction("replace") }) - u(6)
-		field(image.Rect(x0+u(34), cy2-u(14), end, cy2+u(14)), bar.replace, "Replace", "focus-replace", bar.field == 1, 0)
+		field(image.Rect(x0+u(34), cy2-u(14), end, cy2+u(14)), &bar.replace, &bar.replaceField, "Replace", "focus-replace", bar.field == 1, 0)
 	}
 }
 

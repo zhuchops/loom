@@ -60,6 +60,8 @@ type desktop struct {
 	m     *terminalModel
 	shown *editor // the session the state below belongs to
 	inbox chan tea.Msg
+	// pressShift is whether Shift was held at the last pointer press.
+	pressShift bool
 
 	gtx     layout.Context
 	scratch op.Ops

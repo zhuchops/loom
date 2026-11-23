@@ -3,7 +3,6 @@ package editor
 import (
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -14,7 +13,9 @@ type findBar struct {
 	showReplace   bool // the second row is visible
 	transient     bool // opened by "/": Enter jumps to a match and closes it
 	origin        int  // matches are searched from here as the query is typed
-	fresh         bool // the find text was prefilled, so typing replaces it
+	// Caret and selection of each row. Prefilled find text starts selected,
+	// so typing replaces it.
+	findField, replaceField lineField
 }
 
 type barHit struct {
@@ -48,7 +49,8 @@ func (e *editor) openFindBar(replace bool) {
 	if e.mode == "select" {
 		e.normal()
 	}
-	bar.find, bar.fresh = text, text != ""
+	bar.find = text
+	bar.findField.selectAll(text)
 	e.bar = bar
 	if bar.find == "" && !replace {
 		e.query = ""
@@ -169,6 +171,14 @@ func (e *editor) barText() *string {
 	return &e.bar.find
 }
 
+// barField is the caret and selection of the row being edited.
+func (e *editor) barField() *lineField {
+	if e.bar.field == 1 {
+		return &e.bar.replaceField
+	}
+	return &e.bar.findField
+}
+
 // findInput handles a key while the find bar is open. It reports whether the
 // key was consumed; saving still works.
 func (e *editor) findInput(in keyInput) bool {
@@ -178,76 +188,44 @@ func (e *editor) findInput(in keyInput) bool {
 	}
 	text := e.barText()
 	edited := false
-	if bar.fresh && bar.field == 0 {
-		switch r, ok := inputRune(in.key); {
-		case in.paste != "", ok && unicode.IsPrint(r), in.key == "backspace":
-			*text, bar.fresh = "", false
-			if in.key == "backspace" {
-				edited = true
-			}
-		}
-	}
-	switch {
-	case in.paste != "":
-		*text += strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(in.paste)
-		edited = true
-	default:
-		switch in.key {
-		case "esc":
-			e.closeFindBar(false)
-			return true
-		case "enter":
-			if bar.field == 1 {
-				e.barAction("replace")
-			} else if bar.transient {
-				// Typing already moved to the first match, so Enter confirms it.
-				res := e.matches(e.b)
-				if i := res.at(e.b.cursor); i < 0 || res.spans[i].start != e.b.cursor {
-					e.barStep(false)
-				}
-				e.closeFindBar(true)
-			} else {
+	switch in.key {
+	case "esc":
+		e.closeFindBar(false)
+		return true
+	case "enter":
+		if bar.field == 1 {
+			e.barAction("replace")
+		} else if bar.transient {
+			// Typing already moved to the first match, so Enter confirms it.
+			res := e.matches(e.b)
+			if i := res.at(e.b.cursor); i < 0 || res.spans[i].start != e.b.cursor {
 				e.barStep(false)
 			}
-		case "tab", "shift+tab":
-			bar.fresh = false
-			if bar.showReplace {
-				bar.field = 1 - bar.field
-			}
-		case "down", "ctrl+n":
+			e.closeFindBar(true)
+		} else {
 			e.barStep(false)
-		case "up", "ctrl+p":
-			e.barStep(true)
-		case "ctrl+t":
-			e.barAction("case")
-		case "ctrl+o":
-			e.barAction("word")
-		case "ctrl+e":
-			e.barAction("regex")
-		case "ctrl+r":
-			e.barAction("toggle-replace")
-		case "ctrl+a":
-			bar.transient = false
-			e.barAction("all")
-		case "backspace":
-			if r := []rune(*text); len(r) > 0 {
-				*text = string(r[:len(r)-1])
-				edited = true
-			}
-		case "ctrl+u":
-			*text, edited = "", true
-		case "ctrl+w":
-			r := []rune(strings.TrimRightFunc(*text, unicode.IsSpace))
-			for len(r) > 0 && !unicode.IsSpace(r[len(r)-1]) {
-				r = r[:len(r)-1]
-			}
-			*text, edited = string(r), true
-		default:
-			if r, ok := inputRune(in.key); ok && unicode.IsPrint(r) {
-				*text += string(r)
-				edited = true
-			}
 		}
+	case "tab", "shift+tab":
+		if bar.showReplace {
+			bar.field = 1 - bar.field
+		}
+	case "down", "ctrl+n":
+		e.barStep(false)
+	case "up", "ctrl+p":
+		e.barStep(true)
+	case "ctrl+t":
+		e.barAction("case")
+	case "ctrl+o":
+		e.barAction("word")
+	case "ctrl+e":
+		e.barAction("regex")
+	case "ctrl+r":
+		e.barAction("toggle-replace")
+	case "ctrl+a":
+		bar.transient = false
+		e.barAction("all")
+	default:
+		_, edited = e.barField().edit(text, in)
 	}
 	if edited && bar.field == 0 {
 		e.barSync(true)

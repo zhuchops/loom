@@ -330,6 +330,13 @@ func (m *terminalModel) View() tea.View {
 // Match the names used in Loom configs. Text takes priority for shifted
 // printable keys so a binding like "space N" still receives capital N.
 func terminalKey(k tea.Key) keyInput {
+	if k.Mod&tea.ModSuper != 0 && k.Mod&^tea.ModSuper == 0 && (k.Code == tea.KeyBackspace || k.Code == tea.KeyDelete) {
+		// Command+Delete in the desktop app clears to the start or end of a field.
+		if k.Code == tea.KeyBackspace {
+			return keyInput{key: "super+backspace"}
+		}
+		return keyInput{key: "super+delete"}
+	}
 	if k.Mod&(tea.ModMeta|tea.ModHyper|tea.ModSuper) != 0 {
 		return keyInput{}
 	}
@@ -338,7 +345,7 @@ func terminalKey(k tea.Key) keyInput {
 		// only keys that mean something on their own are bound.
 		k.Mod &^= tea.ModAlt
 		if inner := terminalKey(k); inner.key != "" && inner.key != "esc" && inner.paste == "" {
-			return keyInput{key: "alt+" + inner.key}
+			return keyInput{key: "alt+" + inner.key, shift: inner.shift}
 		}
 		return keyInput{}
 	}
@@ -353,8 +360,14 @@ func terminalKey(k tea.Key) keyInput {
 		}
 		return keyInput{key: "tab"}
 	case tea.KeyBackspace:
+		if k.Mod&tea.ModCtrl != 0 {
+			return keyInput{key: "ctrl+backspace"}
+		}
 		return keyInput{key: "backspace"}
 	case tea.KeyDelete:
+		if k.Mod&tea.ModCtrl != 0 {
+			return keyInput{key: "ctrl+delete"}
+		}
 		return keyInput{key: "delete"}
 	case tea.KeyPgUp:
 		return keyInput{key: "pageup"}
@@ -365,7 +378,7 @@ func terminalKey(k tea.Key) keyInput {
 		if k.Mod&tea.ModCtrl != 0 {
 			name = "ctrl+" + name
 		}
-		return keyInput{key: name}
+		return keyInput{key: name, shift: k.Mod&tea.ModShift != 0}
 	case tea.KeySpace, 0:
 		if k.Mod&tea.ModCtrl != 0 || k.Code == 0 {
 			return keyInput{key: "ctrl+space"}

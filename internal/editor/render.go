@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/rivo/uniseg"
 )
@@ -103,25 +102,16 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 		v.screen.FillArea(box.x+1, edge, box.w-2, 1, '─', mutedStyle.Background(menuStyle.bg))
 		v.previewBox = hitBox{x: box.x + 2, y: edge + 1, w: contentWidth, h: box.y + box.h - edge - 2}
 	}
-	// Keep the caret in sight: drop runes on the left up to it, then on the right.
-	before, after := m.inputParts()
-	room := max(0, contentWidth-3)
-	for cellWidth(before+after) > room && before != "" {
-		_, n := utf8.DecodeRuneInString(before)
-		before = before[n:]
-	}
-	for cellWidth(before+after) > room && after != "" {
-		_, n := utf8.DecodeLastRuneInString(after)
-		after = after[:len(after)-n]
-	}
 	prompt := "› "
 	if m.exact != nil {
 		prompt = ": "
 	}
+	caretX := box.x + 2 + cellWidth(prompt)
 	if m.confirmation {
 		v.write(box.x+2, box.y+1, contentWidth, "Enter Apply   Esc Cancel", mutedStyle.Background(menuStyle.GetBackground()))
 	} else {
-		v.write(box.x+2, box.y+1, contentWidth, prompt+before+after, activeStyle)
+		v.write(box.x+2, box.y+1, contentWidth, prompt, activeStyle)
+		caretX = v.drawField(caretX, box.y+1, max(1, contentWidth-cellWidth(prompt)), &m.input, &m.field, activeStyle, nil)
 	}
 	start := max(0, m.selected-visible+1)
 	v.menuBox = hitBox{box.x + 1, box.y + 2, contentWidth + 1, visible, start}
@@ -156,7 +146,7 @@ func (v *renderer) drawMenu(m *menu, w, h int) {
 		return
 	}
 	v.screen.SetCursorStyle(cursorBar)
-	v.screen.ShowCursor(min(box.x+contentWidth+1, box.x+2+cellWidth(prompt+before)), box.y+1)
+	v.screen.ShowCursor(min(box.x+contentWidth+1, caretX), box.y+1)
 }
 
 // writeOption draws the label on the left and the hint right-aligned in a muted color.

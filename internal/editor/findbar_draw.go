@@ -2,20 +2,9 @@ package editor
 
 import "fmt"
 
-// tailToWidth keeps the end of s that fits in width cells, so the text being
-// typed stays visible.
-func tailToWidth(s string, width int) string {
-	r := []rune(s)
-	for len(r) > 0 && cellWidth(string(r)) > width {
-		r = r[1:]
-	}
-	return string(r)
-}
-
 // drawFindBar draws the find and replace panel over the top right of the
 // active pane, in the style of VS Code and Zed.
 func (v *renderer) drawFindBar(e *editor) {
-	v.barHits = v.barHits[:0]
 	bar := e.bar
 	var pane *paneBox
 	for i := range v.panes {
@@ -59,23 +48,26 @@ func (v *renderer) drawFindBar(e *editor) {
 	v.write(x0, y1, 2, chevron, menuStyle.Foreground(th.muted))
 	hit(x0, y1, 3, "toggle-replace")
 
-	field := func(x, y int, text, placeholder string, active bool, action string) {
+	field := func(x, y int, text *string, f *lineField, placeholder string, active bool, action string) {
 		style := baseStyle.Background(th.panel)
 		v.screen.FillArea(x, y, fieldW, 1, ' ', style)
-		shown := tailToWidth(text, fieldW-2)
-		if text == "" {
+		caret := x + 1
+		if *text == "" {
 			v.write(x+1, y, fieldW-2, placeholder, style.Foreground(th.muted))
+			v.fields = append(v.fields, fieldHit{hitBox{x + 1, y, fieldW - 2, 1, 0}, f, text, func() { e.barAction(action) }})
 		} else {
-			v.write(x+1, y, fieldW-2, shown, style)
+			caret = v.drawField(x+1, y, fieldW-2, text, f, style, func() { e.barAction(action) })
 		}
 		if active {
-			v.write(x+1+cellWidth(shown), y, 1, "▏", style.Foreground(th.accent))
+			if _, _, selecting := f.selection(*text); !selecting {
+				v.write(caret, y, 1, "▏", style.Foreground(th.accent))
+			}
 			v.screen.FillArea(x, y, 1, 1, '▎', style.Foreground(th.accent))
 		}
-		hit(x, y, fieldW, action)
+		hit(x, y, 1, action)
 	}
 	fx := x0 + 3
-	field(fx, y1, bar.find, "Find", bar.field == 0, "focus-find")
+	field(fx, y1, &bar.find, &bar.findField, "Find", bar.field == 0, "focus-find")
 
 	// Toggles: match case, whole word, regular expression.
 	toggle := func(x int, label string, on bool, action string) {
@@ -113,7 +105,7 @@ func (v *renderer) drawFindBar(e *editor) {
 	arrow(ax+6, "×", "close")
 
 	if bar.showReplace {
-		field(fx, y2, bar.replace, "Replace", bar.field == 1, "focus-replace")
+		field(fx, y2, &bar.replace, &bar.replaceField, "Replace", bar.field == 1, "focus-replace")
 		button := func(x int, label, action string) int {
 			style := menuStyle.Foreground(th.accent)
 			v.write(x, y2, cellWidth(label), label, style)

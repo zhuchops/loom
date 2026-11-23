@@ -74,6 +74,9 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		e.notificationDetail.move(wheel)
 		return
 	}
+	if (e.menu != nil || e.bar != nil) && wheel == 0 && v.fieldMouse(x, y, press, down, event.shift) {
+		return
+	}
 	if e.menu != nil {
 		m := e.menu
 		if wheel != 0 {

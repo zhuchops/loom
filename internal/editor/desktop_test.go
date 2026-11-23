@@ -173,6 +173,16 @@ func TestDesktopScreens(t *testing.T) {
 				s.e.handle(keyInput{key: "left"})
 			}
 		}},
+		{name: "field-selection", file: src, do: func(s *screen) {
+			s.e.openMenu(&menu{title: "Rename Symbol", input: "handleIncomingWebhookRequest", exact: func(string) bool { return true }, submit: func(string) {}})
+			for range 7 {
+				s.e.handle(keyInput{key: "left", shift: true})
+			}
+		}},
+		{name: "find-selection", file: src, do: func(s *screen) {
+			s.e.mode, s.e.b.anchor, s.e.b.cursor = "select", 0, 6
+			s.e.openFindBar(true)
+		}},
 		{name: "explorer", file: src, do: run("explorer")},
 		{name: "directory", file: src, do: run("explorer-popup")},
 		{name: "find", file: src, do: keys("/ f m t")},

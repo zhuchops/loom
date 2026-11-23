@@ -259,25 +259,7 @@ func (d *desktop) paintPicker(e *editor) {
 			d.icon(iconSearch, x+u(6), cy, 14, c.dim)
 			x += u(22)
 		}
-		if m.input == "" {
-			d.caret(x, cy, u(18))
-			d.text(x+u(4), cy, d.fit(pickerPlaceholder(m, k), field.Max.X-x-u(12), textInput), textInput, c.faint)
-		} else {
-			// The text before the caret gives way on the left, what follows it on the right.
-			avail := field.Max.X - x - u(12)
-			before, after := m.inputParts()
-			if d.width(m.input, textInput) > avail {
-				keep := avail
-				if after != "" {
-					keep = max(avail/2, avail-d.width(after, textInput))
-				}
-				before = d.fitLeft(before, keep, textInput)
-				after = d.fit(after, avail-d.width(before, textInput), textInput)
-			}
-			x += d.text(x, cy, before, textInput, c.text)
-			d.caret(x+u(1), cy, u(18))
-			d.text(x, cy, after, textInput, c.text)
-		}
+		d.paintField(field, x, cy, field.Max.X-u(12), func() string { return m.input }, &m.field, true, textInput, u(18), pickerPlaceholder(m, k), nil)
 	}
 
 	split := card.Min.Y + headH + inputH

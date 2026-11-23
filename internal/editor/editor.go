@@ -22,7 +22,10 @@ type pending struct {
 	version  int
 	count    int
 }
-type keyInput struct{ key, paste string }
+type keyInput struct {
+	key, paste string
+	shift      bool // Shift was held with an arrow, Home or End: text fields select
+}
 
 type editor struct {
 	recovery                        *recoveryState

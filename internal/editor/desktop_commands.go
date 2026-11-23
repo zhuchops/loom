@@ -41,6 +41,9 @@ func (d *desktop) command(id string) {
 		doc = e.directory.doc
 	}
 	// Text actions mean the field or document that has the keyboard.
+	if d.fieldCommand(id) {
+		return
+	}
 	switch id {
 	case "copy", "cut":
 		if e.menu != nil || e.bar != nil || doc.b.dashboard || doc.mode != "select" || doc.b.anchor < 0 {
@@ -171,6 +174,51 @@ func (d *desktop) command(id string) {
 		e.showDashboard()
 	default: // project-search, settings, theme, problems
 		run(id)
+	}
+}
+
+// fieldCommand runs Copy, Cut and Select All in the text field of an open
+// picker or of the find bar. Paste goes there as typed text.
+func (d *desktop) fieldCommand(id string) bool {
+	e := d.m.editor
+	var text *string
+	var f *lineField
+	switch {
+	case e.menu != nil && !e.menu.confirmation:
+		text, f = &e.menu.input, &e.menu.field
+	case e.menu == nil && e.bar != nil:
+		text, f = e.barText(), e.barField()
+	default:
+		return false
+	}
+	switch id {
+	case "select-all":
+		f.selectAll(*text)
+	case "copy", "cut":
+		lo, hi, ok := f.selection(*text)
+		if !ok {
+			return true
+		}
+		systemCopy(f.selected(*text))
+		if id == "cut" {
+			f.replace(text, lo, hi, "")
+			d.fieldChanged()
+		}
+	case "undo", "redo":
+	default:
+		return false
+	}
+	return true
+}
+
+// fieldChanged updates what depends on a field's text after an edit made
+// outside of the keyboard.
+func (d *desktop) fieldChanged() {
+	e := d.m.editor
+	if e.menu != nil {
+		e.menu.filter()
+	} else if e.bar != nil && e.bar.field == 0 {
+		e.barSync(true)
 	}
 }
 

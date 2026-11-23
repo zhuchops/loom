@@ -188,6 +188,8 @@ func (d *desktop) key(ev key.Event) {
 			name = key.NamePageUp
 		case key.NameDownArrow:
 			name = key.NamePageDown
+		case key.NameDeleteBackward, key.NameDeleteForward:
+			mod |= tea.ModSuper // clears to the start or end of a text field
 		default:
 			return
 		}
@@ -265,6 +267,7 @@ func (d *desktop) pointer(ev pointer.Event) {
 	}
 	switch ev.Kind {
 	case pointer.Press:
+		d.pressShift = ev.Modifiers.Contain(key.ModShift)
 		if top == nil {
 			return
 		}
