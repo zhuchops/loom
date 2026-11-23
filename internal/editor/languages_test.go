@@ -85,3 +85,30 @@ func TestFormatterPreservesCRLF(t *testing.T) {
 		t.Fatalf("formatted text = %q", got)
 	}
 }
+
+func TestElixirSupport(t *testing.T) {
+	cfg := defaultConfig()
+	for path, want := range map[string]string{"lib/app.ex": "elixir", "mix.exs": "elixir", "page.html.heex": "heex", "a.eex": "heex"} {
+		if got := cfg.languageFor(path); got != want {
+			t.Errorf("languageFor(%q) = %q, want %q", path, got, want)
+		}
+	}
+	if len(cfg.Languages["elixir"].Format) == 0 {
+		t.Fatal("elixir should format with mix format")
+	}
+	if got := scopeLabel("  defp valid?(user) do"); got != "valid?" {
+		t.Errorf("scope label = %q", got)
+	}
+	if got := scopeLabel("defmodule MyApp.Accounts do"); got != "MyApp.Accounts" {
+		t.Errorf("module label = %q", got)
+	}
+	e := testEditor(t, "vim", "")
+	e.open(fixture(t, e.root, "a.ex", ""))
+	for before, want := range map[string]bool{
+		"def run(x) do": true, "  fn x ->": true, "case y do": true, "else": true, "x = 1": false, "  foo(1) # do": false,
+	} {
+		if got := e.indentAfter(before) != ""; got != want {
+			t.Errorf("indentAfter(%q) indents = %v, want %v", before, got, want)
+		}
+	}
+}

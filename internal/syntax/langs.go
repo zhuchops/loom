@@ -31,6 +31,7 @@ var specs = map[string]spec{
 	"rust":            cStyle,
 	"css":             {block: [2]string{"/*", "*/"}, quotes: "\"'"},
 	"html":            {block: [2]string{"<!--", "-->"}, quotes: "\"'"},
+	"heex":            {block: [2]string{"<!--", "-->"}, quotes: "\"'"},
 	"json":            {quotes: "\""},
 	"python":          {line: []string{"#"}, quotes: "\"'", triple: true, keywords: "and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case", constants: "true false none self cls"},
 	"yaml":            {line: []string{"#"}, quotes: "\"'"},
@@ -108,7 +109,7 @@ var specs = map[string]spec{
 // CommentSyntax returns the delimiters the comment toggle uses for lang.
 func CommentSyntax(lang string) (open, close string, ok bool) {
 	switch lang {
-	case "html", "markdown", "xml":
+	case "html", "heex", "markdown", "xml":
 		return "<!--", "-->", true
 	case "css":
 		return "/*", "*/", true

@@ -25,6 +25,9 @@ func Highlight(lang, path string, text []rune) []Token {
 	if lang == "go" {
 		return highlightGo(path, text)
 	}
+	if lang == "elixir" {
+		return highlightElixir(text)
+	}
 	if _, ok := specs[lang]; ok {
 		return highlightGeneric(text, lang)
 	}

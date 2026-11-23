@@ -40,3 +40,33 @@ func TestCommentSyntax(t *testing.T) {
 		t.Error("json has no comments")
 	}
 }
+
+func TestElixirHighlight(t *testing.T) {
+	src := "defmodule MyApp.User do\n  @moduledoc \"\"\"\n  Docs.\n  \"\"\"\n  @spec run(map) :: :ok\n  def valid?(user), do: user |> check() |> done\n  defp done!(x), do: ~r/ab+/i\n  # note\nend\n"
+	cases := []struct{ word, want string }{
+		{"defmodule", "keyword"}, {"MyApp", "type"}, {"do", "keyword"},
+		{"@moduledoc", "decorator"}, {"\"\"\"\n  Docs.\n  \"\"\"", "comment"},
+		{"@spec", "decorator"}, {":ok", "constant"}, {"def", "keyword"},
+		{"valid?", "function"}, {"do:", "property"}, {"check", "function"}, {"done", "function"},
+		{"defp", "keyword"}, {"done!", "function"}, {"~r/ab+/i", "regexp"}, {"# note", "comment"}, {"end", "keyword"},
+	}
+	got := kinds(src, "elixir")
+	for _, c := range cases {
+		if got[c.word] != c.want {
+			t.Errorf("%q is %q, want %q", c.word, got[c.word], c.want)
+		}
+	}
+	for src, want := range map[string]string{
+		"x = :\"quoted atom\"": ":\"quoted atom\"", "a = ?z": "?z", "n = 1_000.5": "1_000.5", "s = \"a\nb\"": "\"a\nb\"",
+	} {
+		if _, ok := kinds(src, "elixir")[want]; !ok {
+			t.Errorf("%q: no token %q", src, want)
+		}
+	}
+	if k := kinds("x = a::b", "elixir"); k[":"] != "" || k["::b"] != "" {
+		t.Errorf("a double colon is not an atom: %v", k)
+	}
+	if open, _, ok := CommentSyntax("elixir"); !ok || open != "#" {
+		t.Error("elixir comment toggle")
+	}
+}

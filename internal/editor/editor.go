@@ -321,6 +321,20 @@ func (e *editor) insertNewline() {
 	}
 }
 
+// elixirBlockOpener reports whether a line opens an indented Elixir block:
+// it ends in `do`, `->`, or is a bare else/rescue/catch/after/try.
+func elixirBlockOpener(line string) bool {
+	t := strings.TrimSpace(line)
+	if i := strings.Index(t, " #"); i >= 0 {
+		t = strings.TrimSpace(t[:i])
+	}
+	switch t {
+	case "do", "else", "rescue", "catch", "after", "try", "fn":
+		return true
+	}
+	return strings.HasSuffix(t, " do") || strings.HasSuffix(t, "->") || strings.HasSuffix(t, "|> fn")
+}
+
 // closerFor returns the bracket that closes the opener ending text, or 0.
 func closerFor(text string) rune {
 	switch {
@@ -342,6 +356,9 @@ func (e *editor) indentAfter(before string) string {
 		return ""
 	}
 	if closerFor(before) != 0 {
+		return e.indentUnit(before)
+	}
+	if elixirBlockOpener(before) && e.cfg.languageFor(e.b.path) == "elixir" {
 		return e.indentUnit(before)
 	}
 	if !strings.HasSuffix(before, ":") {
