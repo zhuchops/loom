@@ -12,6 +12,50 @@ go install github.com/zhuchops/loom@latest
 
 Run `loom` from the directory you want to edit. If your shell cannot find it, add Go's binary directory to your PATH. The default is `$(go env GOPATH)/bin` unless you set `GOBIN`.
 
+### Installing on Linux
+
+Loom needs Go 1.26 or later, and several distributions ship an older one. Check with `go version`. If it is older, take Go from [go.dev/dl](https://go.dev/dl/) instead of the package manager (use `arm64` in the file name on ARM machines):
+
+```sh
+curl -LO https://go.dev/dl/go1.26.0.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.26.0.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> ~/.bashrc   # or ~/.zshrc
+```
+
+Open a new shell, then `go install github.com/zhuchops/loom@latest` and run `loom`. To pin a release use `@v0.27.0` instead of `@latest`. If the Go proxy has not seen a new tag yet, run `GOPROXY=direct go install github.com/zhuchops/loom@latest`.
+
+The terminal version needs only Go. For the system clipboard install `wl-clipboard` (Wayland) or `xclip` (X11). For file icons use a terminal font from [Nerd Fonts](https://www.nerdfonts.com/). Language servers and formatters are picked up from `PATH` when present.
+
+| Distribution | Go, clipboard (terminal version) |
+|---|---|
+| Debian, Ubuntu, Mint | `sudo apt install golang-go wl-clipboard xclip git` |
+| Fedora, RHEL, Rocky, Alma | `sudo dnf install golang wl-clipboard xclip git` |
+| Arch, Manjaro, EndeavourOS | `sudo pacman -S go wl-clipboard xclip git` |
+| openSUSE | `sudo zypper install go wl-clipboard xclip git` |
+| Alpine | `sudo apk add go wl-clipboard xclip git` |
+| NixOS, or Nix anywhere | `nix shell nixpkgs#go nixpkgs#wl-clipboard nixpkgs#xclip nixpkgs#git` |
+
+If `go version` prints less than 1.26 after that, use the tarball above.
+
+The desktop window (`loom-desktop`) is built with cgo and needs a C compiler plus the development files for Wayland, X11, xkbcommon, EGL/GLES, Vulkan and libffi. The Linux desktop build has not been tested, so treat these lists as a starting point:
+
+| Distribution | Build dependencies |
+|---|---|
+| Debian, Ubuntu, Mint | `sudo apt install gcc pkg-config libwayland-dev libx11-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libvulkan-dev libffi-dev` |
+| Fedora, RHEL | `sudo dnf install gcc pkgconf-pkg-config wayland-devel libX11-devel libxkbcommon-x11-devel mesa-libGLES-devel mesa-libEGL-devel libXcursor-devel vulkan-headers libffi-devel` |
+| Arch, Manjaro | `sudo pacman -S gcc pkgconf wayland libx11 libxkbcommon-x11 mesa libxcursor vulkan-headers libffi` |
+| openSUSE | `sudo zypper install gcc pkgconf-pkg-config wayland-devel libX11-devel libxkbcommon-x11-devel Mesa-libGLESv2-devel Mesa-libEGL-devel libXcursor-devel vulkan-devel libffi-devel` |
+| Alpine | `sudo apk add gcc musl-dev pkgconf wayland-dev libx11-dev libxkbcommon-dev mesa-dev libxcursor-dev vulkan-headers libffi-dev` |
+
+Then:
+
+```sh
+go install -tags desktop github.com/zhuchops/loom/cmd/loom-desktop@latest
+loom-desktop
+```
+
+If the build stops on a missing header, install the development package that provides it and run the command again.
+
 To build from a source checkout:
 
 ```sh
