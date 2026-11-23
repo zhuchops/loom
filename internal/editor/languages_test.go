@@ -93,6 +93,12 @@ func TestElixirSupport(t *testing.T) {
 			t.Errorf("languageFor(%q) = %q, want %q", path, got, want)
 		}
 	}
+	if got := cfg.Languages["elixir"].Server; len(got) != 2 || got[0] != "expert" || got[1] != "--stdio" {
+		t.Fatalf("elixir server = %v, want expert --stdio", got)
+	}
+	if got := cfg.Languages["heex"].Server; len(got) == 0 || got[0] != "expert" {
+		t.Fatalf("heex server = %v", got)
+	}
 	if len(cfg.Languages["elixir"].Format) == 0 {
 		t.Fatal("elixir should format with mix format")
 	}
