@@ -19,6 +19,26 @@ func (b *Bridge) command(id string) {
 		return
 	}
 	e := b.m.editor
+	if s := b.settings; s != nil && b.settingsHaveKeys() {
+		switch id {
+		case "paste":
+			if text, ok := clipboardPaste(); ok {
+				b.settingsKey(keyInput{paste: text})
+			}
+			return
+		case "copy", "cut", "undo", "redo", "select-all":
+			return
+		case "search":
+			s.focusSearch()
+			return
+		case "close-tab":
+			b.settings = nil
+			return
+		case "zoom-in", "zoom-out", "zoom-reset", "quit", "settings":
+		default:
+			b.settings = nil
+		}
+	}
 	doc := e
 	if e.directory != nil {
 		doc = e.directory.doc

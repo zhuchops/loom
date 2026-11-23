@@ -15,32 +15,6 @@ import (
 	"github.com/zhuchops/loom/internal/theme"
 )
 
-var themeTitles = map[string]string{"nvchad": "NvChad", "tokyo-night": "Tokyo Night", "one-dark": "One Dark", "solarized-dark": "Solarized Dark", "solarized-light": "Solarized Light"}
-
-func themeTitle(name string) string {
-	if title, ok := themeTitles[name]; ok {
-		return title
-	}
-	return humanize(name)
-}
-
-var weightNames = map[int]string{100: "Thin", 200: "Extra Light", 300: "Light", 400: "Regular", 500: "Medium", 600: "Semibold", 700: "Bold", 800: "Extra Bold", 900: "Black"}
-
-func weightName(w int) string {
-	if name, ok := weightNames[w]; ok {
-		return name
-	}
-	return strconv.Itoa(w)
-}
-
-// The pieces of the code sample on the Fonts page.
-var previewCode = [][]struct{ kind, text string }{
-	{{"comment", "// Sum adds up the even numbers"}},
-	{{"keyword", "func"}, {"", " "}, {"function", "Sum"}, {"", "(values []"}, {"type", "int"}, {"", ") (total "}, {"type", "int"}, {"", ") {"}},
-	{{"", "    "}, {"keyword", "if"}, {"", " len(values) >= "}, {"number", "2"}, {"", " && total != "}, {"number", "0"}, {"", " { } "}},
-	{{"", "    "}, {"string", `"0O 1lI -> => Привет"`}},
-}
-
 func (d *desktop) paintSettings(e *editor) {
 	s, u, c := d.settings, d.u, &d.c
 	// Lighter than other popups: changes to fonts and colours show behind it.

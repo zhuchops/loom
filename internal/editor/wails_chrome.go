@@ -51,6 +51,9 @@ func (b *Bridge) chrome() map[string]any {
 	}
 	b.popups(ui)
 	b.panels(ui)
+	if b.settings != nil {
+		ui["settings"] = b.settingsState()
+	}
 	return ui
 }
 
@@ -242,7 +245,7 @@ func (b *Bridge) Act(name string, i int, s string) {
 }
 
 func (b *Bridge) act(name string, i int, s string) {
-	if b.popupAct(name, i, s) || b.panelAct(name, i, s) {
+	if b.popupAct(name, i, s) || b.panelAct(name, i, s) || b.settingsAct(name, i, s) {
 		return
 	}
 	e := b.m.editor

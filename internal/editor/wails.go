@@ -67,6 +67,8 @@ type Bridge struct {
 	dialog     *dialog
 	list       listState
 	rows2      panelRows
+	settings   *settingsView
+	fonts      []webFont // installed families, as the page found them
 	preview    previewCache
 }
 
@@ -103,6 +105,7 @@ func newBridge(e *editor, ctx context.Context, explicit bool) *Bridge {
 	b := &Bridge{inbox: make(chan tea.Msg, 256), calls: make(chan func(), 256), ticker: time.NewTicker(time.Second), explicit: explicit}
 	b.m = &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0), native: true}, ctx: ctx, ticks: b.ticker.C}
 	b.m.attach()
+	e.settingsPage = b.toggleSettings
 	e.pickFolder = func(start string, chosen func(string)) { b.pick(pickFolder, start, chosen) }
 	return b
 }
@@ -186,6 +189,16 @@ func (b *Bridge) send(msg tea.Msg) {
 	case tea.QuitMsg:
 		b.m.editor.quit = true
 		return
+	case tea.KeyPressMsg:
+		if b.settingsHaveKeys() {
+			b.settingsKey(terminalKey(tea.Key(msg)))
+			return
+		}
+	case tea.PasteMsg:
+		if b.settingsHaveKeys() {
+			b.settingsKey(keyInput{paste: msg.Content})
+			return
+		}
 	}
 	_, cmd := b.m.Update(msg)
 	b.run(cmd)

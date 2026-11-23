@@ -28,7 +28,13 @@ func (b *Bridge) playDemo() {
 			switch verb {
 			case "keys":
 				for _, k := range strings.Fields(rest) {
-					b.call(func() { b.m.editor.handle(keyInput{key: k}) })
+					b.call(func() {
+						if b.settingsHaveKeys() {
+							b.settingsKey(keyInput{key: k})
+						} else {
+							b.m.editor.handle(keyInput{key: k})
+						}
+					})
 				}
 			case "type":
 				b.call(func() { b.m.editor.handle(keyInput{paste: rest}) })

@@ -244,6 +244,7 @@ function applyChrome(ui) {
   renderDialog(ui.dialog);
   applyPopups(ui);
   applyPanels(ui);
+  renderSettings(ui.settings);
 }
 
 for (const id of ['title', 'sidebar', 'tabs', 'crumbs', 'status']) chromeDown($(id));
