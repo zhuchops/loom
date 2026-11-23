@@ -279,6 +279,12 @@ func (e *editor) requestCompletion(trigger int, char string) {
 	cursor := e.b.cursor
 	go func() {
 		items, err := s.complete(doc, trigger, char)
+		if doc.language == "dingo" && len(items) == 0 {
+			// The server works from the last generated Go file.
+			if extra := unimportedCompletions([]rune(doc.text), cursor); len(extra) > 0 {
+				items, err = extra, nil
+			}
+		}
 		e.async <- func() {
 			e.completion.running = false
 			if e.completion.queued {
@@ -405,6 +411,14 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 			cursor += len([]rune(next.text)) - (next.end - next.start)
 		}
 		edits = append(edits, next)
+	}
+	if item.importPath != "" {
+		if next, ok := importEdit(b, item.importPath); ok {
+			if next.start < primary.start {
+				cursor += len([]rune(next.text)) - (next.end - next.start)
+			}
+			edits = append(edits, next)
+		}
 	}
 	slices.SortStableFunc(edits, func(a, b edit) int { return a.start - b.start })
 	for i := 1; i < len(edits); i++ {

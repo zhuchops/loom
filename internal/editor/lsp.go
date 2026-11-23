@@ -40,6 +40,9 @@ type completionItem struct {
 	InsertTextFormat int             `json:"insertTextFormat"`
 	TextEdit         *textEdit       `json:"textEdit"`
 	Additional       []textEdit      `json:"additionalTextEdits"`
+	// importPath is set by Loom for an export of a package the file has not
+	// imported yet; accepting the item adds the import.
+	importPath string
 }
 type document struct {
 	path, language, text string
