@@ -1,4 +1,4 @@
-//go:build !desktop
+//go:build !desktop && !wails
 
 package editor
 

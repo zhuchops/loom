@@ -4,3 +4,7 @@ package editor
 
 // platformEnvironment has nothing to repair outside macOS.
 func platformEnvironment() {}
+
+func raiseWindow() {}
+
+func setAppearance(bool) {}

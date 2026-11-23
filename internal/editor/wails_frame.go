@@ -87,6 +87,7 @@ func (b *Bridge) render() {
 	if c := deriveColors(); c != b.frame.colors || b.frame.inks == nil {
 		b.frame.colors, b.frame.inks, b.frame.rows = c, map[[2]color.NRGBA]color.NRGBA{}, nil
 		out.Theme = themeVars(c)
+		setAppearance(c.dark)
 		b.frame.ui = "" // the chrome's colours changed with the theme
 	}
 	o := &e.cfg.options

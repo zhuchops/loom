@@ -665,4 +665,3 @@ func (b *Bridge) settingsAct(name string, i int, arg string) bool {
 	}
 	return true
 }
-

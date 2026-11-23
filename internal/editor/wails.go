@@ -93,6 +93,7 @@ func runWails(e *editor, explicit bool) error {
 		OnBeforeClose:    b.beforeClose,
 		OnShutdown:       func(context.Context) { e.hub.finish() },
 		Bind:             []any{b},
+		Menu:             b.appMenu(),
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),
 			WebviewIsTransparent: true,
@@ -112,19 +113,20 @@ func newBridge(e *editor, ctx context.Context, explicit bool) *Bridge {
 
 func (b *Bridge) startup(ctx context.Context) {
 	b.app = ctx
+	b.serveLaunches()
 	go b.loop()
 }
 
-// beforeClose keeps the window open while files are unsaved.
+// beforeClose keeps the window open while files are unsaved, and asks what
+// to do with them.
 func (b *Bridge) beforeClose(context.Context) bool {
 	reply := make(chan bool)
 	b.calls <- func() {
-		e := b.m.editor
-		if e.quit || len(e.hub.unsaved()) == 0 {
+		if b.m.editor.quit || !b.unsaved() {
 			reply <- false
 			return
 		}
-		e.notify("Save or discard your changes before quitting")
+		b.requestQuit()
 		reply <- true
 	}
 	return <-reply
