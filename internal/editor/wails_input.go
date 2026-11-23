@@ -105,9 +105,9 @@ func (b *Bridge) Key(ev KeyEvent) {
 			n := len(q.Choices)
 			switch ev.Key {
 			case "Escape":
-				b.Answer(-1)
+				b.answer(-1)
 			case "Enter":
-				b.Answer(q.Selected)
+				b.answer(q.Selected)
 			case "Tab", "ArrowLeft":
 				// Buttons run right to left, the default on the right.
 				q.Selected = (q.Selected + 1) % n

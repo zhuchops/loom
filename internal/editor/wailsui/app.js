@@ -131,6 +131,12 @@ function drawCursor(c) {
   const oy = grid.offsetTop;
   cursorEl.style.display = 'block';
   cursorEl.style.transform = `translate(${ox + c.x * state.cellW}px, ${oy + c.y * state.cellH}px)`;
+  // Input methods show their candidates next to the field that has the
+  // keyboard, so it follows the cursor.
+  const g = grid.getBoundingClientRect();
+  input.style.left = `${g.left + c.x * state.cellW}px`;
+  input.style.top = `${g.top + c.y * state.cellH}px`;
+  input.style.height = `${state.cellH}px`;
   cursorEl.className = cursorEl.className.replace(/\b(bar|underline|block|blink|idle)\b/g, '').trim();
   cursorEl.classList.add(c.shape || 'block');
   if (!document.hasFocus()) cursorEl.classList.add('idle');

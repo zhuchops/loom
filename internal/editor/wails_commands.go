@@ -375,20 +375,20 @@ type dialogChoice struct {
 }
 
 // Answer picks a dialog's button; -1 is Escape, which is the last one.
-func (b *Bridge) Answer(i int) {
-	b.call(func() {
-		q := b.dialog
-		if q == nil {
-			return
-		}
-		if i < 0 || i >= len(q.runs) {
-			i = len(q.runs) - 1
-		}
-		b.dialog = nil
-		if run := q.runs[i]; run != nil {
-			run()
-		}
-	})
+func (b *Bridge) Answer(i int) { b.call(func() { b.answer(i) }) }
+
+func (b *Bridge) answer(i int) {
+	q := b.dialog
+	if q == nil {
+		return
+	}
+	if i < 0 || i >= len(q.runs) {
+		i = len(q.runs) - 1
+	}
+	b.dialog = nil
+	if run := q.runs[i]; run != nil {
+		run()
+	}
 }
 
 func (b *Bridge) closeTab(buf *buffer) {
