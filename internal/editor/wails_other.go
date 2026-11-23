@@ -1,4 +1,4 @@
-//go:build wails && !darwin
+//go:build desktop && !darwin
 
 package editor
 
@@ -8,3 +8,5 @@ func platformEnvironment() {}
 func raiseWindow() {}
 
 func setAppearance(bool) {}
+
+func installWindow() {}

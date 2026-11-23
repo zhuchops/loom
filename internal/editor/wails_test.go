@@ -1,4 +1,4 @@
-//go:build wails
+//go:build desktop
 
 package editor
 
@@ -6,11 +6,16 @@ import (
 	"context"
 	"encoding/json"
 	"image/color"
+	"os"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/zhuchops/loom/internal/theme"
 )
 
 // testBridge is a Bridge around a test editor, without a window.
@@ -18,6 +23,15 @@ func testBridge(t *testing.T, input string) (*Bridge, *editor) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	// Sessions and settings change the theme for the whole process.
+	was := th.name
+	t.Cleanup(func() {
+		for _, t2 := range theme.All {
+			if t2.Name == was {
+				applyTheme(t2)
+			}
+		}
+	})
 	e := testEditor(t, "vim", input)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -212,4 +226,74 @@ func TestDialogAnswers(t *testing.T) {
 		t.Fatal("Escape left the question up")
 	}
 	_ = tea.KeyPressMsg{}
+}
+
+func TestFileMarks(t *testing.T) {
+	c := deriveColors()
+	for _, path := range []string{"a.ex", "test/a_test.exs", "mix.exs", "page.html.heex", "main.dingo", "main.go"} {
+		if mark, _ := fileMarkOf(&c, path); mark == "" {
+			t.Errorf("%s has no icon", path)
+		}
+	}
+}
+
+func TestDesktopOpensWhatALaterLaunchSends(t *testing.T) {
+	t.Chdir(t.TempDir()) // opening a project moves the process there; come back after
+	b, e := testBridge(t, "")
+	state, err := os.MkdirTemp("/tmp", "ls") // short: a socket path has a length limit
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(state) })
+	t.Setenv("XDG_STATE_HOME", state)
+	h := e.hub
+	notes := filepath.Join(e.root, "NOTES.txt")
+	if err := os.WriteFile(notes, []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b.openRequested(openRequest{Cwd: e.root, Paths: []string{"NOTES.txt"}})
+	if h.current.b.path != resolveOpenPath("/", notes) {
+		t.Fatalf("buffer %q", h.current.b.path)
+	}
+	// A new folder becomes a session.
+	n := len(h.live)
+	fresh := filepath.Join(t.TempDir(), "fresh")
+	if err := os.MkdirAll(fresh, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	b.openRequested(openRequest{Cwd: "/", Paths: []string{fresh}})
+	if len(h.live) != n+1 || filepath.Base(h.current.root) != "fresh" {
+		t.Fatalf("a new folder did not become a session: %d sessions", len(h.live))
+	}
+	// The socket carries a request from a second launch to the first.
+	got := make(chan openRequest, 1)
+	listenForRequests(func(r openRequest) { got <- r })
+	if !forwardToRunning([]string{"a.txt", "dir"}) {
+		t.Fatal("a running Loom did not take the launch")
+	}
+	if r := <-got; len(r.Paths) != 2 || r.Cwd == "" {
+		t.Fatalf("request = %+v", r)
+	}
+	if info, err := os.Stat(ipcSocket()); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("socket: %v %v", info, err)
+	}
+}
+
+func TestTabDroppedOnTheTextSplits(t *testing.T) {
+	b, e := testBridge(t, "one\n")
+	path := filepath.Join(e.root, "two.txt")
+	if err := os.WriteFile(path, []byte("two\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.open(path)
+	b.m.view.draw(e)
+	pane := b.m.view.panes[0]
+	b.act("tab-over", pane.x+pane.w-2, strconv.Itoa(pane.y+pane.h/2)) // the right edge
+	if b.m.view.drop.leaf == nil {
+		t.Fatal("no drop zone over the text")
+	}
+	b.act("tab-drop", -1, "")
+	if n := len(e.layout.leaves()); n != 2 {
+		t.Fatalf("%d panes after the drop", n)
+	}
 }

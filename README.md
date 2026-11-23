@@ -37,34 +37,25 @@ The terminal version needs only Go. For the system clipboard install `wl-clipboa
 
 If `go version` prints less than 1.26 after that, use the tarball above.
 
-The desktop window (`loom-desktop`) is built with cgo and needs a C compiler plus the development files for Wayland, X11, xkbcommon, EGL/GLES, Vulkan and libffi. The Linux desktop build has not been tested, so treat these lists as a starting point:
+The desktop window (`loom-desktop`) is drawn in the system web view through [Wails](https://wails.io). It is built with cgo and needs a C compiler plus the development files for GTK 3 and WebKitGTK. Current distributions ship WebKitGTK 4.1, which takes the extra build tag `webkit2_41`; on an older one that only has 4.0 (Ubuntu 22.04, Debian 11) install the 4.0 package and leave the tag out. The Linux desktop build has not been tested, so treat these lists as a starting point:
 
 | Distribution | Build dependencies |
 |---|---|
-| Debian, Ubuntu, Mint | `sudo apt install gcc pkg-config libwayland-dev libx11-dev libxkbcommon-x11-dev libgles2-mesa-dev libegl1-mesa-dev libxcursor-dev libvulkan-dev libffi-dev` |
-| Fedora, RHEL | `sudo dnf install gcc pkgconf-pkg-config wayland-devel libX11-devel libxkbcommon-x11-devel mesa-libGLES-devel mesa-libEGL-devel libXcursor-devel vulkan-headers libffi-devel` |
-| Arch, Manjaro | `sudo pacman -S gcc pkgconf wayland libx11 libxkbcommon-x11 mesa libxcursor vulkan-headers libffi` |
-| openSUSE | `sudo zypper install gcc pkgconf-pkg-config wayland-devel libX11-devel libxkbcommon-x11-devel Mesa-libGLESv2-devel Mesa-libEGL-devel libXcursor-devel vulkan-devel libffi-devel` |
-| Alpine | `sudo apk add gcc musl-dev pkgconf wayland-dev libx11-dev libxkbcommon-dev mesa-dev libxcursor-dev vulkan-headers libffi-dev` |
+| Debian, Ubuntu, Mint | `sudo apt install gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev` |
+| Fedora, RHEL | `sudo dnf install gcc pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel` |
+| Arch, Manjaro | `sudo pacman -S gcc pkgconf gtk3 webkit2gtk-4.1` |
+| openSUSE, Alpine, others | a C compiler, `pkg-config`, and the GTK 3 and WebKitGTK 4.1 development packages |
 
 Then:
 
 ```sh
-go install -tags desktop github.com/zhuchops/loom/cmd/loom-desktop@latest
+go install -tags desktop,production,webkit2_41 github.com/zhuchops/loom/cmd/loom-desktop@latest
 loom-desktop
 ```
 
+On macOS the system already has WebKit; there the tags are `desktop,production`. The `production` tag is Wails' own: without it the program stops at start and asks for it.
+
 If the build stops on a missing header, install the development package that provides it and run the command again.
-
-### The web view window (in progress)
-
-A second desktop front end, built on [Wails](https://wails.io), is being written to replace the Gio window. It draws the interface in the system web view (WebKit on macOS and Linux), which brings real translucency and blurred "glass" popups. It is not finished yet: so far it has the text panes with their colors and cursor; keys, typing (including input methods), the mouse and the wheel; the title bar (sidebar toggle, project and session switcher, branch, the search field, Source Control, palette and settings buttons), the file sidebar with git marks, filtering and a draggable edge, tabs (click, middle-click or × to close, drag to reorder), the path bar, the status bar, the save-and-quit questions, the system Open and Save panels, and the popups: pickers and the command palette with their highlighted matches, key hints and code previews, the find bar, completion with its documentation, signature help, hover documentation, which-key, notifications and their details. The Source Control panel, diffs, the directory editor, the Welcome page and the panes' scrollbars and dividers are there too. Popups and panels are glass: they blur what lies under them. The Settings window has every page of the Gio one (themes as swatches, the code font preview, steppers, switches and choices, per-language values, key recording); its font pickers list the families the web view finds installed, from a list of common code and interface fonts, and offer the weights 300 to 800. On macOS it has the same menu bar and ⌘ shortcuts, follows the theme with dark or light window glass, and asks about unsaved files when the window is closed. Like the Gio window it is a single instance (a later launch hands its files to the open window, `-new` opens another) and it leaves the terminal unless started with `-foreground`. Input methods show their candidates at the text cursor. Its Go side has its own tests: `go test -tags wails,production ./internal/editor`. Text fields in them take the mouse as in the Gio window. The title bar, sidebar, tabs and status bar are translucent, so on macOS the desktop shows through them, blurred. Build it with:
-
-```sh
-go build -tags wails,production -o loom-wails ./cmd/loom-wails
-```
-
-It needs cgo; on Linux also the WebKitGTK development files (`webkit2gtk-4.1` on current distributions, built with the extra tag `webkit2_41`) and GTK 3. For checking the front end without a keyboard, `LOOM_DEMO=script` names a file of lines such as `keys space f`, `type text`, `run palette` and `sleep 300` that the window plays once it is up.
 
 To build from a source checkout:
 
@@ -220,11 +211,13 @@ The chain of functions and blocks around the cursor, like `Server › Handle ›
 
 ### Desktop app
 
-`sh packaging/macos/build-app.sh` builds `dist/Loom.app`; pass a folder to build somewhere else. The icon, two pairs of threads woven into an L, is drawn in code by `internal/brand`; the logo inside the app is the same drawing, simplified at small sizes. `go build -tags desktop -o loom-desktop ./cmd/loom-desktop` builds just the binary (git ignores it). It is the same editor, with the same keys, themes and config as the terminal version, in a native window (Gio, GPU rendered). Only the code is laid out on a character grid; everything around it is laid out in pixels.
+`sh packaging/macos/build-app.sh` builds `dist/Loom.app`; pass a folder to build somewhere else. The icon, two pairs of threads woven into an L, is drawn in code by `internal/brand`; the logo inside the app is the same drawing, simplified at small sizes. `go build -tags desktop,production -o loom-desktop ./cmd/loom-desktop` builds just the binary (git ignores it). It is the same editor, with the same keys, themes and config as the terminal version, in a native window whose interface is drawn by the system web view ([Wails](https://wails.io); WebKit on macOS and Linux). Go keeps the editor and lays the code out on a character grid as the terminal does; each change sends the rows that changed and the state of everything around them to the page, which draws them with HTML and CSS and sends keys, typing (input methods included, with their candidates at the cursor), clicks and the wheel back.
+
+The title bar, sidebar, tabs and status bar are translucent, so on macOS the desktop shows through them, blurred, in dark or light glass to match the theme. Pickers, popups, panels and dialogs are glass too: they blur the code under them.
 
 - **Title bar:** the project and how many sessions are open (click to switch), the branch (click to switch), a search field, and buttons for Source Control, the Command Palette and Settings.
 - **Sidebar:** the file tree with git state, buttons for a new file, a new folder and filtering. Right-click for actions; drag its edge to resize it.
-- **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click to close. A tinted bar beneath shows the file's path and the functions and blocks around the cursor.
+- **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click or × to close. A tinted bar beneath shows the file's path and the functions and blocks around the cursor.
 - **Pickers and panels:** the palette, file search with a highlighted preview, settings with switches, Source Control with stage and commit buttons, and a diff with both line numbers.
 - **Messages** appear as a toast at the bottom right. Click one for the history.
 - **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first.
@@ -245,7 +238,7 @@ The chain of functions and blocks around the cursor, like `Server › Handle ›
 
 On macOS, Command belongs to the menu bar and Control to Vim, so `⌘D` is not `Ctrl+D`. Control shortcuts also work on a Russian keyboard layout. Option acts as Alt.
 
-Interface text uses Avenir Next and code Menlo until you pick others in Settings → Fonts (`LOOM_FONT` can point at a font file as the default). Secondary text and syntax colors are nudged where a theme would make them unreadable. Started from Finder, Loom takes `PATH` from your login shell so language servers and formatters are found. Set `"animations": false` to turn off the gliding cursor and scrolling.
+Interface text uses the system font and code Menlo until you pick others in Settings → Fonts, whose pickers list the installed families the window finds among common code and interface fonts (weights 300 to 800; a weight a font lacks is made up). Secondary text and syntax colors are nudged where a theme would make them unreadable. Started from Finder, Loom takes `PATH` from your login shell so language servers and formatters are found. Set `"animations": false` to turn off the gliding cursor and scrolling.
 
 The app is signed ad hoc, not notarized. It has only been used on macOS. The Windows build does not compile yet (`recovery.go` uses a Unix call), and the Linux desktop build is untested.
 
@@ -622,7 +615,7 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `search.go` finds matches (plain, whole word, regex) and caches them per buffer version. `findbar.go` and `findbar_draw.go` are the find and replace panel: its input, its replace actions and its drawing.
 - `notifications.go` keeps the full text of status messages and draws their detail view. `pairs.go` tracks generated delimiters through buffer edits and undo.
 
-`go test -tags desktop ./internal/editor` also paints every screen of the desktop app and drives it with pointer and key events, without opening a window. Set `LOOM_SHOTS=<folder>` to save each screen as a PNG and look at it.
+`go test -tags desktop,production ./internal/editor` also tests the desktop app's side of the bridge to its page (keys, the grid rows, the chrome, pickers, settings, dialogs, launches) without opening a window. The page itself is in `internal/editor/wailsui`. To check it by eye, `LOOM_DEMO=script loom-desktop` plays a file of lines such as `keys space f`, `type text`, `run palette`, `open path` and `sleep 300` once the window is up.
 
 Every change gets a README update and a version bump in `internal/editor/main.go`, committed as `vX.Y.Z`. Run `go test -race ./...` from this directory. Set `LOOM_TEST_GOPLS=1` to enable the tests against `gopls` on PATH. Renderer tests inspect the in-memory frame, and terminal adapter tests send Bubble Tea messages directly.
 

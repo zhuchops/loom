@@ -237,6 +237,7 @@ window.addEventListener('mousemove', (e) => {
   lastCell = at;
   const inside = e.target.closest && e.target.closest('#editor');
   if (!held && !inside) return;
+  if (typeof tabDrag !== 'undefined' && tabDrag) return;
   bridge().Mouse('move', x, y, 0, held, e.shiftKey);
 });
 window.addEventListener('mouseup', (e) => {

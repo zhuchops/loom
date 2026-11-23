@@ -4,16 +4,14 @@ go 1.26.0
 
 require (
 	charm.land/bubbletea/v2 v2.1.1
-	gioui.org v0.10.3
 	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
-	github.com/go-text/typesetting v0.3.5
 	github.com/rivo/uniseg v0.4.7
+	github.com/wailsapp/wails/v2 v2.17.1
 )
 
 require (
-	gioui.org/shader v1.0.9 // indirect
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
@@ -45,11 +43,9 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
-	github.com/wailsapp/wails/v2 v2.17.1 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/exp/shiny v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
-	golang.org/x/image v0.41.0 // indirect
+	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect

@@ -1,4 +1,4 @@
-//go:build (desktop || wails) && darwin
+//go:build desktop && darwin
 
 package editor
 

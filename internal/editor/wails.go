@@ -1,4 +1,4 @@
-//go:build wails
+//go:build desktop
 
 package editor
 
@@ -23,7 +23,7 @@ import (
 	"github.com/zhuchops/loom/internal/brand"
 )
 
-// The Wails front end keeps the editor, its commands and its renderer in Go,
+// The desktop front end, built on Wails, keeps the editor, its commands and its renderer in Go,
 // as the terminal build does. The renderer lays out only the text panes on a
 // character grid; each frame sends the rows that changed and the state of the
 // chrome (tabs, sidebar, pickers, popovers) to the web view, which draws them
@@ -32,8 +32,8 @@ import (
 //go:embed all:wailsui
 var wailsAssets embed.FS
 
-// MainWails runs Loom in a web view window and exits the process on failure.
-func MainWails() {
+// MainDesktop runs Loom in a web view window and exits the process on failure.
+func MainDesktop() {
 	// Started from Finder, the working directory is "/"; begin in the home folder.
 	if wd, err := os.Getwd(); err == nil && wd == "/" {
 		if home, err := os.UserHomeDir(); err == nil {
@@ -90,6 +90,7 @@ func runWails(e *editor, explicit bool) error {
 		BackgroundColour: &wopt.RGBA{R: 0, G: 0, B: 0, A: 0},
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        b.startup,
+		OnDomReady:       func(context.Context) { installWindow() },
 		OnBeforeClose:    b.beforeClose,
 		OnShutdown:       func(context.Context) { e.hub.finish() },
 		Bind:             []any{b},

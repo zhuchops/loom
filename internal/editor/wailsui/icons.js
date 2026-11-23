@@ -1,4 +1,4 @@
-// The interface's icons, drawn on a 16 by 16 grid as in the Gio front end.
+// The interface's icons, drawn on a 16 by 16 grid.
 'use strict';
 
 // Errors in the page go to Loom's log, as there are no developer tools.

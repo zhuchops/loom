@@ -1,4 +1,4 @@
-//go:build wails
+//go:build desktop
 
 package editor
 
@@ -7,11 +7,12 @@ import (
 	"image/color"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 // The chrome is described to the web view as plain data; it lays it out with
-// CSS. Colours are resolved here so every theme looks as it does in Gio.
+// CSS. Colours are resolved here, from the editor theme.
 
 func (b *Bridge) gitInk(mark byte) color.NRGBA {
 	c := &b.frame.colors
@@ -282,6 +283,25 @@ func (b *Bridge) act(name string, i int, s string) {
 		if inTabs {
 			b.closeTab(e.buffers[i])
 		}
+	case "tab-over":
+		// A tab dragged over the text: i is the cell's column, s its row.
+		v := &b.m.view
+		y, err := strconv.Atoi(s)
+		if err != nil {
+			return
+		}
+		v.tabDrag, v.tabMoving, v.drop = e.b, true, dropZone{}
+		for _, pane := range v.panes {
+			if pane.leaf != nil && pane.contains(i, y) && !pane.b.dashboard {
+				v.drop = dropZoneAt(pane, i, y)
+			}
+		}
+	case "tab-drop":
+		v := &b.m.view
+		if v.tabMoving && v.drop.leaf != nil {
+			v.dropTab(e)
+		}
+		v.tabDrag, v.tabMoving, v.drop = nil, false, dropZone{}
 	case "tab-move":
 		// The dragged tab is the active one; i is where it goes.
 		if inTabs {

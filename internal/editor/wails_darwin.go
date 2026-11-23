@@ -1,4 +1,4 @@
-//go:build wails && darwin
+//go:build desktop && darwin
 
 package editor
 
@@ -9,6 +9,22 @@ package editor
 #cgo CFLAGS: -x objective-c -fobjc-arc
 #cgo LDFLAGS: -framework Cocoa -framework UniformTypeIdentifiers
 #import <Cocoa/Cocoa.h>
+
+// loomInstallWindow gives the window what the system offers windows: it
+// reopens where it was left, and it can go full screen.
+static void loomInstallWindow(void) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		NSWindow *window = NSApp.mainWindow ?: NSApp.windows.firstObject;
+		if (window == nil) {
+			return;
+		}
+		window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+		if (![window setFrameUsingName:@"LoomMain"]) {
+			[window center];
+		}
+		[window setFrameAutosaveName:@"LoomMain"];
+	});
+}
 
 static void loomRaise(void) {
 	dispatch_async(dispatch_get_main_queue(), ^{
@@ -25,6 +41,9 @@ static void loomAppearance(int dark) {
 }
 */
 import "C"
+
+// installWindow lets the window remember where it was.
+func installWindow() { C.loomInstallWindow() }
 
 // raiseWindow brings Loom in front of other apps.
 func raiseWindow() { C.loomRaise() }

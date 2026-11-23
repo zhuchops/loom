@@ -1,4 +1,4 @@
-//go:build wails
+//go:build desktop
 
 package editor
 
@@ -14,8 +14,8 @@ import (
 // The window's place in the system: the macOS menu bar, launches from other
 // terminals, and closing with unsaved work.
 
-// appMenu is the macOS menu bar. Its items run the same commands as the Gio
-// window's; elsewhere the keymap has the Ctrl shortcuts and there is none.
+// appMenu is the macOS menu bar. Its items run the window's commands;
+// elsewhere the keymap has the Ctrl shortcuts and there is none.
 func (b *Bridge) appMenu() *wmenu.Menu {
 	if runtime.GOOS != "darwin" {
 		return nil

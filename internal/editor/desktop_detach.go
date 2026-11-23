@@ -1,4 +1,4 @@
-//go:build (desktop || wails) && unix
+//go:build desktop && unix
 
 package editor
 

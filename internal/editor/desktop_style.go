@@ -1,4 +1,4 @@
-//go:build desktop || wails
+//go:build desktop
 
 package editor
 
@@ -108,8 +108,8 @@ func deriveColors() uiColors {
 	if contrast(white, c.accent) > contrast(black, c.accent) {
 		c.onAccent = white
 	}
-	// Opaque on purpose: Gio composites in linear space, where a light tint
-	// over a dark surface comes out far stronger than its alpha suggests.
+	// Opaque on purpose: a light tint over a dark surface comes out far
+	// stronger than its alpha suggests.
 	c.hover = blend(c.raised, c.text, 0.07)
 	c.selected = blend(c.raised, c.accent, 0.17)
 	c.open = blend(c.side, c.text, 0.085)

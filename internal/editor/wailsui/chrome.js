@@ -164,7 +164,25 @@ function renderTabs(tabs) {
     if (t.active) requestAnimationFrame(() => tab.scrollIntoView({ inline: 'nearest', block: 'nearest' }));
   });
 }
-window.addEventListener('mouseup', () => { tabDrag = null; });
+// Dragged over the text, a tab offers to split the pane it is over.
+window.addEventListener('mousemove', (e) => {
+  if (!tabDrag || !(e.buttons & 1)) return;
+  const over = e.target.closest && e.target.closest('#editor');
+  if (!over) {
+    if (tabDrag.over) { tabDrag.over = false; act('tab-over', -1, '-1'); }
+    return;
+  }
+  const [x, y] = cellAt(e);
+  const at = `${x},${y}`;
+  if (at === tabDrag.cell) return;
+  tabDrag.cell = at;
+  tabDrag.over = true;
+  act('tab-over', x, String(y));
+});
+window.addEventListener('mouseup', () => {
+  if (tabDrag && tabDrag.over) act('tab-drop');
+  tabDrag = null;
+});
 
 // ---- Path bar -------------------------------------------------------------
 

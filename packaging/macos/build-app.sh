@@ -8,7 +8,7 @@ out=${1:-dist}
 app=$out/Loom.app
 rm -rf "$app" "$out/Loom.iconset"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$out/Loom.iconset"
-go build -tags desktop -ldflags "-s -w" -o "$app/Contents/MacOS/loom" ./cmd/loom-desktop
+go build -tags desktop,production -ldflags "-s -w" -o "$app/Contents/MacOS/loom" ./cmd/loom-desktop
 sed "s/@VERSION@/$version/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
 go run packaging/macos/icon.go "$out/Loom.iconset"
 iconutil -c icns "$out/Loom.iconset" -o "$app/Contents/Resources/Loom.icns"
