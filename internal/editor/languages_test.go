@@ -118,3 +118,16 @@ func TestElixirSupport(t *testing.T) {
 		}
 	}
 }
+
+func TestDingoSupport(t *testing.T) {
+	cfg := defaultConfig()
+	if got := cfg.languageFor("cmd/main.dingo"); got != "dingo" {
+		t.Fatalf("languageFor = %q", got)
+	}
+	if got := cfg.languageFor("cmd/main.go"); got != "go" {
+		t.Fatalf("go files changed: %q", got)
+	}
+	if got := cfg.Languages["dingo"].Server; len(got) != 1 || got[0] != "dingo-lsp" {
+		t.Fatalf("server = %v", got)
+	}
+}

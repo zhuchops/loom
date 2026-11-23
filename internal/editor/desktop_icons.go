@@ -172,6 +172,8 @@ func (d *desktop) fileMark(path string) (string, color.NRGBA) {
 		return "LU", c.blue
 	case ".swift":
 		return "SW", c.orange
+	case ".dingo":
+		return "DG", c.orange
 	case ".ex", ".exs":
 		return "EX", c.purple
 	case ".heex", ".eex", ".leex":

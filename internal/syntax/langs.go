@@ -29,17 +29,21 @@ var specs = map[string]spec{
 	"javascript":      cStyle,
 	"javascriptreact": cStyle,
 	"rust":            cStyle,
-	"css":             {block: [2]string{"/*", "*/"}, quotes: "\"'"},
-	"html":            {block: [2]string{"<!--", "-->"}, quotes: "\"'"},
-	"heex":            {block: [2]string{"<!--", "-->"}, quotes: "\"'"},
-	"json":            {quotes: "\""},
-	"python":          {line: []string{"#"}, quotes: "\"'", triple: true, keywords: "and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case", constants: "true false none self cls"},
-	"yaml":            {line: []string{"#"}, quotes: "\"'"},
-	"toml":            {line: []string{"#"}, quotes: "\"'"},
-	"shellscript":     {line: []string{"#"}, quotes: "\"'`", keywords: "if then else elif fi for while until do done case esac in function select return exit export local readonly source alias unset"},
-	"lua":             {line: []string{"--"}, block: [2]string{"--[[", "]]"}, quotes: "\"'", keywords: "and break do else elseif end for function goto if in local not or repeat return then until while"},
-	"sql":             {line: []string{"--"}, block: [2]string{"/*", "*/"}, quotes: "\"'", keywords: "select from where insert into values update set delete create alter drop table index view join left right inner outer on group by order having limit offset union as and or not null is in like between distinct primary key foreign references default case when then else end begin commit rollback"},
-	"markdown":        {block: [2]string{"<!--", "-->"}, quotes: "`", keywords: "-"},
+	"dingo": withSpec(cStyle, func(sp *spec) {
+		sp.keywords = "break case chan const continue default defer else enum fallthrough for func go goto if import in interface let map match package range return select struct switch type var where guard"
+		sp.constants = "true false nil iota none"
+	}),
+	"css":         {block: [2]string{"/*", "*/"}, quotes: "\"'"},
+	"html":        {block: [2]string{"<!--", "-->"}, quotes: "\"'"},
+	"heex":        {block: [2]string{"<!--", "-->"}, quotes: "\"'"},
+	"json":        {quotes: "\""},
+	"python":      {line: []string{"#"}, quotes: "\"'", triple: true, keywords: "and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case", constants: "true false none self cls"},
+	"yaml":        {line: []string{"#"}, quotes: "\"'"},
+	"toml":        {line: []string{"#"}, quotes: "\"'"},
+	"shellscript": {line: []string{"#"}, quotes: "\"'`", keywords: "if then else elif fi for while until do done case esac in function select return exit export local readonly source alias unset"},
+	"lua":         {line: []string{"--"}, block: [2]string{"--[[", "]]"}, quotes: "\"'", keywords: "and break do else elseif end for function goto if in local not or repeat return then until while"},
+	"sql":         {line: []string{"--"}, block: [2]string{"/*", "*/"}, quotes: "\"'", keywords: "select from where insert into values update set delete create alter drop table index view join left right inner outer on group by order having limit offset union as and or not null is in like between distinct primary key foreign references default case when then else end begin commit rollback"},
+	"markdown":    {block: [2]string{"<!--", "-->"}, quotes: "`", keywords: "-"},
 
 	"c": withSpec(cStyle, func(s *spec) {
 		s.keywords = "auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while bool"

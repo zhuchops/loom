@@ -70,3 +70,19 @@ func TestElixirHighlight(t *testing.T) {
 		t.Error("elixir comment toggle")
 	}
 }
+
+func TestDingoHighlight(t *testing.T) {
+	src := "enum Result {\n    Ok(value: int),\n}\nfunc run(a: int) -> Result {\n    x := f()? // note\n    match x {\n        None => 1,\n    }\n}\n"
+	got := kinds(src, "dingo")
+	for word, want := range map[string]string{
+		"enum": "keyword", "match": "keyword", "func": "keyword", "Result": "type", "Ok": "function",
+		"// note": "comment", "None": "constant", "run": "function",
+	} {
+		if got[word] != want {
+			t.Errorf("%q is %q, want %q", word, got[word], want)
+		}
+	}
+	if open, _, ok := CommentSyntax("dingo"); !ok || open != "//" {
+		t.Error("dingo comment toggle")
+	}
+}

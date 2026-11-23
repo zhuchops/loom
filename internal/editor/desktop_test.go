@@ -751,7 +751,7 @@ func TestDesktopSessions(t *testing.T) {
 
 func TestElixirFileMarks(t *testing.T) {
 	d := &desktop{}
-	for _, path := range []string{"a.ex", "test/a_test.exs", "mix.exs", "page.html.heex"} {
+	for _, path := range []string{"a.ex", "test/a_test.exs", "mix.exs", "page.html.heex", "main.dingo"} {
 		if mark, _ := d.fileMark(path); mark == "" {
 			t.Errorf("%s has no icon", path)
 		}

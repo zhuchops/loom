@@ -50,6 +50,7 @@ func defaultLanguages() map[string]languageConfig {
 	prettier := []string{"prettier", "--stdin-filepath", "{path}"}
 	return map[string]languageConfig{
 		"go":              {Extensions: []string{"go"}, Server: []string{"gopls"}},
+		"dingo":           {Extensions: []string{"dingo"}, Server: []string{"dingo-lsp"}},
 		"typescript":      {Extensions: []string{"ts", "mts", "cts"}, Server: tsServer, Format: prettier},
 		"typescriptreact": {Extensions: []string{"tsx"}, Server: tsServer, Format: prettier},
 		"javascript":      {Extensions: []string{"js", "mjs", "cjs"}, Server: tsServer, Format: prettier},
