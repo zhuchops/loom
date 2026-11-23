@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"gioui.org/app"
 	"gioui.org/f32"
 	"gioui.org/gpu/headless"
@@ -817,5 +818,57 @@ func TestDesktopOpensWhatALaterLaunchSends(t *testing.T) {
 	defer func() { newWindow = false }()
 	if info, err := os.Stat(ipcSocket()); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("socket: %v %v", info, err)
+	}
+}
+
+func TestDesktopWheelLeavesTheCursorOffScreen(t *testing.T) {
+	s := openScreen(t)
+	e := s.e
+	var sb strings.Builder
+	for i := 0; i < 400; i++ {
+		fmt.Fprintf(&sb, "line %d\n", i)
+	}
+	e.open(fixture(t, e.root, "long.txt", sb.String()))
+	s.frame()
+	b := e.b
+	b.cursor = 0
+	s.frame()
+	if b.top != 0 {
+		t.Fatalf("top = %d", b.top)
+	}
+	mid := image.Pt(s.w*3/4, s.h/2)
+	for i := 0; i < 40; i++ {
+		s.mouse(pointer.Scroll, mid.X, mid.Y, 0, f32.Pt(0, 60))
+		s.frame()
+	}
+	top := b.top
+	if top < 20 {
+		t.Fatalf("the wheel scrolled to %d only", top)
+	}
+	if b.cursor != 0 {
+		t.Fatalf("scrolling moved the cursor to %d", b.cursor)
+	}
+	for i := 0; i < 5; i++ {
+		s.frame()
+		time.Sleep(20 * time.Millisecond)
+	}
+	if b.top != top {
+		t.Fatalf("the view snapped back from %d to %d", top, b.top)
+	}
+	// Whatever happens in the background, and the pointer resting on the text,
+	// leaves the view where it was scrolled to.
+	e.checkDisk()
+	e.refreshGit()
+	e.refreshLanguage()
+	e.notify("something happened")
+	s.mouse(pointer.Move, mid.X, mid.Y, 0, f32.Point{})
+	s.mouse(pointer.Move, mid.X+10, mid.Y+10, 0, f32.Point{})
+	s.d.send(tea.KeyPressMsg(tea.Key{Code: tea.KeyLeftShift}))
+	s.frame()
+	if b.top != top || b.cursor != 0 {
+		t.Fatalf("the view moved from %d to %d, cursor %d", top, b.top, b.cursor)
+	}
+	if s.d.m.view.screen.cursorVisible {
+		t.Fatalf("the cursor is drawn at %d,%d (top %d, row %d, mode %s, tree focused %v)", s.d.m.view.screen.cursorX, s.d.m.view.screen.cursorY, b.top, b.rowAt(b.cursor), e.mode, e.tree.focused)
 	}
 }

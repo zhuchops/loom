@@ -425,7 +425,7 @@ The sidebar has its own navigation and file actions:
 | R / ? | Refresh / show help |
 | Esc / q | Return to the editor |
 
-Drag a tab onto a pane to move it. Near the left, right, top or bottom edge a highlight shows the split it will make, and the middle opens the tab in that pane. Drag a tab along the tab bar to reorder it. Click a tab or explorer entry to open it. Click in the editor to place the cursor, drag to select, or double-click to select a word. The wheel scrolls the pane or explorer under the pointer. Drag the sidebar divider to resize it. Right-click for editor or file actions. Completion and picker rows are clickable.
+Drag a tab onto a pane to move it. Near the left, right, top or bottom edge a highlight shows the split it will make, and the middle opens the tab in that pane. Drag a tab along the tab bar to reorder it. Click a tab or explorer entry to open it. Click in the editor to place the cursor, drag to select, or double-click to select a word. The wheel scrolls the pane or explorer under the pointer. Scrolling does not move the cursor: when its line leaves the window the cursor is not drawn, and the view returns to it on the next key press. Drag the sidebar divider to resize it. Right-click for editor or file actions. Completion and picker rows are clickable.
 
 ## Command palette
 

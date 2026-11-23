@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -114,5 +115,32 @@ func TestSignatureHintStaysClearOfCompletion(t *testing.T) {
 		if !highlighted {
 			t.Fatalf("active argument was not highlighted on row %d", hintRow)
 		}
+	}
+}
+
+func TestCursorScrolledOutOfSightIsNotDrawn(t *testing.T) {
+	var text strings.Builder
+	for i := 0; i < 100; i++ {
+		fmt.Fprintf(&text, "line %d\n", i)
+	}
+	e := testEditor(t, "vim", text.String())
+	e.b.cursor = 0
+	v := renderer{screen: newTerminalFrame(40, 12)}
+	v.draw(e)
+	if !v.screen.cursorVisible {
+		t.Fatal("the cursor is not drawn on its own line")
+	}
+	// Wheel scrolling leaves the cursor behind, above the window and below it.
+	e.scrollLock = true
+	e.b.top = 50
+	v.draw(e)
+	if v.screen.cursorVisible {
+		t.Fatalf("a cursor above the window is drawn at %d,%d", v.screen.cursorX, v.screen.cursorY)
+	}
+	e.b.top = 0
+	e.b.cursor = e.b.lines[90]
+	v.draw(e)
+	if v.screen.cursorVisible {
+		t.Fatal("a cursor below the window is drawn")
 	}
 }

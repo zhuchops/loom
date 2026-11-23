@@ -534,7 +534,8 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 		return
 	}
 	x, y := box.x+gutter+col-b.left, box.y+visibleOffset(hidden, b.top, row)
-	if !box.contains(x, y) || x < box.x+gutter {
+	// A cursor above the window would otherwise land on its first line.
+	if row < b.top || !box.contains(x, y) || x < box.x+gutter {
 		return
 	}
 	cursor := cursorBlock
