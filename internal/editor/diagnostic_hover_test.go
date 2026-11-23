@@ -69,7 +69,7 @@ func TestHoverDocumentationPreservesFullWrappedContent(t *testing.T) {
 	e := testEditor(t, "vim", "abc")
 	content := strings.Repeat("long documentation ", 30) + "FINAL"
 	raw, _ := json.Marshal(map[string]string{"contents": content})
-	e.showHover(raw)
+	e.showHover(raw, "")
 	v := renderer{screen: newTerminalFrame(52, 18)}
 	v.draw(e)
 	if e.menu.selectedPreview().message != content {

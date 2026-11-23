@@ -25,6 +25,13 @@ type lspRange struct {
 	Start position `json:"start"`
 	End   position `json:"end"`
 }
+
+func (p position) before(q position) bool {
+	return p.Line < q.Line || p.Line == q.Line && p.Character < q.Character
+}
+
+// contains reports whether p lies in r, its end included.
+func (r lspRange) contains(p position) bool { return !p.before(r.Start) && !r.End.before(p) }
 type textEdit struct {
 	Range   *lspRange `json:"range"`
 	Insert  *lspRange `json:"insert"`
@@ -126,6 +133,7 @@ func (s *languageSession) connect() error {
 				"semanticTokens":     map[string]any{"requests": map[string]bool{"full": true}, "tokenTypes": tokenTypes, "tokenModifiers": tokenModifiers, "formats": []string{"relative"}},
 				"publishDiagnostics": map[string]bool{"versionSupport": true},
 				"hover":              map[string]any{"contentFormat": []string{"plaintext", "markdown"}},
+				"typeDefinition":     map[string]bool{"linkSupport": true},
 			},
 		},
 	}

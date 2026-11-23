@@ -30,7 +30,7 @@ func TestHoverDocumentationHasOneOption(t *testing.T) {
 	e := testEditor(t, "vim", "word")
 	content := "first line\n\nsecond line"
 	raw, _ := json.Marshal(map[string]string{"contents": content})
-	e.showHover(raw)
+	e.showHover(raw, "")
 	if len(e.menu.options) != 1 || e.menu.options[0].label != "Documentation" || strings.Contains(e.menu.options[0].label, "first") || e.menu.selectedPreview().message != content {
 		t.Fatal("hover list should contain one documentation option with the full content in its preview")
 	}

@@ -89,6 +89,7 @@ On the Dashboard, use `j`/`k` or the arrow keys and Enter, or click an action. R
 | Search project | Space / |
 | Split right / switch panes / close split | Ctrl+W v / w / c |
 | Go to definition / references / hover | g d / g r / g h |
+| Go to type definition | g y |
 | File problems / project problems | Space d / Space D |
 | Notification history | Space N |
 | Next / previous problem | ] d / [ d |
@@ -313,6 +314,7 @@ Both editing profiles use the same leaders. Press Space, g, or Ctrl+W to see con
 | Space b / Space w | Buffers / save |
 | Space a / Space r / Space d | Code actions / rename symbol / file problems |
 | g d / g r / g h | Definition / references / hover |
+| g y | Type definition: the declaration of the symbol's type, such as `ent.User` for a variable `user` |
 | Ctrl+O / g ] | Previous / next jump |
 | gg | Top of file |
 | Space m | Toggle Markdown preview |
@@ -477,7 +479,7 @@ The status bar shows errors and warnings for the current file and for the whole 
 
 Diagnostics underline the reported range in the editor. Errors use red, warnings use amber, and information and hints use teal. In either Problems picker, the preview shows the full message, line and column, and nearby source with the same underline.
 
-Hover over an underlined diagnostic or its gutter marker to read its full message. Hover over a symbol to see language server documentation after a brief pause; when the symbol has a diagnostic, both appear together. Messages wrap to the popup width; scroll over the popup for messages taller than the terminal. Hover Documentation also has a wrapped, scrollable preview.
+Hover over an underlined diagnostic or its gutter marker to read its full message. Hover over a symbol to see language server documentation after a brief pause; when the symbol has a diagnostic, both appear together. When the symbol has a type declared elsewhere (a variable `user` of type `*ent.User`), the documentation of that type follows its own, read from the type's file even when it is not open; in `g h` it is a separate **Type Documentation** entry. Messages wrap to the popup width; scroll over the popup for messages taller than the terminal. Hover Documentation also has a wrapped, scrollable preview.
 
 In Problems, press Enter or click an item to jump to its source. Hover over the underlined code or press `g h` to inspect the diagnostic. The `g h` list offers diagnostic and documentation entries; select one to read its wrapped details. Notification History also opens scrollable details with Enter. Esc returns to the list.
 

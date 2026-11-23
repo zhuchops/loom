@@ -14,7 +14,7 @@ func TestListsOpenFullDetailsAndReturn(t *testing.T) {
 			switch kind {
 			case "hover":
 				raw, _ := json.Marshal(map[string]string{"contents": full})
-				e.showHover(raw)
+				e.showHover(raw, "")
 			case "message":
 				e.notify(full)
 				e.openNotifications()

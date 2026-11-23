@@ -166,7 +166,7 @@ func defaultConfig() config {
 				"/": "search", ".": "repeat", "] d": "next-problem", "[ d": "prev-problem", "n": "next-match", "N": "prev-match", ":": "ex", "esc": "normal"},
 			"vim.normal": {"d": "delete-op", "c": "change-op", "y": "yank-op", ">": "indent-op", "<": "outdent-op", "q": "macro-record", "@": "macro-play",
 				"{": "paragraph-prev", "}": "paragraph-next", "\"": "register-prefix", "'": "mark-line", "`": "mark-exact", "g c c": "toggle-comment", "g v": "reselect", "~": "toggle-case", "z z": "scroll-center", "z t": "scroll-top", "z b": "scroll-bottom",
-				"z a": "fold-toggle", "z c": "fold-close", "z o": "fold-open", "z M": "fold-close-all", "z R": "fold-open-all", "g i": "implementation",
+				"z a": "fold-toggle", "z c": "fold-close", "z o": "fold-open", "z M": "fold-close-all", "z R": "fold-open-all", "g i": "implementation", "g y": "type-definition",
 				"V": "select-line", "^": "first-nonblank", "D": "delete-to-end", "C": "change-to-end", "Y": "yank-line",
 				"r": "replace-character", "J": "join-lines", "%": "match-bracket",
 				"s a": "mini-add-motion", "s d": "mini-delete", "s r": "mini-replace", "s f": "mini-find", "s F": "mini-find-back", "s h": "mini-highlight"},

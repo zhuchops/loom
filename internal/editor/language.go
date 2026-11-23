@@ -279,6 +279,7 @@ func (e *editor) languageCommands() {
 	e.add("definition", "Go to Definition", func(e *editor) { e.languageAction("definition") })
 	e.add("references", "Find References", func(e *editor) { e.languageAction("references") })
 	e.add("implementation", "Go to Implementation", func(e *editor) { e.languageAction("implementation") })
+	e.add("type-definition", "Go to Type Definition", func(e *editor) { e.languageAction("typeDefinition") })
 	e.add("symbols", "Go to Symbol in File", func(e *editor) { e.documentSymbols() })
 	e.add("workspace-symbols", "Go to Symbol in Workspace", func(e *editor) { e.workspaceSymbols() })
 	e.add("hover", "Show Hover Documentation", func(e *editor) { e.languageAction("hover") })
@@ -369,9 +370,10 @@ func (e *editor) languageAction(action string) {
 	}
 	doc := e.document(b)
 	cursor := b.cursor
-	e.notify("Requesting " + action + "…")
+	e.notify("Requesting " + actionName(action) + "…")
 	go func() {
 		var raw json.RawMessage
+		var typed string // hover: the documentation of the symbol's type
 		s.mu.Lock()
 		err := s.connect()
 		if err == nil {
@@ -385,6 +387,9 @@ func (e *editor) languageAction(action string) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			err = s.client.Request(ctx, "textDocument/"+action, params, &raw)
+			if err == nil && action == "hover" {
+				typed = s.typeDocumentation(ctx, doc, hoverContent(raw))
+			}
 			cancel()
 		}
 		s.mu.Unlock()
@@ -402,10 +407,13 @@ func (e *editor) languageAction(action string) {
 				if hoverMenu != nil {
 					if content := hoverContent(raw); content != "" {
 						e.addHoverOption(hoverMenu, "Documentation", content)
-						hoverMenu.filter()
 					}
+					if typed != "" {
+						e.addHoverOption(hoverMenu, "Type Documentation", typed)
+					}
+					hoverMenu.filter()
 				} else {
-					e.showHover(raw)
+					e.showHover(raw, typed)
 				}
 				return
 			}
@@ -428,6 +436,8 @@ func (e *editor) showLocations(action string, raw json.RawMessage) {
 		m.title = "Definitions"
 	case "implementation":
 		m.title = "Implementations"
+	case "typeDefinition":
+		m.title = "Type Definitions"
 	}
 	for _, loc := range locations {
 		if loc.TargetURI != "" {
@@ -445,15 +455,23 @@ func (e *editor) showLocations(action string, raw json.RawMessage) {
 		m.options = append(m.options, option{fmt.Sprintf("%s:%d:%d", label, p.Line+1, p.Character+1), "", func() { e.jumpTo(path, p.Line, p.Character, true) }, e.filePreview(path, p.Line, p.Character, true, nil)})
 	}
 	if len(m.options) == 0 {
-		e.notify("No " + action + " results")
+		e.notify("No " + actionName(action) + " results")
 		return
 	}
 	e.message = ""
-	if (action == "definition" || action == "implementation") && len(m.options) == 1 {
+	if action != "references" && len(m.options) == 1 {
 		m.options[0].run()
 		return
 	}
 	e.openMenu(m)
+}
+
+// actionName is how a request is named in messages.
+func actionName(action string) string {
+	if action == "typeDefinition" {
+		return "type definition"
+	}
+	return action
 }
 
 func hoverContent(raw json.RawMessage) string {
@@ -481,14 +499,19 @@ func hoverContent(raw json.RawMessage) string {
 	return strings.TrimSpace(content)
 }
 
-func (e *editor) showHover(raw json.RawMessage) {
+func (e *editor) showHover(raw json.RawMessage, typed string) {
 	content := hoverContent(raw)
-	if content == "" {
+	if content == "" && typed == "" {
 		e.notify("No hover information")
 		return
 	}
 	m := &menu{title: "Hover Documentation", details: true}
-	e.addHoverOption(m, "Documentation", content)
+	if content != "" {
+		e.addHoverOption(m, "Documentation", content)
+	}
+	if typed != "" {
+		e.addHoverOption(m, "Type Documentation", typed)
+	}
 	e.openMenu(m)
 }
 

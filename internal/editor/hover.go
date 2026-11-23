@@ -3,6 +3,8 @@ package editor
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"strings"
 	"time"
 	"unicode"
 
@@ -76,6 +78,81 @@ func (m *terminalModel) requestHover(token uint64) tea.Cmd {
 		if err := s.client.Request(ctx, "textDocument/hover", params, &raw); err != nil {
 			return hoverResult{token: token}
 		}
-		return hoverResult{token, hoverContent(raw)}
+		content := hoverContent(raw)
+		if typed := s.typeDocumentation(ctx, doc, content); typed != "" {
+			content = joinHover(content, typed)
+		}
+		return hoverResult{token, content}
 	}
+}
+
+// joinHover puts the documentation of a symbol's type under its own.
+func joinHover(own, typed string) string {
+	if own == "" {
+		return typed
+	}
+	return own + "\n\n" + typed
+}
+
+// typeDocumentation asks for the type a symbol has (a variable's ent.User,
+// say) and returns the hover text of that type's declaration, so the
+// documentation of the type shows up beside the symbol's own. It returns ""
+// when the server has no type for the symbol, when the symbol is the type
+// itself, or when the type's text says nothing new. The caller holds s.mu
+// and has synced doc.
+func (s *languageSession) typeDocumentation(ctx context.Context, doc document, own string) string {
+	params := docParams(doc)
+	params["position"] = doc.position
+	var raw json.RawMessage
+	if s.client.Request(ctx, "textDocument/typeDefinition", params, &raw) != nil {
+		return ""
+	}
+	var locations []location
+	if json.Unmarshal(raw, &locations) != nil {
+		var one location
+		if json.Unmarshal(raw, &one) != nil {
+			return ""
+		}
+		locations = []location{one}
+	}
+	if len(locations) == 0 {
+		return ""
+	}
+	loc := locations[0]
+	if loc.TargetURI != "" {
+		loc.URI, loc.Range = loc.TargetURI, loc.TargetSelectionRange
+	}
+	path := pathFromURI(loc.URI)
+	if path == "" {
+		return ""
+	}
+	if path == doc.path && loc.Range.contains(doc.position) {
+		return "" // already looking at the type
+	}
+	uri := fileURI(path)
+	if _, open := s.opened[uri]; !open {
+		// Servers answer only for files they were given; lend them this one
+		// from disk for the one request.
+		text, err := os.ReadFile(path)
+		if err != nil {
+			return ""
+		}
+		if s.client.Notify("textDocument/didOpen", map[string]any{"textDocument": map[string]any{
+			"uri": uri, "version": 0, "languageId": doc.language, "text": string(text),
+		}}) != nil {
+			return ""
+		}
+		defer s.client.Notify("textDocument/didClose", map[string]any{"textDocument": map[string]string{"uri": uri}})
+	}
+	raw = nil
+	if s.client.Request(ctx, "textDocument/hover", map[string]any{
+		"textDocument": map[string]string{"uri": uri}, "position": loc.Range.Start,
+	}, &raw) != nil {
+		return ""
+	}
+	typed := hoverContent(raw)
+	if typed == "" || typed == own || strings.Contains(own, typed) {
+		return ""
+	}
+	return typed
 }
