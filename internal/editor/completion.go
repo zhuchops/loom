@@ -399,6 +399,16 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 	if between {
 		cursor--
 	}
+	if untranslatedEdits(b.path) && item.importPath == "" {
+		// The positions of the server's own edits are not this file's, but the
+		// import they add is: put it where it belongs here.
+		for _, add := range item.Additional {
+			if path := importedPath(add.NewText); path != "" {
+				item.importPath = path
+				break
+			}
+		}
+	}
 	for _, add := range item.Additional {
 		if untranslatedEdits(b.path) {
 			break

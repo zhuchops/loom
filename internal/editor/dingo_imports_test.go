@@ -72,3 +72,30 @@ func TestUnimportedCompletionAddsTheImport(t *testing.T) {
 		t.Errorf("offered %d items for an imported package", len(got))
 	}
 }
+
+func TestServerImportEditIsMovedIntoTheFile(t *testing.T) {
+	for text, want := range map[string]string{
+		"import \"fmt\"\n": "fmt", "\t\"net/http\"\n": "net/http", "import (\n\t\"fmt\"\n)\n": "fmt",
+		"import str \"strings\"\n": "strings", "foo()\n": "", "": "",
+	} {
+		if got := importedPath(text); got != want {
+			t.Errorf("importedPath(%q) = %q, want %q", text, got, want)
+		}
+	}
+	src := "package main\n\nfunc main() {\n    fmt.prin\n}\n"
+	b := &buffer{text: []rune(src), path: "/tmp/main.dingo"}
+	b.indexLines()
+	b.cursor = strings.Index(src, "prin") + 4
+	// What gopls sends for an unimported package: positions of the Go file.
+	item := completionItem{
+		Label: "Println", Kind: 3, Detail: "func(a ...any)",
+		TextEdit:   &textEdit{Range: &lspRange{Start: position{9, 4}, End: position{9, 8}}, NewText: "Println"},
+		Additional: []textEdit{{Range: &lspRange{Start: position{2, 0}, End: position{2, 0}}, NewText: "import \"fmt\"\n"}},
+	}
+	if err := applyCompletionAt(b, item, wordStartAt(b, b.cursor)); err != nil {
+		t.Fatal(err)
+	}
+	if want := "package main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println()\n}\n"; string(b.text) != want {
+		t.Fatalf("text = %q, want %q", string(b.text), want)
+	}
+}

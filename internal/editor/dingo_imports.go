@@ -3,6 +3,7 @@ package editor
 import (
 	"context"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -95,6 +96,17 @@ func exportsOf(path string) []completionItem {
 	}
 	packageExports.items[path] = items
 	return items
+}
+
+var importText = regexp.MustCompile(`^\s*(?:import\s*\(?\s*)?(?:[\w.]+\s+)?"([^"\s]+)"\s*\)?\s*$`)
+
+// importedPath is the package a server's edit imports, or "" when the text
+// is anything else than an import line (or a one-line block).
+func importedPath(text string) string {
+	if m := importText.FindStringSubmatch(text); m != nil {
+		return m[1]
+	}
+	return ""
 }
 
 func isWordRune(r rune) bool { return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r) }

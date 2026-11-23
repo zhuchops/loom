@@ -175,7 +175,7 @@ func TestSnippetCallsBecomePlainCompletions(t *testing.T) {
 	}
 }
 
-func TestCompletionRangeOffTheCursorLineIsIgnored(t *testing.T) {
+func TestCompletionRangeOffTheCursorLineIsIgnoredAndImportMoved(t *testing.T) {
 	e := testEditor(t, "vim", "")
 	b := e.b
 	b.path = "/tmp/main.dingo"
@@ -193,7 +193,7 @@ func TestCompletionRangeOffTheCursorLineIsIgnored(t *testing.T) {
 	if err := applyCompletionAt(b, item, wordStartAt(b, b.cursor)); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(b.text), "package main\n\nfunc main() {\n    fmt.Println()\n}\n"; got != want {
+	if got, want := string(b.text), "package main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println()\n}\n"; got != want {
 		t.Fatalf("text = %q, want %q", got, want)
 	}
 }
