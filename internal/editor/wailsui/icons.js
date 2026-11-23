@@ -61,6 +61,10 @@ function fileIcon(mark) {
   return `<span class="ficon mono${text.length > 2 ? ' small' : ''}" style="color:${ink}">${escapeHTML(text)}</span>`;
 }
 
+// ltr keeps a path left to right inside an element that is cut on the left
+// (direction: rtl), so its slashes stay where they are.
+function ltr(s) { return `\u200e${escapeHTML(s)}\u200e`; }
+
 function escapeHTML(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

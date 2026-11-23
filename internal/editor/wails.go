@@ -66,6 +66,7 @@ type Bridge struct {
 	frame      frameState
 	dialog     *dialog
 	list       listState
+	rows2      panelRows
 	preview    previewCache
 }
 

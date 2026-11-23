@@ -106,7 +106,7 @@ function rowHTML(row) {
     else html += `<span class="ficon" style="color:${ic[2]}">${icon(ic[1], 14)}</span>`;
   }
   html += `<span class="mlabel">${highlightLabel(row.label, row.hits)}</span>`;
-  if (row.detail) html += `<span class="mdetail">${escapeHTML(row.detail)}</span>`;
+  if (row.detail) html += `<span class="mdetail">${ltr(row.detail)}</span>`;
   const h = row.hint;
   if (h) {
     if (h[0] === 'check') html += `<span class="mhint check">${icon('check', 14)}</span>`;
@@ -206,7 +206,7 @@ function previewEl(p) {
     el.appendChild(h('div', 'pempty', escapeHTML(p.empty)));
     return el;
   }
-  el.appendChild(h('div', 'ptitle', escapeHTML(p.title)));
+  el.appendChild(h('div', 'ptitle', ltr(p.title)));
   const body = h('div', 'pcode');
   if (p.message) body.appendChild(h('div', 'pmessage', escapeHTML(p.message)));
   if (p.code) body.appendChild(h('div', 'code', codeHTML(p.code)));

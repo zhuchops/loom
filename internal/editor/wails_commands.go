@@ -333,10 +333,10 @@ func (b *Bridge) writeTo(buf *buffer, path string) {
 
 // dialog is a question in the middle of the window.
 type dialog struct {
-	Title    string         `json:"title"`
-	Body     string         `json:"body"`
-	Choices  []string       `json:"choices"`
-	Selected int            `json:"selected"`
+	Title    string   `json:"title"`
+	Body     string   `json:"body"`
+	Choices  []string `json:"choices"`
+	Selected int      `json:"selected"`
 	runs     []func()
 }
 

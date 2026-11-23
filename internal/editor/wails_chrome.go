@@ -50,6 +50,7 @@ func (b *Bridge) chrome() map[string]any {
 		ui["dialog"] = b.dialog
 	}
 	b.popups(ui)
+	b.panels(ui)
 	return ui
 }
 
@@ -241,7 +242,7 @@ func (b *Bridge) Act(name string, i int, s string) {
 }
 
 func (b *Bridge) act(name string, i int, s string) {
-	if b.popupAct(name, i, s) {
+	if b.popupAct(name, i, s) || b.panelAct(name, i, s) {
 		return
 	}
 	e := b.m.editor

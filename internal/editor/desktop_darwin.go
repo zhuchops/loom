@@ -99,4 +99,3 @@ func loomPickedPath(id C.int, path *C.char) {
 		go d.post(uiCallback(func() { done(chosen) }))
 	}
 }
-
