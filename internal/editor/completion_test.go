@@ -1,6 +1,9 @@
 package editor
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCompletionOnlyAutoOpensAfterLetters(t *testing.T) {
 	e := testEditor(t, "vim", "")
@@ -169,5 +172,28 @@ func TestSnippetCallsBecomePlainCompletions(t *testing.T) {
 	}
 	if takesArguments(completionItem{Label: "run()", Detail: "(function)"}) {
 		t.Error("run() takes no arguments")
+	}
+}
+
+func TestCompletionRangeOffTheCursorLineIsIgnored(t *testing.T) {
+	e := testEditor(t, "vim", "")
+	b := e.b
+	b.path = "/tmp/main.dingo"
+	text := "package main\n\nfunc main() {\n    fmt.Pr\n}\n"
+	b.text = []rune(text)
+	b.indexLines()
+	b.cursor = strings.Index(text, "Pr") + 2
+	item := completionItem{
+		Label: "Println", Kind: 3,
+		// A range from the top of the file, like positions of the generated Go file.
+		TextEdit:   &textEdit{Range: &lspRange{Start: position{0, 0}, End: position{0, 5}}, NewText: "Println"},
+		Additional: []textEdit{{Range: &lspRange{Start: position{0, 0}, End: position{0, 12}}, NewText: "import \"fmt\"\n"}},
+		Detail:     "func(a ...any)",
+	}
+	if err := applyCompletionAt(b, item, wordStartAt(b, b.cursor)); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(b.text), "package main\n\nfunc main() {\n    fmt.Println()\n}\n"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
 	}
 }

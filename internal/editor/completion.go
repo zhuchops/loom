@@ -370,7 +370,10 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 			return fmt.Errorf("completion edit has no range")
 		}
 		start, ok := b.offset(r.Start)
-		if !ok || start > b.cursor {
+		// What is accepted replaces text on the cursor's own line. A range that
+		// starts elsewhere is a server's mistake, such as dingo-lsp passing on
+		// positions in the generated Go file, and would eat the text between.
+		if !ok || start > b.cursor || b.rowAt(start) != b.rowAt(b.cursor) {
 			start = at
 		}
 		primary = edit{span{start, b.cursor}, item.TextEdit.NewText}
@@ -391,6 +394,9 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 		cursor--
 	}
 	for _, add := range item.Additional {
+		if untranslatedEdits(b.path) {
+			break
+		}
 		next, err := makeEdit(add)
 		if err != nil {
 			return err
@@ -416,6 +422,11 @@ func applyCompletionAt(b *buffer, item completionItem, at int) error {
 	}
 	return nil
 }
+
+// untranslatedEdits is true for files whose server hands over the positions of
+// a generated file for the extra edits (an import to add, say), not of the
+// file being edited. Applying those would change the wrong text.
+func untranslatedEdits(path string) bool { return strings.HasSuffix(strings.ToLower(path), ".dingo") }
 
 var detailTag = regexp.MustCompile(`^\((?:method|function|local function|constructor|alias|property)\)\s*`)
 
