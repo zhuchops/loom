@@ -1,5 +1,3 @@
-//go:build desktop
-
 package editor
 
 import (
@@ -100,6 +98,10 @@ var latinKeys = func() map[rune]rune {
 
 // Key is a key press that is not plain typing.
 func (b *Bridge) Key(ev KeyEvent) {
+	if b.peer != nil {
+		b.peer.forward("Key", ev)
+		return
+	}
 	b.call(func() {
 		if q := b.dialog; q != nil {
 			n := len(q.Choices)
@@ -124,6 +126,10 @@ func (b *Bridge) Key(ev KeyEvent) {
 
 // Text is typed or composed text.
 func (b *Bridge) Text(s string) {
+	if b.peer != nil {
+		b.peer.forward("Text", s)
+		return
+	}
 	b.call(func() {
 		if s == "" {
 			return
@@ -141,6 +147,10 @@ func (b *Bridge) Text(s string) {
 // Mouse is a pointer event on the text grid, in cells. Kind is "down",
 // "up" or "move"; button is 0 for the main one, 1 middle, 2 secondary.
 func (b *Bridge) Mouse(kind string, x, y, button int, held, shift bool) {
+	if b.peer != nil {
+		b.peer.forward("Mouse", kind, x, y, button, held, shift)
+		return
+	}
 	b.call(func() {
 		x, y = min(b.cols-1, max(0, x)), min(b.rows-1, max(0, y))
 		mouse := tea.Mouse{X: x, Y: y}
@@ -171,6 +181,10 @@ func (b *Bridge) Mouse(kind string, x, y, button int, held, shift bool) {
 
 // Wheel scrolls the grid by whole lines and columns at cell x, y.
 func (b *Bridge) Wheel(x, y, dx, dy int) {
+	if b.peer != nil {
+		b.peer.forward("Wheel", x, y, dx, dy)
+		return
+	}
 	b.call(func() {
 		e, v := b.m.editor, &b.m.view
 		v.clearDiagnosticHover()

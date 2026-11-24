@@ -35,7 +35,7 @@ func testBridge(t *testing.T, input string) (*Bridge, *editor) {
 	e := testEditor(t, "vim", input)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	b := newBridge(e, ctx, false)
+	b := newBridge(e, ctx, false, nil)
 	t.Cleanup(b.ticker.Stop)
 	b.frame.colors, b.frame.inks = deriveColors(), map[[2]color.NRGBA]color.NRGBA{}
 	b.started = true
@@ -267,7 +267,7 @@ func TestDesktopOpensWhatALaterLaunchSends(t *testing.T) {
 	}
 	// The socket carries a request from a second launch to the first.
 	got := make(chan openRequest, 1)
-	listenForRequests(func(r openRequest) { got <- r })
+	listenForRequests(func(r openRequest) { got <- r }, nil)
 	if !forwardToRunning([]string{"a.txt", "dir"}) {
 		t.Fatal("a running Loom did not take the launch")
 	}

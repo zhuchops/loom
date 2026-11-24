@@ -82,6 +82,13 @@ tar -xzf "$tmp/loom_${os}_${arch}.tar.gz" -C "$tmp"
 install -m 755 "$tmp/loom" "$dir/loom"
 say "Installed $dir/loom ($("$dir/loom" -version))"
 
+# Without the window version, loom-desktop is loom under another name: in an
+# SSH session started with "loom ssh" it opens files in the Loom app on the
+# computer the session came from.
+if [ "$desktop" != 1 ] && [ ! -e "$dir/loom-desktop" ]; then
+	ln -s loom "$dir/loom-desktop"
+fi
+
 if [ "$desktop" = 1 ]; then
 	if [ "$os" = darwin ]; then
 		get Loom_darwin_universal.zip

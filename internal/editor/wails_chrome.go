@@ -1,5 +1,3 @@
-//go:build desktop
-
 package editor
 
 import (
@@ -70,6 +68,9 @@ func (b *Bridge) titleState() map[string]any {
 	}
 	if e.git.branch != "" && !e.noProject {
 		t["branch"] = e.git.branch
+	}
+	if b.remoteHost != "" {
+		t["host"] = b.remoteHost
 	}
 	if e.noProject {
 		t["search"] = []string{"Search commands", shortcutText("⇧⌘P", "Space p"), "palette"}
@@ -242,6 +243,10 @@ func (b *Bridge) statusState() map[string]any {
 // Act is a click or drag on the chrome: name says what, i and s carry the
 // row, tab or key it was on.
 func (b *Bridge) Act(name string, i int, s string) {
+	if b.peer != nil {
+		b.peer.forward("Act", name, i, s)
+		return
+	}
 	b.call(func() { b.act(name, i, s) })
 }
 

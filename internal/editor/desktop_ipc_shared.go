@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -17,27 +16,8 @@ import (
 // again with a file or folder hands it to that window instead of opening a
 // second one; -new opts out and starts a window of its own.
 
-// openRequest is what a second launch sends to the first.
-type openRequest struct {
-	Cwd   string   `json:"cwd"`
-	Paths []string `json:"paths"`
-}
-
 // newWindow is set by -new: the process neither forwards nor takes the socket.
 var newWindow bool
-
-func ipcSocket() string {
-	root := stateRoot()
-	if root == "" {
-		return ""
-	}
-	sock := filepath.Join(root, "desktop.sock")
-	if len(sock) > 100 {
-		// A socket path is limited to about 104 bytes.
-		sock = filepath.Join(os.TempDir(), "loom-"+strconv.Itoa(os.Getuid())+".sock")
-	}
-	return sock
-}
 
 // forwardToRunning gives paths to a Loom that is already open. It reports
 // whether one took them; with no paths it just brings that window forward.
@@ -62,7 +42,8 @@ func forwardToRunning(paths []string) bool {
 
 // listenForRequests makes this process the one that later launches talk to.
 // It does nothing if another live Loom already owns the socket.
-func listenForRequests(handle func(openRequest)) {
+// A remote editor's request keeps its connection, which remote takes over.
+func listenForRequests(handle func(openRequest), remote func(net.Conn, remoteHello)) {
 	sock := ipcSocket()
 	if sock == "" || newWindow {
 		return
@@ -87,12 +68,24 @@ func listenForRequests(handle func(openRequest)) {
 				return
 			}
 			go func() {
-				defer conn.Close()
 				_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 				var req openRequest
-				if json.NewDecoder(bufio.NewReader(conn)).Decode(&req) != nil {
+				// The other end waits for "ok" before it sends anything else,
+				// so the decoder's buffer holds nothing more.
+				if json.NewDecoder(conn).Decode(&req) != nil {
+					conn.Close()
 					return
 				}
+				if req.Remote != nil && remote != nil {
+					_ = conn.SetDeadline(time.Time{})
+					if _, err := conn.Write([]byte("ok\n")); err != nil {
+						conn.Close()
+						return
+					}
+					remote(conn, *req.Remote)
+					return
+				}
+				defer conn.Close()
 				handle(req)
 				_, _ = conn.Write([]byte("ok\n"))
 			}()

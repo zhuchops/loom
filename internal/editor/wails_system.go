@@ -119,5 +119,5 @@ func (b *Bridge) serveLaunches() {
 	if newWindow {
 		return
 	}
-	listenForRequests(func(req openRequest) { b.call(func() { b.openRequested(req) }) })
+	listenForRequests(func(req openRequest) { b.call(func() { b.openRequested(req) }) }, openRemoteWindow)
 }

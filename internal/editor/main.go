@@ -1,19 +1,56 @@
 package editor
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
-const version = "0.31.1"
+const version = "0.32.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
+	if handled, err := remoteEntry(false); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "loom:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "loom:", err)
 		os.Exit(1)
 	}
+}
+
+// remoteEntry handles what is about remote sessions: loom ssh, loom
+// ssh-config, and loom-desktop on a server reached that way. inWindowApp is
+// set in the desktop app, which opens its own window when no remote one is
+// wanted.
+func remoteEntry(inWindowApp bool) (handled bool, err error) {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "ssh":
+			return true, sshCommand(os.Args[2:])
+		case "ssh-config":
+			sshConfig()
+			return true, nil
+		}
+	}
+	asDesktop := inWindowApp || filepath.Base(os.Args[0]) == "loom-desktop"
+	if !asDesktop {
+		return false, nil
+	}
+	if sock := remoteSocket(); sock != "" {
+		return true, runRemote(sock)
+	}
+	if inWindowApp {
+		return false, nil
+	}
+	// The terminal loom under the name loom-desktop, with no window to reach.
+	return true, errors.New(remoteUnavailable)
 }
 
 func run() error {

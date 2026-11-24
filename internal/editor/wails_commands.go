@@ -1,5 +1,3 @@
-//go:build desktop
-
 package editor
 
 import (
@@ -8,11 +6,22 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	wrt "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Command runs an action of the menu bar or of a button.
-func (b *Bridge) Command(id string) { b.call(func() { b.command(id) }) }
+func (b *Bridge) Command(id string) {
+	if b.peer != nil {
+		if id == "paste" {
+			// The editor is elsewhere; give it this computer's clipboard first.
+			if text, ok := systemPaste(); ok {
+				b.peer.forward("Clipboard", text)
+			}
+		}
+		b.peer.forward("Command", id)
+		return
+	}
+	b.call(func() { b.command(id) })
+}
 
 func (b *Bridge) command(id string) {
 	if b.dialog != nil {
@@ -202,7 +211,7 @@ func (b *Bridge) fieldCommand(id string) bool {
 		if !ok {
 			return true
 		}
-		systemCopy(f.selected(*text))
+		clipboardCopy(f.selected(*text))
 		if id == "cut" {
 			f.replace(text, lo, hi, "")
 			if e.menu != nil {
@@ -245,25 +254,17 @@ func (b *Bridge) newFile() {
 	e.mode = "insert"
 }
 
-// pick shows the system's open or save panel off the editor's goroutine and
-// hands the chosen path back to it.
-func (b *Bridge) pick(kind pickKind, start string, chosen func(string)) {
-	go func() {
-		var path string
-		var err error
-		switch kind {
-		case pickFolder:
-			path, err = wrt.OpenDirectoryDialog(b.app, wrt.OpenDialogOptions{DefaultDirectory: start, Title: "Open Project", CanCreateDirectories: true})
-		case pickFile:
-			path, err = wrt.OpenFileDialog(b.app, wrt.OpenDialogOptions{DefaultDirectory: start, Title: "Open File", ShowHiddenFiles: true})
-		case pickSave:
-			path, err = wrt.SaveFileDialog(b.app, wrt.SaveDialogOptions{DefaultDirectory: start, Title: "Save As", CanCreateDirectories: true})
+// pick asks the host for a system panel and falls back to a prompt in the
+// window, as a remote editor has no panel to show.
+func (b *Bridge) pick(kind pickKind, start string, title string, chosen func(string)) {
+	if b.host != nil && b.host.pick(kind, start, chosen) {
+		return
+	}
+	b.m.editor.openMenu(&menu{title: title, hidePreview: true, input: start + string(filepath.Separator), submit: func(path string) {
+		if strings.TrimSpace(path) != "" {
+			chosen(path)
 		}
-		if err != nil || path == "" {
-			return
-		}
-		b.call(func() { chosen(path) })
-	}()
+	}})
 }
 
 type pickKind int
@@ -280,7 +281,7 @@ func (b *Bridge) openFile() {
 	if e.b.path != "" {
 		start = filepath.Dir(e.b.path)
 	}
-	b.pick(pickFile, start, func(path string) {
+	b.pick(pickFile, start, "Open File", func(path string) {
 		if e.hub.show(e) {
 			e.open(path)
 		}
@@ -307,7 +308,7 @@ func (b *Bridge) saveAs() {
 		start = filepath.Dir(buf.path)
 	}
 	// The system panel has already asked before replacing a file.
-	b.pick(pickSave, start, func(path string) {
+	b.pick(pickSave, start, "Save As", func(path string) {
 		if e.hub.show(e) {
 			b.writeTo(buf, path)
 		}
@@ -375,7 +376,13 @@ type dialogChoice struct {
 }
 
 // Answer picks a dialog's button; -1 is Escape, which is the last one.
-func (b *Bridge) Answer(i int) { b.call(func() { b.answer(i) }) }
+func (b *Bridge) Answer(i int) {
+	if b.peer != nil {
+		b.peer.forward("Answer", i)
+		return
+	}
+	b.call(func() { b.answer(i) })
+}
 
 func (b *Bridge) answer(i int) {
 	q := b.dialog

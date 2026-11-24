@@ -109,6 +109,8 @@ kbd { font: inherit; }
 .tproject { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px 0 9px; border-radius: 6px; font-weight: 600; color: var(--text); color: var(--dim); max-width: 220px; }
 .tproject .pname { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tproject:hover { background: var(--hover); }
+.thost { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--selected); color: var(--accent); font-size: 12px; font-weight: 600; max-width: 180px; flex: none; }
+.thost span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pill { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 8px; background: var(--selected); color: var(--accent); }
 .tbranch { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 6px; color: var(--dim); max-width: 180px; }
 .tbranch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -267,6 +267,20 @@ Interface text uses the system font and code Menlo until you pick others in Sett
 
 The app is signed ad hoc, not notarized. It has only been used on macOS. The Windows build does not compile yet (`recovery.go` uses a Unix call), and the Linux desktop build is untested.
 
+#### Remote sessions over SSH
+
+The desktop app can show an editor that runs on another machine, as VS Code and Zed do: the files, git, project search, language servers and formatters are all on the server, and the window, the clipboard and the keyboard are here. Connect with `loom ssh`, which is `ssh` with the desktop app's socket forwarded to the server, then open what you want there:
+
+```sh
+loom ssh me@build-box          # takes every ssh argument
+loom-desktop .                 # on the server: a new Loom window here, for that folder there
+loom-desktop src/main.go       # or for a file
+```
+
+The server needs only the terminal `loom` (the install script and the Homebrew formula on Linux also make `loom-desktop` a link to it); WebKit is not needed there. The Loom app must be open here. Each remote session gets a window of its own, with the server's name in its title bar; the editor uses the server's own Loom config. Copying puts text on this computer's clipboard and pasting takes it from there. File panels are replaced by a path prompt, since they would browse the wrong computer. Closing the window ends the editor on the server, asking first about unsaved files; if the SSH connection drops, the window closes.
+
+To use plain `ssh` instead, add the forward to `~/.ssh/config`; `loom ssh-config` prints the lines with this computer's socket filled in. On the server, `loom-desktop` finds the socket through `LC_LOOM_SOCKET` (passed when the server accepts `LC_*` variables, as most do) or by looking for `/tmp/loom-fwd-*.sock` of your user, the newest first. Outside such a session, a `loom-desktop` that is only the terminal `loom` says how to connect.
+
 #### Opening files and projects from a terminal
 
 The desktop app is a single window. Starting it again with a path hands the path to the window that is already open and exits at once:

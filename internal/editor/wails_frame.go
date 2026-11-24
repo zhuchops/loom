@@ -1,5 +1,3 @@
-//go:build desktop
-
 package editor
 
 import (
@@ -7,8 +5,6 @@ import (
 	"fmt"
 	"image/color"
 	"strings"
-
-	wrt "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // frameState is what the web view already has, so a frame carries only
@@ -76,7 +72,7 @@ func (b *Bridge) cellFG(c terminalColor, bg color.NRGBA) color.NRGBA {
 
 // render lays the frame out and sends what changed to the web view.
 func (b *Bridge) render() {
-	if b.app == nil || !b.started || b.cols == 0 {
+	if b.host == nil || !b.started || b.cols == 0 {
 		return
 	}
 	e := b.m.editor
@@ -87,7 +83,7 @@ func (b *Bridge) render() {
 	if c := deriveColors(); c != b.frame.colors || b.frame.inks == nil {
 		b.frame.colors, b.frame.inks, b.frame.rows = c, map[[2]color.NRGBA]color.NRGBA{}, nil
 		out.Theme = themeVars(c)
-		setAppearance(c.dark)
+		b.host.appearance(c.dark)
 		b.frame.ui = "" // the chrome's colours changed with the theme
 	}
 	o := &e.cfg.options
@@ -131,7 +127,7 @@ func (b *Bridge) render() {
 	if data, err := json.Marshal(ui); err == nil && string(data) != b.frame.ui {
 		b.frame.ui, out.UI = string(data), ui
 	}
-	wrt.EventsEmit(b.app, "frame", out)
+	b.host.emit(out)
 }
 
 // encodeRow groups a row of the grid into runs of one style.

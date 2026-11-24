@@ -16,6 +16,9 @@ class Loom < Formula
 
   def install
     system "go", "build", *std_go_args(ldflags: "-s -w", output: bin/"loom"), "."
+    # On a server, loom-desktop opens files in the Loom app on the computer
+    # an SSH session came from (loom ssh); there it is loom by another name.
+    bin.install_symlink "loom" => "loom-desktop" if OS.linux?
   end
 
   test do

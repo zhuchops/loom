@@ -48,6 +48,7 @@ function renderTitle(t) {
   const left = h('div', 'title-left');
   if (isMac) left.appendChild(h('div', 'lights'));
   if (!t.noProject) left.appendChild(button('tbtn' + (t.sidebar ? ' on' : ''), icon('sidebar'), () => run('sidebar'), 'Toggle Sidebar'));
+  if (t.host) left.appendChild(h('span', 'thost', icon('command', 12) + `<span>${escapeHTML(t.host)}</span>`));
   const project = button('tproject', `<span class="pname">${escapeHTML(t.project)}</span>` +
     (t.sessions > 1 ? `<span class="pill">${t.sessions}</span>` : '') + icon('down', 11), () => run('sessions'), 'Switch Session');
   left.appendChild(project);
