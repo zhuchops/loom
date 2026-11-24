@@ -32,7 +32,24 @@ static id loomInitWebView(id self, SEL cmd, NSRect frame, WKWebViewConfiguration
 	return ((id (*)(id, SEL, NSRect, WKWebViewConfiguration *))loomOriginalInit)(self, cmd, frame, config);
 }
 
+// The web view's setting doesn't reach the small "write with Siri" panel
+// AppKit puts beside the text field that has the keyboard: its controller
+// asks one class method whether that panel is on at all, so it answers no.
+static BOOL loomNo(id self, SEL cmd) { return NO; }
+
+static void loomQuietCampo(void) {
+	Class c = objc_getClass("NSCampoLightweightUIController");
+	if (c == Nil) {
+		return; // a system without the panel
+	}
+	Method m = class_getClassMethod(c, NSSelectorFromString(@"_isLightweightUIEnabledForWritingTools"));
+	if (m != NULL) {
+		method_setImplementation(m, (IMP)loomNo);
+	}
+}
+
 static void loomQuietWebView(void) {
+	loomQuietCampo();
 	if (loomOriginalInit != NULL) {
 		return;
 	}
