@@ -185,14 +185,15 @@ kbd { font: inherit; }
 #crumbs .scope { color: var(--text); overflow: hidden; text-overflow: ellipsis; }
 
 #status { height: 27px; display: flex; align-items: center; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); padding: 0 6px 0 8px; }
-.status-left, .status-right { display: flex; align-items: center; height: 100%; gap: 10px; }
+.status-left, .status-right { display: flex; align-items: stretch; height: 100%; gap: 10px; }
+.status-left > .mode, .status-left > .keys { align-self: center; }
 .status-right { margin-left: auto; gap: 0; }
 .mode { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 1px 8px; border-radius: 5px; }
 .keys { padding: 1px 7px; border-radius: 5px; background: var(--hover); color: var(--text); }
-.sbtn { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--dim); }
+/* Buttons and plain text share one box, so their text sits on one line. */
+.sbtn, .sseg { height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--dim); line-height: 1; }
 .sbtn span { display: flex; align-items: center; gap: 4px; }
 .sbtn:hover { background: var(--hover); color: var(--text); }
-.seg { padding: 0 8px; }
 
 /* ---- Layers: dialogs, pickers, toasts ---------------------------------- */
 

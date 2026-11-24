@@ -225,7 +225,7 @@ function renderStatus(s) {
   const right = h('div', 'status-right');
   for (const [text, cmd] of [...(s.segments || [])].reverse()) {
     if (cmd) right.appendChild(button('sbtn', escapeHTML(text), () => run(cmd)));
-    else right.appendChild(h('span', 'seg', escapeHTML(text)));
+    else right.appendChild(h('span', 'sseg', escapeHTML(text)));
   }
   el.appendChild(right);
 }
