@@ -6,12 +6,15 @@ Loom is a Go terminal editor with a Zed-inspired workspace, Vim-style editing, l
 
 ### Install
 
-With Homebrew (macOS and Linux; it builds from source, and on macOS also builds `loom-desktop`):
+With Homebrew (macOS and Linux). The formula builds the terminal editor from source; on macOS the cask installs the window version, `Loom.app`, from the latest release into Applications with a `loom-desktop` command:
 
 ```sh
 brew tap zhuchops/loom https://github.com/zhuchops/loom
-brew install loom
+brew install loom                   # the terminal editor
+brew install --cask loom-desktop    # Loom.app and loom-desktop (macOS)
 ```
+
+The app is not notarized, so the cask clears the quarantine flag Homebrew puts on downloads; otherwise macOS would refuse to open it. After each release the workflow points the formula and the cask at it, so `brew upgrade` picks it up.
 
 Or the ready-made builds from the GitHub releases, for macOS and Linux on arm64 and amd64:
 

@@ -69,3 +69,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+
+  # Points the Homebrew formula and cask in this repository at the new
+  # release, so brew upgrade finds it.
+  homebrew:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Update the formula and the cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          sha=$(gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" -p checksums.txt -O - | awk '$2 == "Loom_darwin_universal.zip" {print $1}')
+          test -n "$sha"
+          sed -i -E "s/tag: \"v[^\"]+\"/tag: \"$GITHUB_REF_NAME\"/" Formula/loom.rb
+          sed -i -E "s/^  version \"[^\"]+\"/  version \"$version\"/; s/^  sha256 \"[^\"]+\"/  sha256 \"$sha\"/" Casks/loom-desktop.rb
+          git diff --quiet && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Homebrew: $GITHUB_REF_NAME"
+          git push origin HEAD:main
