@@ -10,3 +10,5 @@ func raiseWindow() {}
 func setAppearance(bool) {}
 
 func installWindow() {}
+
+func quietTyping() {}

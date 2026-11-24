@@ -41,6 +41,7 @@ func MainDesktop() {
 		}
 	}
 	platformEnvironment()
+	quietTyping()
 	e, explicit, done, err := prepare(true)
 	if err == nil && !done {
 		err = runWails(e, explicit)

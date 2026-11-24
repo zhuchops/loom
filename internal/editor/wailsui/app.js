@@ -131,12 +131,7 @@ function drawCursor(c) {
   const oy = grid.offsetTop;
   cursorEl.style.display = 'block';
   cursorEl.style.transform = `translate(${ox + c.x * state.cellW}px, ${oy + c.y * state.cellH}px)`;
-  // Input methods show their candidates next to the field that has the
-  // keyboard, so it follows the cursor.
-  const g = grid.getBoundingClientRect();
-  input.style.left = `${g.left + c.x * state.cellW}px`;
-  input.style.top = `${g.top + c.y * state.cellH}px`;
-  input.style.height = `${state.cellH}px`;
+  if (composing) placeInput();
   cursorEl.className = cursorEl.className.replace(/\b(bar|underline|block|blink|idle)\b/g, '').trim();
   cursorEl.classList.add(c.shape || 'block');
   if (!document.hasFocus()) cursorEl.classList.add('idle');
@@ -202,7 +197,28 @@ input.addEventListener('input', (e) => {
   if (text) bridge().Text(text);
 });
 
+// Input methods show their candidates next to the field that has the
+// keyboard, so while one is composing the field sits at the cursor. The rest
+// of the time it stays off screen, where the system's writing suggestions,
+// which attach to any text field, can't be seen.
+let composing = false;
+function placeInput() {
+  const c = state.cursor;
+  if (!composing || !c) {
+    input.style.left = '-1000px';
+    input.style.top = '0px';
+    return;
+  }
+  const g = grid.getBoundingClientRect();
+  input.style.left = `${g.left + c.x * state.cellW}px`;
+  input.style.top = `${g.top + c.y * state.cellH}px`;
+  input.style.height = `${state.cellH}px`;
+}
+
+input.addEventListener('compositionstart', () => { composing = true; placeInput(); });
 input.addEventListener('compositionend', (e) => {
+  composing = false;
+  placeInput();
   input.value = '';
   if (e.data) bridge().Text(e.data);
 });
