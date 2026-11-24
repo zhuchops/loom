@@ -152,7 +152,12 @@ func (b *Bridge) Mouse(kind string, x, y, button int, held, shift bool) {
 		return
 	}
 	b.call(func() {
-		x, y = min(b.cols-1, max(0, x)), min(b.rows-1, max(0, y))
+		if kind == "move" && held {
+			// A drag may go past the text: how far says how fast to scroll.
+			x, y = min(b.cols+40, max(-40, x)), min(b.rows+40, max(-40, y))
+		} else {
+			x, y = min(b.cols-1, max(0, x)), min(b.rows-1, max(0, y))
+		}
 		mouse := tea.Mouse{X: x, Y: y}
 		if shift {
 			mouse.Mod = tea.ModShift

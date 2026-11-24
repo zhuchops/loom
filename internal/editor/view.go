@@ -64,6 +64,8 @@ type renderer struct {
 	dragStart                                   int
 	lastClick                                   time.Time
 	lastX, lastY                                int
+	edge                                        edgeState        // a drag at the edge of a pane
+	clock                                       func() time.Time // nil is time.Now
 }
 
 func (v *renderer) draw(e *editor) {

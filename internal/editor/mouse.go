@@ -387,27 +387,94 @@ func (e *editor) editorContext() {
 	e.openMenu(m)
 }
 
-// edgeScroll moves the view while a selection is dragged to or past the edge of
-// the pane, so there is more text to reach. The further out the pointer is, the
-// faster it goes.
+// edgeScroll moves the view while a selection is dragged past the edge of
+// the pane, so there is more text to reach. In a window the pointer has to
+// leave the text; a terminal ends at its last row, so there the outermost row
+// counts. The speed is in lines per second, whatever the rate of events: it
+// starts slow after a short pause and grows the further out the pointer is.
 func (v *renderer) edgeScroll(pane paneBox, x, y int) {
 	b := pane.b
 	band := 1
-	if pane.h < 4 {
+	if v.native || pane.h < 4 {
 		band = 0
 	}
+	vertical, horizontal := 0, 0
 	if above := pane.y + band - y; above > 0 {
-		b.top = max(0, b.top-min(above, 6))
+		vertical = -above
 	} else if below := y - (pane.y + pane.h - 1 - band); below > 0 {
-		b.top = min(len(b.lines)-1, b.top+min(below, 6))
+		vertical = below
 	}
 	left, right := pane.x+pane.gutter, pane.x+pane.w-1
 	if out := left + 1 - x; out > 0 && b.left > 0 {
-		b.left = max(0, b.left-min(out, 8))
+		horizontal = -out
 	} else if out := x - (right - 1); out > 0 {
 		row := b.rowAtScreen(b.top, max(0, min(pane.h-1, y-pane.y)))
 		if cellOffset(b, row, right-left+b.left) < b.lineEnd(row) {
-			b.left += min(out, 8)
+			horizontal = out
 		}
 	}
+	now := v.now()
+	if vertical == 0 && horizontal == 0 {
+		v.edge = edgeState{}
+		return
+	}
+	e := &v.edge
+	if e.since.IsZero() {
+		*e = edgeState{since: now, last: now}
+		return
+	}
+	dt := now.Sub(e.last).Seconds()
+	e.last = now
+	if now.Sub(e.since) < edgeDelay {
+		return
+	}
+	speed := func(out int) float64 { return min(edgeMax, edgeBase+edgeStep*float64(abs(out)-1)) }
+	if vertical != 0 {
+		e.rows += speed(vertical) * dt
+		if n := int(e.rows); n > 0 {
+			e.rows -= float64(n)
+			if vertical < 0 {
+				b.top = max(0, b.top-n)
+			} else {
+				b.top = min(len(b.lines)-1, b.top+n)
+			}
+		}
+	}
+	if horizontal != 0 {
+		e.cols += 2 * speed(horizontal) * dt
+		if n := int(e.cols); n > 0 {
+			e.cols -= float64(n)
+			if horizontal < 0 {
+				b.left = max(0, b.left-n)
+			} else {
+				b.left += n
+			}
+		}
+	}
+}
+
+// The selection's scrolling at an edge: lines per second, and the pause
+// before it starts.
+const (
+	edgeDelay = 140 * time.Millisecond
+	edgeBase  = 8.0  // with the pointer just past the edge
+	edgeStep  = 7.0  // for every further row out
+	edgeMax   = 60.0 // at most
+)
+
+// edgeState is how long a drag has been at an edge, and the part of a line
+// owed but not yet scrolled.
+type edgeState struct {
+	since, last time.Time
+	rows, cols  float64
+}
+
+func abs(n int) int { return max(n, -n) }
+
+// now is the renderer's clock, which tests set.
+func (v *renderer) now() time.Time {
+	if v.clock != nil {
+		return v.clock()
+	}
+	return time.Now()
 }

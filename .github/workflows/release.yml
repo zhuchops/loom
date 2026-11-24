@@ -72,17 +72,26 @@ jobs:
 
   # Points the Homebrew formula and cask in this repository at the new
   # release, so brew upgrade finds it.
+  # Runs one at a time, and only for the newest tag, so releases built side by
+  # side neither race nor point Homebrew back at an older one.
   homebrew:
     needs: publish
     runs-on: ubuntu-latest
+    concurrency: homebrew
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0
       - name: Update the formula and the cask
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          newest=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          if [ "$newest" != "$GITHUB_REF_NAME" ]; then
+            echo "$GITHUB_REF_NAME is not the newest release ($newest); leaving Homebrew alone"
+            exit 0
+          fi
           version=${GITHUB_REF_NAME#v}
           sha=$(gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" -p checksums.txt -O - | awk '$2 == "Loom_darwin_universal.zip" {print $1}')
           test -n "$sha"
@@ -92,4 +101,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "Homebrew: $GITHUB_REF_NAME"
+          git pull --rebase origin main
           git push origin HEAD:main
