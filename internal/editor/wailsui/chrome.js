@@ -114,7 +114,12 @@ function renderSidebar(s) {
       row.innerHTML = html;
       row.dataset.i = i;
       row.addEventListener('mousedown', (e) => { if (e.button === 0 && i > 0) treeDrag.press(e, r.p, r.n); });
-      row.addEventListener('click', () => { if (!treeDrag.justDropped()) act('tree-open', i); });
+      // The second click of a double click keeps the file's tab. The count
+      // comes from the system, so it survives the row being drawn again.
+      row.addEventListener('click', (e) => {
+        if (treeDrag.justDropped()) return;
+        act(e.detail >= 2 && !r.dir ? 'tree-keep' : 'tree-open', i);
+      });
       row.addEventListener('contextmenu', (e) => { e.preventDefault(); act('tree-context', i); });
       list.appendChild(row);
     });
@@ -242,7 +247,7 @@ function renderTabs(tabs) {
   el.replaceChildren();
   if (!tabs) return;
   tabs.forEach((t, i) => {
-    const tab = h('div', 'tab' + (t.active ? ' active' : ''));
+    const tab = h('div', 'tab' + (t.active ? ' active' : '') + (t.preview ? ' preview' : ''));
     const mark = t.welcome ? `<img class="logo" src="${state.logo || ''}" alt="">` : fileIcon(t.icon);
     tab.innerHTML = `${mark}<span class="tlabel">${escapeHTML(t.name)}</span>` + (t.folder ? `<span class="tfolder">${escapeHTML(t.folder)}</span>` : '');
     const close = button('tclose' + (t.dirty ? ' dirty' : ''), icon('close', 12), () => act('tab-close', i), 'Close');
@@ -251,6 +256,7 @@ function renderTabs(tabs) {
       if (e.button === 1) { e.preventDefault(); act('tab-close', i); return; }
       if (e.button !== 0 || e.target.closest('.tclose')) return;
       act('tab', i);
+      if (e.detail >= 2) act('tab-keep', i); // a double click keeps a preview tab
       tabDrag = { from: i, at: i };
     });
     tab.addEventListener('mousemove', () => {
@@ -262,6 +268,14 @@ function renderTabs(tabs) {
     if (t.active) requestAnimationFrame(() => tab.scrollIntoView({ inline: 'nearest', block: 'nearest' }));
   });
 }
+// The wheel scrolls the tab strip sideways, without Shift.
+$('tabs').addEventListener('wheel', (e) => {
+  const el = $('tabs');
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  if (!d || el.scrollWidth <= el.clientWidth) return;
+  e.preventDefault();
+  el.scrollLeft += e.deltaMode === 1 ? d * 30 : d;
+}, { passive: false });
 // Dragged over the text, a tab offers to split the pane it is over.
 window.addEventListener('mousemove', (e) => {
   if (!tabDrag || !(e.buttons & 1)) return;

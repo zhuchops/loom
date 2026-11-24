@@ -251,7 +251,11 @@ func (v *renderer) drawTabs(e *editor, left, width int) {
 		if b.dashboard {
 			v.write(x+1, 0, 2, "\uf015", marker)
 		}
-		v.write(x+3, 0, size-5, name, style)
+		nameStyle := style
+		if b.isPreview() {
+			nameStyle.italic = true
+		}
+		v.write(x+3, 0, size-5, name, nameStyle)
 		mark, markStyle := "×", number
 		if b.dirty() {
 			mark, markStyle = "●", style.Foreground(th.yellow)

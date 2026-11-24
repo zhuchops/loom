@@ -35,6 +35,7 @@ func (e *editor) workspaceCommands() {
 	e.add("directory-jump", "Jump to Directory", func(e *editor) { e.directoryPicker() })
 	e.layoutCommands()
 	e.add("close-tab", "Close Tab", func(e *editor) { e.closeBuffer(e.b) })
+	e.add("keep-tab", "Keep Tab Open", func(e *editor) { e.keepTab(e.b) })
 	e.add("project-search", "Search Project", func(e *editor) { e.projectSearchPrompt("") })
 	e.add("refresh-git", "Refresh Git Status", func(e *editor) { e.refreshGit() })
 	e.add("format", "Format Buffer", func(e *editor) {
@@ -241,7 +242,7 @@ func (e *editor) projectSearch(query string) {
 
 func (e *editor) jumpTo(path string, row, col int, utf16 bool) {
 	from := e.jumpPoint()
-	if !e.open(path) {
+	if !e.openPreview(path) {
 		return
 	}
 	row = max(0, min(len(e.b.lines)-1, row))

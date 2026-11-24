@@ -150,6 +150,9 @@ func (b *Bridge) tabsState() []any {
 		if buf.dirty() {
 			t["dirty"] = true
 		}
+		if buf.isPreview() {
+			t["preview"] = true
+		}
 		if buf.dashboard {
 			t["welcome"] = true
 		} else {
@@ -293,6 +296,19 @@ func (b *Bridge) act(name string, i int, s string) {
 	case "tab":
 		if inTabs {
 			e.switchBuffer(e.buffers[i])
+		}
+	case "tab-keep":
+		if inTabs {
+			e.keepTab(e.buffers[i])
+		}
+	case "tree-keep":
+		// A double click in the sidebar keeps the file it opened.
+		if inTree {
+			for _, buf := range e.buffers {
+				if buf.path == t.rows[i].path {
+					e.keepTab(buf)
+				}
+			}
 		}
 	case "tab-close":
 		if inTabs {

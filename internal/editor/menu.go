@@ -378,7 +378,7 @@ func (e *editor) openFiles() {
 			if err != nil {
 				return nil
 			}
-			options = append(options, option{rel, "", func() { e.open(path) }, e.filePreview(path, -1, 0, false, nil)})
+			options = append(options, option{rel, "", func() { e.openPreview(path) }, e.filePreview(path, -1, 0, false, nil)})
 			if len(options) >= 20000 {
 				return fs.SkipAll
 			}

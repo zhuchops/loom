@@ -56,6 +56,9 @@ type options struct {
 	PathBar   bool `json:"path_bar"`
 	StatusBar bool `json:"status_bar"`
 	Scrollbar bool `json:"scrollbar"`
+	// PreviewTabs opens files from the sidebar, the file picker and jumps in
+	// one preview tab that the next one replaces until it is kept.
+	PreviewTabs bool `json:"preview_tabs"`
 
 	FormatOnSave    bool `json:"format_on_save"`
 	OrganizeImports bool `json:"organize_imports"`
@@ -75,7 +78,7 @@ func defaultOptions() options {
 
 		CursorNormal: "block", CursorInsert: "bar", CursorGlide: true,
 
-		PathBar: true, StatusBar: true, Scrollbar: true,
+		PathBar: true, StatusBar: true, Scrollbar: true, PreviewTabs: true,
 
 		FormatOnSave: true, RestoreSession: true, ReopenProject: true,
 	}
@@ -164,6 +167,7 @@ var settingList = []setting{
 	{key: "path_bar", page: "interface", group: "Window", title: "Path bar", help: "The file's path under the tabs", kind: settingSwitch, desktop: true, added: true},
 	{key: "status_bar", page: "interface", group: "Window", title: "Status bar", help: "Mode, problems and cursor position", kind: settingSwitch, desktop: true, added: true},
 	{key: "scrollbar", page: "interface", group: "Window", title: "Editor scrollbar", kind: settingSwitch, desktop: true, added: true},
+	{key: "preview_tabs", page: "interface", group: "Tabs", title: "Preview tabs", help: "Files opened for a look share one tab until you edit or keep it", kind: settingSwitch, added: true},
 
 	{key: "format_on_save", page: "files", group: "Saving", title: "Format on save", kind: settingSwitch},
 	{key: "organize_imports", page: "files", group: "Saving", title: "Organize imports on save", kind: settingSwitch},

@@ -34,8 +34,11 @@ type buffer struct {
 	semanticPath, highlightPath       string
 	diagnostics                       []diagnostic
 
-	path        string
-	dashboard   bool
+	path      string
+	dashboard bool
+	// preview marks the preview tab, which the next file opened for a look
+	// replaces. Editing it keeps it.
+	preview     bool
 	text        []rune
 	cursor      int
 	anchor      int
@@ -214,6 +217,14 @@ func (b *buffer) history(redo bool) {
 }
 
 func (b *buffer) dirty() bool { return string(b.text) != b.saved }
+
+// isPreview tells whether b is still a preview tab; an edit keeps it for good.
+func (b *buffer) isPreview() bool {
+	if b.preview && b.dirty() {
+		b.preview = false
+	}
+	return b.preview
+}
 
 func (b *buffer) save(expected *diskState) error {
 	if b.path == "" {

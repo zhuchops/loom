@@ -267,7 +267,7 @@ func (e *editor) treeInput(key string) bool {
 			e.refreshTree(row.path)
 		} else {
 			t.focused, t.popup = false, false
-			e.open(row.path)
+			e.openPreview(row.path)
 		}
 	case "a", "A":
 		dir := treeDir(row)

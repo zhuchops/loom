@@ -952,32 +952,99 @@ func (e *editor) playMacro(name string) {
 	}
 }
 
-func (e *editor) open(path string) bool {
+func (e *editor) open(path string) bool { return e.openAs(path, false) }
+
+// openPreview opens path in the preview tab: a tab that the next preview
+// replaces until it is kept. Browsing (the sidebar, the file picker, jumps)
+// opens files this way.
+func (e *editor) openPreview(path string) bool { return e.openAs(path, e.cfg.PreviewTabs) }
+
+func (e *editor) openAs(path string, preview bool) bool {
+	for _, existing := range e.buffers {
+		if !existing.dashboard && existing.path != "" && existing.path == path {
+			e.showOpened(existing, preview)
+			return true
+		}
+	}
 	b, err := loadBuffer(path)
 	if err != nil {
 		e.notify(err.Error())
 		return false
 	}
-	e.openLoaded(b)
+	e.openLoadedAs(b, preview)
 	return true
 }
 
-func (e *editor) openLoaded(b *buffer) {
+func (e *editor) openLoaded(b *buffer) { e.openLoadedAs(b, false) }
+
+func (e *editor) openLoadedAs(b *buffer, preview bool) {
 	for _, existing := range e.buffers {
 		if !existing.dashboard && existing.path == b.path {
-			e.switchBuffer(existing)
+			e.showOpened(existing, preview)
 			return
 		}
 	}
 	if ds := e.problems[b.path]; len(ds) > 0 {
 		b.diagnostics = slices.Clone(ds)
 	}
+	b.preview = preview && b.path != ""
 	if len(e.buffers) == 1 && e.b.path == "" && !e.b.dashboard && !e.b.dirty() && e.layout == e.activePane {
 		e.buffers[0] = b
-	} else {
-		e.buffers = append(e.buffers, b)
+		e.switchBuffer(b)
+		return
+	}
+	old := e.previewTab()
+	if b.preview && old != nil && e.replaceable(old) {
+		// The new preview takes the old one's place in the tab strip.
+		at := slices.Index(e.buffers, old)
+		e.buffers = slices.Insert(e.buffers, at+1, b)
+		e.switchBuffer(b)
+		e.closeBuffer(old)
+		return
+	}
+	if old != nil && b.preview {
+		old.preview = false
+	}
+	e.buffers = append(e.buffers, b)
+	e.switchBuffer(b)
+}
+
+// showOpened switches to a file that already has a tab; opening it for good
+// keeps its tab.
+func (e *editor) showOpened(b *buffer, preview bool) {
+	if !preview {
+		b.preview = false
 	}
 	e.switchBuffer(b)
+}
+
+// previewTab is the tab the next preview replaces, if there is one. A preview
+// that was edited has been kept.
+func (e *editor) previewTab() *buffer {
+	for _, b := range e.buffers {
+		if b.isPreview() {
+			return b
+		}
+	}
+	return nil
+}
+
+// replaceable tells whether old can give way to a new preview: it is not
+// shown in a pane other than the active one.
+func (e *editor) replaceable(old *buffer) bool {
+	for _, p := range e.layout.leaves() {
+		if p != e.activePane && (p.b == old || p.dashboardPrevious != nil && p.dashboardPrevious.b == old) {
+			return false
+		}
+	}
+	return !old.dirty()
+}
+
+// keepTab makes b an ordinary tab, so the next preview opens beside it.
+func (e *editor) keepTab(b *buffer) {
+	if b != nil {
+		b.preview = false
+	}
 }
 
 // The active leaf projects its view onto e.b for existing modal commands.
@@ -1024,6 +1091,7 @@ func (e *editor) save() bool {
 		e.writeDirectory()
 		return false
 	}
+	e.keepTab(e.b)
 	return e.saveAgainst(nil, false)
 }
 func (e *editor) tryQuit(force bool) {

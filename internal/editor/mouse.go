@@ -214,6 +214,18 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 				e.treeContext()
 				return
 			}
+			now := v.now()
+			if row := e.tree.rows[at]; !row.dir && now.Sub(v.lastClick) < 350*time.Millisecond && x == v.lastX && y == v.lastY {
+				// The second click of a double click keeps the file's tab.
+				v.lastClick = time.Time{}
+				for _, b := range e.buffers {
+					if b.path == row.path {
+						e.keepTab(b)
+					}
+				}
+				return
+			}
+			v.lastClick, v.lastX, v.lastY = now, x, y
 			e.treeInput("enter")
 		}
 		return
@@ -231,6 +243,11 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 		if (press && x == tab.close) || button == mouseMiddle {
 			e.closeBuffer(tab.b)
 		} else if press {
+			now := v.now()
+			if now.Sub(v.lastClick) < 350*time.Millisecond && x == v.lastX && y == v.lastY {
+				e.keepTab(tab.b) // a double click keeps a preview tab
+			}
+			v.lastClick, v.lastX, v.lastY = now, x, y
 			v.tabPrev = e.b
 			e.switchBuffer(tab.b)
 			v.tabDrag, v.tabStartX, v.tabStartY = tab.b, x, y

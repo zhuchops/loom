@@ -163,7 +163,7 @@ The desktop app has a settings window. Type to search all of it, move with the a
 | Fonts, interface | `ui_font_family`, `ui_font_size` (scales the whole interface), `ui_font_weight` |
 | Editor | `line_numbers`, `relative_numbers`, `highlight_line`, `indent_guides`, `tab_size`, `indent_style`, `scrolloff`, `sticky_scroll` (breadcrumbs), `smooth_scroll`, `auto_complete`, `auto_pairs`, `hover_docs` |
 | Cursor | `cursor_normal`, `cursor_insert` (`block`, `bar` or `underline`), `cursor_blink`, `cursor_glide` |
-| Interface | `path_bar`, `status_bar`, `scrollbar` |
+| Interface | `path_bar`, `status_bar`, `scrollbar`, `preview_tabs` |
 | Files | `format_on_save`, `organize_imports`, `reopen_project`, `restore_session` |
 | Languages | Tab size, indent style and format on save per language, and whether its server and formatter are installed |
 | Keyboard | The keys of every command in Normal, Visual and Insert mode. Click one and press the new keys. `⌘` shortcuts belong to the menu bar and can't be changed. |
@@ -304,7 +304,7 @@ A swipe scrolls along one axis only. The first direction of a swipe wins, and th
 
 ### Scrolling tabs
 
-When there are more tabs than fit, scroll the wheel or touchpad over the tab bar (either axis) to slide through them without switching buffer. Switching to another tab brings it back into view.
+When there are more tabs than fit, scroll the wheel or touchpad over the tab bar (either axis, no Shift needed, in the terminal and the desktop app) to slide through them without switching buffer. Switching to another tab brings it back into view.
 
 ### Vim compatibility
 
@@ -367,6 +367,17 @@ Both editing profiles use the same leaders. Press Space, g, or Ctrl+W to see con
 Definition jumps, reference results, project search results, and Ex line addresses enter jump history. Taking a new jump clears the forward history.
 
 ## Tabs and panes
+
+### Preview tabs
+
+Files opened for a look open in a preview tab, whose name is in italics: from the sidebar, the file picker, recent files, and jumps such as go to definition, references and search results. There is one preview tab at a time, and the next file opened this way replaces it in place. A preview tab becomes an ordinary tab when you:
+
+- double-click it in the tab bar, or double-click the file in the sidebar;
+- edit it or save it;
+- run **Keep Tab Open** (`:keep-tab`);
+- open the file with `:e`, from the command line or the Open dialog.
+
+A preview still shown in another pane stays when the next one opens. Files given on the command line and tabs restored from a session open as ordinary tabs. Turn previews off with `"preview_tabs": false` or in Settings, under Interface.
 
 Tabs are numbered in the tab bar. A split opens another view of the current buffer, with its own cursor and scrolling. Both views share text and undo. Tab commands change the buffer in the active pane.
 

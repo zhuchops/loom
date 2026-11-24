@@ -48,7 +48,7 @@ func (e *editor) recentOptions(skipCurrent bool) []option {
 			continue
 		}
 		rel, _ := filepath.Rel(e.root, path)
-		out = append(out, option{rel, "recent", func() { e.open(path) }, e.filePreview(path, -1, 0, false, nil)})
+		out = append(out, option{rel, "recent", func() { e.openPreview(path) }, e.filePreview(path, -1, 0, false, nil)})
 	}
 	return out
 }
