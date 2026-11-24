@@ -381,6 +381,39 @@ func treeDir(row treeEntry) string {
 	return filepath.Dir(row.path)
 }
 
+// dropEntry moves src into the folder of onto: onto itself when it is a
+// folder, the one holding it when it is a file. It is a drag in the sidebar;
+// both are paths, as rows shift while a dragged-over folder opens.
+func (e *editor) dropEntry(src, onto string) error {
+	if src == "" || onto == "" || src == e.root || !within(e.root, src) || !within(e.root, onto) {
+		return nil
+	}
+	dir := onto
+	if info, err := os.Stat(onto); err != nil || !info.IsDir() {
+		dir = filepath.Dir(onto)
+	}
+	if filepath.Dir(src) == dir {
+		return nil // already there
+	}
+	if err := e.moveEntry(src, filepath.Join(dir, filepath.Base(src))); err != nil {
+		return err
+	}
+	e.tree.cut = ""
+	e.refreshGit()
+	e.notify("Moved " + filepath.Base(src) + " to " + filepath.Base(dir))
+	return nil
+}
+
+// expandEntry opens the folder at row i, as a drag that rests on it does.
+func (e *editor) expandEntry(i int) {
+	t := &e.tree
+	if i < 0 || i >= len(t.rows) || !t.rows[i].dir || t.expanded[t.rows[i].path] {
+		return
+	}
+	t.expanded[t.rows[i].path] = true
+	e.refreshTree("")
+}
+
 func (e *editor) expandTo(path string) {
 	for dir := filepath.Dir(path); within(e.root, dir); dir = filepath.Dir(dir) {
 		e.tree.expanded[dir] = true

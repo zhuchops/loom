@@ -97,6 +97,7 @@ function renderSidebar(s) {
     }
     el.appendChild(head);
     const list = h('div', 'side-list');
+    treeDrag.rows = s.rows;
     s.rows.forEach((r, i) => {
       const row = h('div', 'trow' + (r.sel ? ' sel' : '') + (r.cur ? ' cur' : '') + (r.cut ? ' cut' : '') + (i === 0 ? ' root' : ''));
       row.style.paddingLeft = `${11 + r.d * 13}px`;
@@ -111,7 +112,9 @@ function renderSidebar(s) {
       html += `<span class="tname"${r.git && !r.dir ? ` style="color:${r.git[1]}"` : ''}>${escapeHTML(r.n)}</span>`;
       if (r.git) html += r.dir ? `<span class="gdot" style="background:${r.git[1]}"></span>` : `<span class="gmark" style="color:${r.git[1]}">${escapeHTML(r.git[0])}</span>`;
       row.innerHTML = html;
-      row.addEventListener('click', () => act('tree-open', i));
+      row.dataset.i = i;
+      row.addEventListener('mousedown', (e) => { if (e.button === 0 && i > 0) treeDrag.press(e, r.p, r.n); });
+      row.addEventListener('click', () => { if (!treeDrag.justDropped()) act('tree-open', i); });
       row.addEventListener('contextmenu', (e) => { e.preventDefault(); act('tree-context', i); });
       list.appendChild(row);
     });
@@ -129,12 +132,106 @@ function renderSidebar(s) {
       window.addEventListener('mouseup', up);
     });
     el.appendChild(edge);
+    if (treeDrag.active) treeDrag.mark(treeDrag.target); // the rows were redrawn under the drag
   }
   if (reveal !== undefined) {
     const row = el.querySelectorAll('.trow')[reveal];
     if (row) row.scrollIntoView({ block: 'nearest' });
   }
 }
+
+// ---- Dragging in the sidebar ---------------------------------------------
+
+// treeDrag moves files and folders with the mouse: drop on a folder to move
+// into it, on a file to move beside it. A folder the drag rests on opens.
+const treeDrag = {
+  rows: [],
+  from: '', // the dragged path, relative to the project
+  name: '',
+  start: null,
+  active: false,
+  target: -1,
+  ghost: null,
+  hover: { at: -1, timer: 0 },
+  dropped: 0,
+
+  press(e, path, name) {
+    this.from = path;
+    this.name = name;
+    this.start = [e.clientX, e.clientY];
+    this.active = false;
+  },
+
+  // folderOf is the row of the folder a drop on row i goes into.
+  folderOf(i) {
+    const rows = this.rows;
+    if (i < 0 || i >= rows.length) return -1;
+    if (rows[i].dir) return i;
+    for (let k = i - 1; k >= 0; k--) if (rows[k].dir && rows[k].d < rows[i].d) return k;
+    return 0;
+  },
+
+  rowAt(e) {
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const row = el && el.closest('#sidebar .trow');
+    if (row) return Number(row.dataset.i);
+    // Below the last row is the project folder itself.
+    return el && el.closest('#sidebar .side-list') ? 0 : -1;
+  },
+
+  move(e) {
+    if (!this.from) return;
+    if (!this.active) {
+      if (Math.abs(e.clientX - this.start[0]) + Math.abs(e.clientY - this.start[1]) < 5) return;
+      this.active = true;
+      this.ghost = h('div', 'tghost', escapeHTML(this.name));
+      document.body.appendChild(this.ghost);
+      document.body.classList.add('dragging');
+    }
+    this.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 6}px)`;
+    const over = this.rowAt(e);
+    this.mark(this.folderOf(over));
+    // Resting on a closed folder opens it.
+    if (over !== this.hover.at) {
+      clearTimeout(this.hover.timer);
+      this.hover.at = over;
+      const row = this.rows[over];
+      if (row && row.dir && !row.open) this.hover.timer = setTimeout(() => act('tree-expand', over), 650);
+    }
+  },
+
+  mark(target) {
+    this.target = target;
+    document.querySelectorAll('#sidebar .trow.drop, #sidebar .side-list.drop').forEach((el) => el.classList.remove('drop'));
+    if (target < 0) return;
+    const row = document.querySelector(`#sidebar .trow[data-i="${target}"]`);
+    if (target === 0) document.querySelector('#sidebar .side-list')?.classList.add('drop');
+    else if (row) row.classList.add('drop');
+  },
+
+  release() {
+    if (!this.from) return;
+    if (this.active) {
+      const onto = this.rows[this.target];
+      if (onto) act('tree-drop', -1, `${this.from}\n${onto.p}`);
+      this.dropped = Date.now();
+      this.ghost.remove();
+      this.ghost = null;
+      document.body.classList.remove('dragging');
+      this.mark(-1);
+    }
+    clearTimeout(this.hover.timer);
+    this.hover.at = -1;
+    this.from = '';
+    this.active = false;
+  },
+
+  // justDropped tells the click that ends a drag from a real click.
+  justDropped() { return Date.now() - this.dropped < 300; },
+};
+window.addEventListener('mousemove', (e) => treeDrag.move(e));
+window.addEventListener('mouseup', () => treeDrag.release());
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && treeDrag.active) { treeDrag.target = -1; treeDrag.release(); } }, true);
 
 // ---- Tabs -----------------------------------------------------------------
 

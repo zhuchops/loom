@@ -241,7 +241,7 @@ The chain of functions and blocks around the cursor, like `Server › Handle ›
 The status bar's segments (encoding, line endings, language and the cursor position, which is a button) share one line. The title bar, sidebar, tabs and status bar are translucent, so on macOS the desktop shows through them, blurred, in dark or light glass to match the theme. Pickers, popups, panels and dialogs are glass too: they blur the code under them.
 
 - **Title bar:** the project and how many sessions are open (click to switch), the branch (click to switch), a search field, and buttons for Source Control, the Command Palette and Settings.
-- **Sidebar:** the file tree with git state, buttons for a new file, a new folder and filtering. Right-click for actions; drag its edge to resize it.
+- **Sidebar:** the file tree with git state, buttons for a new file, a new folder and filtering. Right-click for actions; drag its edge to resize it. Drag a file or folder onto a folder to move it there, or onto a file to move it beside that file; a closed folder the drag rests on opens, and Esc cancels. Open tabs follow what they show.
 - **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click or × to close. A tinted bar beneath shows the file's path and the functions and blocks around the cursor.
 - **Pickers and panels:** the palette, file search with a highlighted preview, settings with switches, Source Control with stage and commit buttons, and a diff with both line numbers.
 - **Messages** appear as a toast at the bottom right. Click one for the history.

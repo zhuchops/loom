@@ -9,7 +9,7 @@ import (
 
 // playDemo runs the script named by LOOM_DEMO once the window is up, so the
 // front end can be checked without touching the keyboard. Each line is
-// "keys a b ctrl+p", "type text", "run command-id", "open path" or "sleep 300".
+// "keys a b ctrl+p", "type text", "run command-id", "open path", "js code" or "sleep 300".
 func (b *Bridge) playDemo() {
 	path := os.Getenv("LOOM_DEMO")
 	if path == "" {
@@ -42,6 +42,11 @@ func (b *Bridge) playDemo() {
 						c.run(b.m.editor)
 					}
 				})
+			case "js":
+				// Runs JavaScript in the page, to drive what Go can't, like a drag.
+				if h, ok := b.host.(interface{ execJS(string) }); ok {
+					h.execJS(rest)
+				}
 			case "open":
 				b.call(func() { b.m.editor.open(rest) })
 			case "sleep":

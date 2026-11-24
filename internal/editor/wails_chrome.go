@@ -88,7 +88,8 @@ func (b *Bridge) sidebarState() map[string]any {
 	c := &b.frame.colors
 	rows := make([]any, 0, len(t.rows))
 	for i, row := range t.rows {
-		r := map[string]any{"n": filepath.Base(row.path), "d": row.depth}
+		rel, _ := filepath.Rel(e.root, row.path)
+		r := map[string]any{"n": filepath.Base(row.path), "d": row.depth, "p": rel}
 		if row.dir {
 			r["dir"] = true
 			if t.expanded[row.path] || t.filter != "" {
@@ -275,6 +276,15 @@ func (b *Bridge) act(name string, i int, s string) {
 		}
 		t.focused = true
 		e.treeInput(s)
+	case "tree-drop":
+		// A drag in the sidebar: s is the dragged path and the one it was
+		// dropped on, relative to the project, on two lines.
+		from, onto, _ := strings.Cut(s, "\n")
+		if err := e.dropEntry(filepath.Join(e.root, from), filepath.Join(e.root, onto)); err != nil {
+			e.notify(err.Error())
+		}
+	case "tree-expand":
+		e.expandEntry(i)
 	case "tree-clear-filter":
 		t.filter, t.filtering = "", false
 		e.refreshTree("")

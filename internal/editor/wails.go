@@ -119,6 +119,8 @@ func (h wailsHost) emit(frame any) { wrt.EventsEmit(h.b.app, "frame", frame) }
 
 func (h wailsHost) quit() { wrt.Quit(h.b.app) }
 
+func (h wailsHost) execJS(code string) { wrt.WindowExecJS(h.b.app, code) }
+
 func (h wailsHost) appearance(dark bool) { setAppearance(dark) }
 
 // pick shows the system's open or save panel off the editor's goroutine and
