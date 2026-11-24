@@ -67,7 +67,7 @@ func (b *Bridge) titleState() map[string]any {
 		"sessions": len(e.hub.live), "gitDot": len(e.git.files) > 0,
 	}
 	if e.git.branch != "" && !e.noProject {
-		t["branch"] = e.git.branch
+		t["branch"] = e.git.branchLabel()
 	}
 	if b.remoteHost != "" {
 		t["host"] = b.remoteHost

@@ -56,7 +56,7 @@ func (v *renderer) drawStatus(e *editor, w, h int) {
 		position = ""
 	}
 	if e.git.branch != "" {
-		right = " \U000f062c " + e.git.branch + "  " + right
+		right = " \U000f062c " + e.git.branchLabel() + "  " + right
 	}
 	folder, folderName := "", ""
 	if w >= 78 && !e.noProject {

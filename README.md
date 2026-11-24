@@ -480,6 +480,10 @@ Popups are centered and take their colors from the active theme. Modal prompts d
 
 ## Git
 
+Git changes made outside Loom show at once: when a commit, a checkout, a pull or a stash from a terminal touches the repository, the file marks, the changed-line gutter and the Source Control panel follow within a second (Loom watches the few files git changes for these, so it costs nothing on a large repository). Edits other programs make to files that aren't open are picked up every few seconds where `git status` is quick. The branch shows how far it is from its upstream, like `main ↑2 ↓1`, in the title bar, the status line and the panel.
+
+Git commands are in the command palette: **Git: Commit…** (what is staged, or every change when nothing is), **Commit All…**, **Amend Last Commit…** (starting from the last message), **Push** (which publishes a branch that has no upstream yet), **Pull**, **Pull (Rebase)**, **Fetch** (all remotes, pruning), **Sync** (pull with a rebase, then push), **Stash Changes**, **Pop Stash**, **Create Branch…**, **Stage This File** and **Unstage This File**, besides **Switch Branch**. Network commands run in the background and say how they went; files they change reload. In the Source Control panel `f` fetches and `S` syncs, next to `c` commit, `p` push and `P` pull, and the desktop panel has Fetch, Pull, Push, Sync and Commit buttons.
+
 The status bar shows the current branch. Git commands run with the `git` on your `PATH`.
 
 | Keys | Action |

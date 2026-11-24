@@ -47,6 +47,9 @@ func (b *Bridge) gitState() map[string]any {
 	s := map[string]any{"selected": p.selected, "scroll": p.scroll, "total": len(rows), "staged": p.hasStaged(), "ready": p.top != ""}
 	if p.branch != "" {
 		s["branch"] = p.branch
+		if p.branch == e.git.branch {
+			s["branch"] = e.git.branchLabel() // with how far it is from upstream
+		}
 	}
 	var out []any
 	for i := p.scroll; i < len(rows) && i < p.scroll+count; i++ {
@@ -286,9 +289,13 @@ func (b *Bridge) panelAct(name string, i int, s string) bool {
 		case "commit":
 			e.commitPrompt(p)
 		case "push":
-			e.gitRemote(p.top, "push")
+			e.gitPush()
 		case "pull":
-			e.gitRemote(p.top, "pull", "--ff-only")
+			e.gitRun("pull", []string{"pull", "--ff-only"})
+		case "fetch":
+			e.gitRun("fetch", []string{"fetch", "--all", "--prune"})
+		case "sync":
+			e.gitSync()
 		case "branch":
 			e.openBranchPicker()
 		}

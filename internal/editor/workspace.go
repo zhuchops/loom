@@ -266,6 +266,24 @@ type gitState struct {
 	path    string
 	version int
 	branch  string
+	// dir is the repository's git folder, watched for changes made outside
+	// the editor; ahead and behind count commits against the upstream.
+	dir           string
+	top           string
+	ahead, behind int
+	upstream      bool
+}
+
+// branchLabel is the branch with how far it is from its upstream: main ↑2 ↓1.
+func (g gitState) branchLabel() string {
+	label := g.branch
+	if g.ahead > 0 {
+		label += " ↑" + strconv.Itoa(g.ahead)
+	}
+	if g.behind > 0 {
+		label += " ↓" + strconv.Itoa(g.behind)
+	}
+	return label
 }
 
 func (e *editor) scheduleGit() {
@@ -294,6 +312,7 @@ func (e *editor) refreshGit() {
 	path, version, text := b.path, b.version, string(b.text)
 	root := e.root // the project can change while git runs
 	go func() {
+		started := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		run := func(args ...string) []byte {
@@ -334,12 +353,59 @@ func (e *editor) refreshGit() {
 			}
 		}
 		branch := gitBranch(root)
+		dir := strings.TrimSpace(string(run("rev-parse", "--absolute-git-dir")))
+		g := gitState{files: files, lines: lines, path: path, version: version, branch: branch, dir: dir, top: top}
+		if counts := strings.Fields(string(run("rev-list", "--left-right", "--count", "@{upstream}...HEAD"))); len(counts) == 2 {
+			g.behind, _ = strconv.Atoi(counts[0])
+			g.ahead, _ = strconv.Atoi(counts[1])
+			g.upstream = true
+		}
+		print := gitFingerprint(dir, branch)
+		took := time.Since(started)
 		e.async <- func() {
 			if token == e.gitToken {
-				e.git = gitState{files: files, lines: lines, path: path, version: version, branch: branch}
+				e.git = g
+				e.gitPrint, e.gitChecked, e.gitCost = print, time.Now(), took
 			}
 		}
 	}()
+}
+
+// gitFingerprint is the size and time of the files git changes when it
+// commits, stages, switches branches, fetches or pulls; a different one
+// means the repository moved, whoever moved it.
+func gitFingerprint(dir, branch string) string {
+	if dir == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, name := range []string{"index", "HEAD", "FETCH_HEAD", "ORIG_HEAD", "MERGE_HEAD", "packed-refs", "logs/HEAD", "refs/stash", "refs/heads/" + branch} {
+		if info, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			fmt.Fprintf(&b, "%s:%d:%d;", name, info.Size(), info.ModTime().UnixNano())
+		}
+	}
+	return b.String()
+}
+
+// watchGit runs every second: when git's files changed (a commit, a
+// checkout, a pull from a terminal) the marks, the gutter and the Source
+// Control panel catch up at once. Edits by other programs to files that are
+// not open don't touch git's files, so a cheap repository is also looked at
+// every few seconds.
+func (e *editor) watchGit() {
+	if e.noProject || e.git.dir == "" && !e.gitChecked.IsZero() && time.Since(e.gitChecked) < 10*time.Second {
+		return
+	}
+	moved := gitFingerprint(e.git.dir, e.git.branch) != e.gitPrint
+	stale := e.gitCost < 300*time.Millisecond && time.Since(e.gitChecked) > 5*time.Second
+	if !moved && !stale {
+		return
+	}
+	e.gitChecked = time.Now() // until this refresh reports back
+	e.refreshGit()
+	if moved {
+		e.reloadSourceControl()
+	}
 }
 
 func changedLines(old, current string) map[int]byte {

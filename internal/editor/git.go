@@ -170,6 +170,7 @@ func (e *editor) gitCommands() {
 	e.add("git-panel", "Source Control", func(e *editor) { e.openSourceControl() })
 	e.add("git-diff", "Show Git Diff", func(e *editor) { e.openDiffFor(e.b.path) })
 	e.add("git-branch", "Switch Branch", func(e *editor) { e.openBranchPicker() })
+	e.gitActionCommands()
 }
 
 func (e *editor) openSourceControl() {
@@ -283,9 +284,13 @@ func (e *editor) sourceControlInput(in keyInput) {
 	case "c":
 		e.commitPrompt(p)
 	case "p":
-		e.gitRemote(p.top, "push")
+		e.gitPush()
 	case "P":
-		e.gitRemote(p.top, "pull", "--ff-only")
+		e.gitRun("pull", []string{"pull", "--ff-only"})
+	case "f":
+		e.gitRun("fetch", []string{"fetch", "--all", "--prune"})
+	case "S":
+		e.gitSync()
 	case "b":
 		e.openBranchPicker()
 	case "R":
@@ -324,27 +329,9 @@ func (e *editor) discardRow(p *sourceControl) {
 	}})
 }
 
-func (e *editor) commitPrompt(p *sourceControl) {
-	if !p.hasStaged() {
-		e.notify("Nothing staged to commit")
-		return
-	}
-	e.openMenu(&menu{title: "Commit message", submit: func(message string) {
-		message = strings.TrimSpace(message)
-		if message == "" {
-			e.notify("Commit message is empty")
-			return
-		}
-		out, err := gitExec(p.top, 30*time.Second, "commit", "-m", message)
-		if err != nil {
-			e.notify(err.Error())
-			return
-		}
-		e.notify(strings.TrimSpace(string(out)))
-		e.reloadSourceControl()
-		e.refreshGit()
-	}})
-}
+// commitPrompt is the panel's Commit: what is staged, or every change when
+// nothing is.
+func (e *editor) commitPrompt(*sourceControl) { e.gitCommit(false) }
 
 func (e *editor) openBranchPicker() {
 	dir := e.root
@@ -566,7 +553,7 @@ func (v *renderer) drawSourceControl(e *editor, w, h int) {
 	}
 	muted := mutedStyle.Background(menuStyle.GetBackground())
 	v.write(box.x+2, box.y+box.h-3, box.w-4, "s stage  a stage all  A unstage all  d discard  enter diff", muted)
-	v.write(box.x+2, box.y+box.h-2, box.w-4, "c commit  p push  P pull  b branch  R refresh  esc close", muted)
+	v.write(box.x+2, box.y+box.h-2, box.w-4, "c commit  p push  P pull  f fetch  S sync  b branch  esc close", muted)
 	v.screen.HideCursor()
 }
 

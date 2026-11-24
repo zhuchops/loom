@@ -44,6 +44,9 @@ type editor struct {
 	scrollLock                      bool
 	git                             gitState
 	gitToken                        int
+	gitPrint                        string        // gitFingerprint at the last refresh
+	gitChecked                      time.Time     // when git was last read
+	gitCost                         time.Duration // how long reading it took
 	languageTimer                   *time.Timer
 	languageWake                    chan int
 	languageToken                   int
@@ -132,7 +135,8 @@ func newEditor(cfg config, b *buffer, root string) (*editor, error) {
 	e.registerCommands()
 	e.registerNativeCommands()
 	e.workspaceCommands()
-	e.needsProject("files", "project-search", "explorer", "explorer-popup", "toggle-sidebar", "git-panel", "git-branch", "refresh-git", "problems", "recent-files", "close-explorer")
+	e.needsProject("files", "project-search", "explorer", "explorer-popup", "toggle-sidebar", "git-panel", "git-branch", "refresh-git", "problems", "recent-files", "close-explorer",
+		"git-commit", "git-commit-all", "git-amend", "git-push", "git-pull", "git-pull-rebase", "git-fetch", "git-sync", "git-stash", "git-stash-pop", "git-new-branch", "git-stage-file", "git-unstage-file")
 	if err := e.registerPlugins(); err != nil {
 		return nil, err
 	}

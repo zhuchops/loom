@@ -41,8 +41,10 @@ function renderGit(g) {
   if (g.branch) head.appendChild(button('tbranch', icon('branch', 13) + `<span>${escapeHTML(g.branch)}</span>`, () => act('git-button', -1, 'branch')));
   const buttons = h('span', 'gbuttons');
   if (g.ready) {
+    buttons.appendChild(button('tbutton', 'Fetch', () => act('git-button', -1, 'fetch'), 'git fetch --all --prune'));
     buttons.appendChild(button('tbutton', 'Pull', () => act('git-button', -1, 'pull')));
     buttons.appendChild(button('tbutton', 'Push', () => act('git-button', -1, 'push')));
+    buttons.appendChild(button('tbutton', 'Sync', () => act('git-button', -1, 'sync'), 'Pull with a rebase, then push'));
     buttons.appendChild(button('tbutton' + (g.staged ? ' primary' : ''), 'Commit', () => act('git-button', -1, 'commit')));
   }
   head.appendChild(buttons);
@@ -65,7 +67,7 @@ function renderGit(g) {
   card.appendChild(list);
   const narrow = card.offsetWidth < 600;
   card.appendChild(h('div', 'pfoot', hintsHTML(narrow ? ['↵', 'diff', 's', 'stage', 'esc', 'close']
-    : ['↵', 'diff', 's', 'stage', 'a', 'stage all', 'c', 'commit', 'd', 'discard', 'esc', 'close'])));
+    : ['↵', 'diff', 's', 'stage', 'a', 'stage all', 'c', 'commit', 'f', 'fetch', 'S', 'sync', 'esc', 'close'])));
 }
 
 // ---- Diff -----------------------------------------------------------------
