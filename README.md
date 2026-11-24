@@ -4,6 +4,28 @@ Loom is a Go terminal editor with a Zed-inspired workspace, Vim-style editing, l
 
 ## Run it
 
+### Install
+
+With Homebrew (macOS and Linux; it builds from source, and on macOS also builds `loom-desktop`):
+
+```sh
+brew tap zhuchops/loom https://github.com/zhuchops/loom
+brew install loom
+```
+
+Or the ready-made builds from the GitHub releases, for macOS and Linux on arm64 and amd64:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zhuchops/loom/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/zhuchops/loom/main/install.sh | sh -s -- --desktop   # also the window version
+```
+
+`install.sh` puts `loom` in `~/.local/bin` (`--dir` for elsewhere), checks every download against the release's `checksums.txt`, and with `--desktop` installs `Loom.app` (one app for Apple silicon and Intel) into `/Applications` with a `loom-desktop` command beside `loom`, or on Linux the `loom-desktop` binary, which needs WebKitGTK 4.1 and GTK 3 (it says which packages when they are missing). `--version v0.31.0` installs a given release. The Linux desktop build is made on Ubuntu 24.04, so it needs a glibc at least that new.
+
+Releases are built by `.github/workflows/release.yml` for every pushed `v*` tag, with `packaging/release.sh` (`terminal`, `macos` or `linux`), which also works by hand. There is no Windows build yet.
+
+### With Go
+
 Install with Go 1.26 or later:
 
 ```sh
