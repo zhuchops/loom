@@ -7,8 +7,40 @@ package editor
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework Cocoa -framework UniformTypeIdentifiers
+#cgo LDFLAGS: -framework Cocoa -framework WebKit -framework UniformTypeIdentifiers
 #import <Cocoa/Cocoa.h>
+#import <WebKit/WebKit.h>
+#import <objc/runtime.h>
+
+// macOS attaches its writing helpers (Writing Tools, the Siri writing
+// suggestions, inline predictions) to the text field that has the keyboard,
+// wherever it is. The page's only field is the hidden one that takes keys, so
+// the web view is made without them: Wails builds its WKWebView with
+// initWithFrame:configuration:, which is wrapped here to adjust the
+// configuration first. Key-value coding leaves older systems alone.
+static IMP loomOriginalInit;
+
+static id loomInitWebView(id self, SEL cmd, NSRect frame, WKWebViewConfiguration *config) {
+	if (config != nil) {
+		if ([config respondsToSelector:NSSelectorFromString(@"setWritingToolsBehavior:")]) {
+			[config setValue:@(-1) forKey:@"writingToolsBehavior"]; // WKWritingToolsBehaviorNone
+		}
+		if ([config respondsToSelector:NSSelectorFromString(@"setAllowsInlinePredictions:")]) {
+			[config setValue:@NO forKey:@"allowsInlinePredictions"];
+		}
+	}
+	return ((id (*)(id, SEL, NSRect, WKWebViewConfiguration *))loomOriginalInit)(self, cmd, frame, config);
+}
+
+static void loomQuietWebView(void) {
+	if (loomOriginalInit != NULL) {
+		return;
+	}
+	Method m = class_getInstanceMethod([WKWebView class], @selector(initWithFrame:configuration:));
+	if (m != NULL) {
+		loomOriginalInit = method_setImplementation(m, (IMP)loomInitWebView);
+	}
+}
 
 // loomInstallWindow gives the window what the system offers windows: it
 // reopens where it was left, and it can go full screen.
@@ -30,6 +62,7 @@ static void loomInstallWindow(void) {
 // predictions, completion, corrections and substitutions. The page's only
 // field is the hidden one that takes the keyboard, so they only get in the way.
 static void loomQuietTyping(void) {
+	loomQuietWebView();
 	NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
 	for (NSString *key in @[ @"NSAutomaticInlinePredictionEnabled", @"NSAutomaticTextCompletionEnabled",
 			@"NSAutomaticSpellingCorrectionEnabled", @"NSAutomaticQuoteSubstitutionEnabled",
