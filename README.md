@@ -457,6 +457,8 @@ Pick the default theme in **Settings → Appearance**, or run **Color Theme** fr
 
 The sidebar is a collapsible project tree. Each row shows a folder or file-type icon from Material Design Icons in Nerd Font, so the terminal needs a Nerd Font Mono variant. `Space e` focuses the sidebar. `Space x` opens an editable directory buffer in a centered popup. It starts beside the active file, or at the project root for an untitled buffer.
 
+The tree keeps up with the disk. Files and folders made, deleted, moved or renamed by anything (a terminal, git, a build) show up within a second in every open folder, without collapsing and expanding it again. The selection and the scroll stay where they were. Loom checks only the modification times of the folders on screen, so large projects cost nothing extra. While the tree is filtered it updates when the filter changes.
+
 Edit the listing with Vim motions. For example, `cc` replaces a filename, `o` adds a new entry, and `dd` removes an entry.
 
 - Edit a filename in place to rename it. Enter a relative path such as `src/main.go` to move it into an existing folder.

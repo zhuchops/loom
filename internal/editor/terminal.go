@@ -284,6 +284,7 @@ func (m *terminalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case diskTick:
 		e.checkDisk()
+		e.watchTree()
 		e.watchGit()
 		if e.hub != nil {
 			e.hub.saveRecovery()

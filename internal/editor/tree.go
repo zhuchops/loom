@@ -25,6 +25,9 @@ type fileTree struct {
 	sortMode                                            int
 	filter                                              string
 	filtering                                           bool
+	// print is when each folder the tree lists last changed. A file made,
+	// deleted or renamed changes its folder's time.
+	print string
 }
 
 var treeSorts = []string{"name", "modified", "size", "type"}
@@ -175,6 +178,40 @@ func (e *editor) refreshTree(target string) {
 			break
 		}
 	}
+	t.print = e.treeFingerprint()
+}
+
+// treeFingerprint stats the folders whose contents the tree shows: the
+// project and every open folder in it.
+func (e *editor) treeFingerprint() string {
+	t := &e.tree
+	var out strings.Builder
+	for _, row := range t.rows {
+		if !row.dir || !t.expanded[row.path] {
+			continue
+		}
+		if info, err := os.Stat(row.path); err == nil {
+			fmt.Fprintf(&out, "%s %d\n", row.path, info.ModTime().UnixNano())
+		} else {
+			fmt.Fprintf(&out, "%s gone\n", row.path)
+		}
+	}
+	return out.String()
+}
+
+// watchTree redraws the tree when files appear, go away or are renamed in a
+// folder it shows, whoever did it. It keeps the selection and the scroll.
+func (e *editor) watchTree() {
+	t := &e.tree
+	if e.noProject || t.filter != "" || t.filtering || len(t.rows) == 0 {
+		return
+	}
+	if e.treeFingerprint() == t.print {
+		return
+	}
+	reveal, scroll := t.reveal, t.scroll
+	e.refreshTree("")
+	t.reveal, t.scroll = reveal, scroll
 }
 
 func within(root, path string) bool {
