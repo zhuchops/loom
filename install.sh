@@ -107,6 +107,27 @@ if [ "$desktop" = 1 ]; then
 		tar -xzf "$tmp/loom-desktop_linux_${arch}.tar.gz" -C "$tmp"
 		install -m 755 "$tmp/loom-desktop" "$dir/loom-desktop"
 		say "Installed $dir/loom-desktop"
+		# A menu entry with the icon, so launchers and the dock show Loom.
+		if [ -f "$tmp/loom.png" ]; then
+			share=${XDG_DATA_HOME:-$HOME/.local/share}
+			mkdir -p "$share/icons/hicolor/256x256/apps" "$share/applications"
+			install -m 644 "$tmp/loom.png" "$share/icons/hicolor/256x256/apps/loom.png"
+			cat >"$share/applications/loom.desktop" <<ENTRY
+[Desktop Entry]
+Type=Application
+Name=Loom
+Comment=A fast, modal code editor
+Exec=$dir/loom-desktop %F
+Icon=loom
+Terminal=false
+Categories=Development;TextEditor;
+MimeType=text/plain;inode/directory;
+StartupWMClass=loom
+ENTRY
+			command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$share/applications" 2>/dev/null || true
+			command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q "$share/icons/hicolor" 2>/dev/null || true
+			say "Added Loom to the applications menu"
+		fi
 		if ! (ldconfig -p 2>/dev/null || true) | grep -q 'libwebkit2gtk-4.1'; then
 			say "loom-desktop needs WebKitGTK 4.1 and GTK 3, which this system does not seem to have:"
 			say "  Debian, Ubuntu: sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0"

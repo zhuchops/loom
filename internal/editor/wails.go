@@ -3,9 +3,11 @@
 package editor
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"fmt"
+	"image/png"
 	"io/fs"
 	"os"
 	"runtime"
@@ -13,8 +15,10 @@ import (
 	"github.com/wailsapp/wails/v2"
 	wopt "github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	wrt "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/zhuchops/loom/internal/brand"
 )
 
 // The desktop front end, built on Wails, keeps the editor, its commands and its renderer in Go,
@@ -84,12 +88,24 @@ func runWails(e *editor, explicit bool) error {
 		OnShutdown:       func(context.Context) { e.hub.finish() },
 		Bind:             []any{b},
 		Menu:             b.appMenu(),
+		Linux:            linuxOptions(),
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),
 			WebviewIsTransparent: true,
 			WindowIsTranslucent:  true,
 		},
 	})
+}
+
+// linuxOptions gives the window Loom's icon and the program name the desktop
+// entry that install.sh writes looks for (StartupWMClass=loom).
+func linuxOptions() *linux.Options {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	var icon bytes.Buffer
+	_ = png.Encode(&icon, brand.Icon(256))
+	return &linux.Options{Icon: icon.Bytes(), ProgramName: "loom"}
 }
 
 // windowBackground is clear on macOS, where the window blurs the desktop

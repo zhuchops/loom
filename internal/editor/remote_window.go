@@ -121,8 +121,9 @@ func runRemoteWindow() error {
 			b.peer.forward("Close")
 			return true
 		},
-		Bind: []any{b},
-		Menu: b.appMenu(),
+		Bind:  []any{b},
+		Menu:  b.appMenu(),
+		Linux: linuxOptions(),
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),
 			WebviewIsTransparent: true,

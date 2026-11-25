@@ -1,7 +1,7 @@
-// Package brand draws the Loom mark: two warp and two weft threads woven into
-// an L. The app icon sets it on a night sky, with a crescent moon resting in
-// the crook of the L (Loom, lune). The app icon and the logo inside the app
-// both come from here.
+// Package brand draws the Loom mark: a crescent moon (Loom, lune) with one
+// thread woven through its horns, over the upper one and under the lower.
+// The app icon sets it on a night sky; the logo inside the app is the mark
+// alone. Both come from here.
 package brand
 
 import (
@@ -26,119 +26,106 @@ func (a rgb) mix(b rgb, t float64) rgb {
 
 func clamp(v float64) float64 { return min(max(v, 0), 1) }
 
-// thread is a capsule between two points, coloured from its start to its end.
-type thread struct {
-	a, b     vec
-	r        float64
-	from, to rgb
-}
+// The design, in 1024 units of the mark's square. The lit disk minus the
+// shade disk leaves a crescent that opens to the upper right; its horns are
+// at about (435, 227) and (781, 626).
+var (
+	litCentre   = vec{500, 520}
+	shadeCentre = vec{650, 390}
+	threadFrom  = vec{318, 160}
+	threadTo    = vec{830, 751}
+)
 
-func (t thread) nearest(p vec) (off vec, along float64) {
-	dx, dy := t.b.x-t.a.x, t.b.y-t.a.y
-	along = clamp(((p.x-t.a.x)*dx + (p.y-t.a.y)*dy) / (dx*dx + dy*dy))
-	return vec{p.x - t.a.x - dx*along, p.y - t.a.y - dy*along}, along
+const (
+	litR    = 300.0
+	shadeR  = 270.0
+	threadR = 15.0
+	// The thread runs under the moon past this point along it.
+	threadUnder = 0.5
+)
+
+// stars are points of light on the sky: x, y and brightness, in icon units.
+var stars = [][3]float64{
+	{820, 196, 1}, {226, 300, 0.7}, {900, 420, 0.55}, {300, 860, 0.5}, {640, 180, 0.4}, {170, 560, 0.45}, {860, 860, 0.35},
 }
 
 type mark struct {
-	size       float64
-	warp, weft [2]thread
-	flat       bool // too small for shadows and fine shading
+	size, unit float64 // pixels, and pixels per design unit
+	origin     vec     // where the design's square starts
+	flat       bool    // too small for shading, maria and shadows
 }
 
-// layout fits the mark into a square. The small logos inside the app land on
-// whole pixels, so the threads and the gap between them stay sharp.
 func layout(size int, tile bool) mark {
 	s := float64(size)
-	span, shift := s, 0.0
-	width, gap, over := 0.216, 0.058, 0.076
+	m := mark{size: s, flat: size <= 40}
 	if tile {
-		span, shift = s*612/1024, s*5/1024
-	}
-	m := mark{size: s, flat: !tile && size <= 64}
-	if m.flat {
-		width, gap = 0.235, 0.075
-	}
-	w, g, o := span*width, span*gap, span*over
-	if !tile && size <= 40 {
-		w, g, o = max(2, math.Round(w)), max(1, math.Round(g)), max(1, math.Round(o))
-	}
-	// The L is heavy at the bottom left, so it sits a little up and right.
-	left, top := (s-span)/2+shift, (s-span)/2-shift
-	r, right, bottom := w/2, left+span, top+span
-	x0 := left + o + r
-	y1 := bottom - o - r
-	m.warp = [2]thread{
-		{vec{x0, top + r}, vec{x0, bottom - r}, r, hex(0x86eaff), hex(0x2c63f5)},
-		{vec{x0 + w + g, top + r}, vec{x0 + w + g, bottom - r}, r, hex(0x8af5c8), hex(0x1687e8)},
-	}
-	m.weft = [2]thread{
-		{vec{left + r, y1 - w - g}, vec{right - r, y1 - w - g}, r, hex(0xff4f9d), hex(0xffc869)},
-		{vec{left + r, y1}, vec{right - r, y1}, r, hex(0x9256ff), hex(0xff5c9c)},
+		// The moon fills most of the 824 unit tile, a little up and left of
+		// centre so the thread's ends have room.
+		span := s * 760 / 1024
+		m.unit = span / 1024
+		// The crescent is heavy on its left; nudge it right and up.
+		m.origin = vec{(s-span)/2 + 30*m.unit, (s-span)/2 - 40*m.unit}
+	} else {
+		m.unit = s / 1024
 	}
 	return m
 }
 
-// paint returns the colour of the top thread at p.
-func (m *mark) paint(p vec) (rgb, bool) {
-	vi, hi := -1, -1
-	var voff, hoff vec
-	var vat, hat float64
-	for i := range 2 {
-		if off, at := m.warp[i].nearest(p); math.Hypot(off.x, off.y) <= m.warp[i].r {
-			vi, voff, vat = i, off, at
-		}
-		if off, at := m.weft[i].nearest(p); math.Hypot(off.x, off.y) <= m.weft[i].r {
-			hi, hoff, hat = i, off, at
-		}
-	}
-	if vi < 0 && hi < 0 {
+// design maps a pixel position to design units.
+func (m *mark) design(p vec) vec {
+	return vec{(p.x - m.origin.x) / m.unit, (p.y - m.origin.y) / m.unit}
+}
+
+// moonAt reports whether d is on the crescent, and its colour there.
+func (m *mark) moonAt(d vec) (rgb, bool) {
+	lit := math.Hypot(d.x-litCentre.x, d.y-litCentre.y)
+	shade := math.Hypot(d.x-shadeCentre.x, d.y-shadeCentre.y)
+	if lit > litR || shade < shadeR {
 		return rgb{}, false
 	}
-	vertical := hi < 0 || vi >= 0 && (vi+hi)%2 == 1
-	var c rgb
-	if vertical {
-		t := m.warp[vi]
-		c = m.shade(t, voff, t.from.mix(t.to, vat))
-	} else {
-		t := m.weft[hi]
-		c = m.shade(t, hoff, t.from.mix(t.to, hat))
-	}
-
-	// A thread darkens where it dips under the one crossing it.
-	r := m.warp[0].r
-	reach, depth := r*0.62, 0.5
+	// Pale gold at the heart of the crescent, warmer toward the limb.
+	k := clamp(lit / litR)
+	c := hex(0xfff6dc).mix(hex(0xf5c46a), k*k*0.9)
 	if m.flat {
-		reach, depth = r*0.5, 0.3
+		return c, true
 	}
-	for i := range 2 {
-		var d float64
-		if vertical {
-			if (vi+i)%2 == 1 {
-				continue
-			}
-			d = math.Abs(p.y-m.weft[i].a.y) - r
-		} else {
-			if (hi+i)%2 == 0 {
-				continue
-			}
-			d = math.Abs(p.x-m.warp[i].a.x) - r
+	// Lit from the lower left: the inner edge, toward the shade, dims.
+	edge := clamp((shade - shadeR) / 70)
+	c = c.mix(hex(0xd99a4c), 0.35*(1-edge)*(1-edge))
+	for _, sea := range [][3]float64{{330, 560, 46}, {400, 690, 34}, {300, 440, 26}, {470, 780, 22}} {
+		if r := math.Hypot(d.x-sea[0], d.y-sea[1]); r < sea[2] {
+			f := 1 - r/sea[2]
+			c = c.mix(hex(0xe2ad62), 0.3*min(1, f*1.8))
 		}
-		if d >= 0 && d < reach {
-			f := 1 - d/reach
-			c = c.mix(hex(0x14062e), depth*f*f)
-		}
+	}
+	// A rim of light along the limb.
+	if rim := litR - lit; rim < 10 {
+		c = c.mix(hex(0xffffff), 0.25*(1-rim/10))
 	}
 	return c, true
 }
 
-// shade rounds a thread, lit from the upper left.
-func (m *mark) shade(t thread, off vec, c rgb) rgb {
-	x, y := off.x/t.r, off.y/t.r
+// threadAt reports whether d is on the thread, how far along it, and its
+// colour there.
+func (m *mark) threadAt(d vec) (rgb, float64, bool) {
+	dx, dy := threadTo.x-threadFrom.x, threadTo.y-threadFrom.y
+	along := clamp(((d.x-threadFrom.x)*dx + (d.y-threadFrom.y)*dy) / (dx*dx + dy*dy))
+	off := vec{d.x - threadFrom.x - dx*along, d.y - threadFrom.y - dy*along}
+	if math.Hypot(off.x, off.y) > m.threadR() {
+		return rgb{}, 0, false
+	}
+	c := hex(0x6fd8ff).mix(hex(0x9a5cff), clamp(along*1.6)).mix(hex(0xff5c9c), clamp(along*1.6-0.6))
+	return m.shade(off, c), along, true
+}
+
+// shade rounds the thread, lit from the upper left.
+func (m *mark) shade(off vec, c rgb) rgb {
+	x, y := off.x/m.threadR(), off.y/m.threadR()
 	z := math.Sqrt(max(0, 1-x*x-y*y))
 	light := -0.36*x - 0.48*y + 0.8*z
-	strength, shine := 1.0, 0.24
+	strength, shine := 1.0, 0.3
 	if m.flat {
-		strength, shine = 0.5, 0.08
+		strength, shine = 0.4, 0.06
 	}
 	if k := (light - 0.72) * strength; k < 0 {
 		c = c.mix(hex(0x1c0b45), min(-k*0.5, 0.6))
@@ -148,19 +135,51 @@ func (m *mark) shade(t thread, off vec, c rgb) rgb {
 	return c.mix(hex(0xffffff), shine*math.Pow(max(0, light), 18))
 }
 
-// shadow is how much the mark darkens the tile at p.
-func (m *mark) shadow(p vec) float64 {
-	p.y -= m.size * 0.014
-	blur, d := m.size*0.03, math.Inf(1)
-	for _, set := range [2][2]thread{m.warp, m.weft} {
-		for _, t := range set {
-			off, _ := t.nearest(p)
-			d = min(d, math.Hypot(off.x, off.y)-t.r)
+// paint returns the mark's colour at pixel p, if it covers p.
+func (m *mark) paint(p vec) (rgb, bool) {
+	d := m.design(p)
+	moon, onMoon := m.moonAt(d)
+	thread, along, onThread := m.threadAt(d)
+	switch {
+	case onThread && (!onMoon || along < threadUnder):
+		if !onMoon && !m.flat {
+			// Where it dips under the moon, the thread darkens.
+			if gap := m.moonGap(d); gap < 28 && along >= threadUnder {
+				f := 1 - gap/28
+				thread = thread.mix(hex(0x14062e), 0.5*f*f)
+			}
 		}
+		return thread, true
+	case onMoon:
+		if !m.flat && along < threadUnder {
+			// The thread over the upper horn casts a soft shadow on it.
+			if gap := m.threadGap(vec{d.x - 6, d.y - 12}); gap < 18 {
+				f := 1 - gap/18
+				moon = moon.mix(hex(0x7a4a1e), 0.45*f*f)
+			}
+		}
+		return moon, true
 	}
-	f := clamp(0.5 - d/(2*blur))
-	return 0.55 * f * f * (3 - 2*f)
+	return rgb{}, false
 }
+
+// moonGap is how far d is outside the crescent.
+func (m *mark) moonGap(d vec) float64 {
+	lit := math.Hypot(d.x-litCentre.x, d.y-litCentre.y) - litR
+	shade := shadeR - math.Hypot(d.x-shadeCentre.x, d.y-shadeCentre.y)
+	return max(lit, shade, 0)
+}
+
+// threadGap is how far d is from the thread's edge.
+func (m *mark) threadGap(d vec) float64 {
+	dx, dy := threadTo.x-threadFrom.x, threadTo.y-threadFrom.y
+	along := clamp(((d.x-threadFrom.x)*dx + (d.y-threadFrom.y)*dy) / (dx*dx + dy*dy))
+	return max(0, math.Hypot(d.x-threadFrom.x-dx*along, d.y-threadFrom.y-dy*along)-m.threadR())
+}
+
+// threadR is the thread's radius in design units; small marks draw it
+// thicker, at least a pixel and a half wide.
+func (m *mark) threadR() float64 { return max(threadR, 0.8/m.unit) }
 
 // tileEdge is the distance to the macOS icon shape: an 824 unit square on a
 // 1024 unit canvas with continuous corners.
@@ -175,41 +194,21 @@ func tileEdge(p vec, size float64) float64 {
 	return math.Pow(math.Pow(qx, n)+math.Pow(qy, n), 1/n) - r
 }
 
-// The moon, in 1024 unit icon space: a lit disk with a darker one over its
-// upper right, leaving a crescent that opens away from the L and hugs its
-// corner.
-var (
-	moonLit   = vec{676, 330}
-	moonShade = vec{738, 276}
-)
-
-const (
-	moonR      = 146.0
-	moonShadeR = 134.0
-)
-
-// stars are small points of light on the sky: x, y and brightness.
-var stars = [][3]float64{
-	{886, 154, 0.9}, {520, 168, 0.6}, {872, 488, 0.55}, {478, 262, 0.4}, {610, 520, 0.35}, {900, 330, 0.3},
-}
-
-func tileColour(p vec, size, edge float64) rgb {
-	u := size / 1024
+// sky is the tile behind the mark: deep blue going to black, moonlight
+// around the crescent, a few stars and a lit rim along the top.
+func (m *mark) sky(p vec, edge float64) rgb {
+	u := m.size / 1024
 	x, y := p.x/u, p.y/u
 	t := clamp((y - 100) / 824)
-	c := hex(0x2a2a58).mix(hex(0x0a0a1a), t)
-	// Moonlight: a halo that fades into the sky.
-	lit := math.Hypot(x-moonLit.x, y-moonLit.y)
-	halo := clamp(1 - (lit-moonR*0.7)/300)
-	c = c.mix(hex(0x8f86ff), 0.26*halo*halo)
+	c := hex(0x232456).mix(hex(0x07071a), t)
+	d := m.design(p)
+	glow := clamp(1 - (math.Hypot(d.x-litCentre.x, d.y-litCentre.y)-litR*0.6)/520)
+	c = c.mix(hex(0x8b7cff), 0.34*glow*glow)
 	for _, s := range stars {
-		d := math.Hypot(x-s[0], y-s[1])
-		if g := clamp(1 - d/(7+4*s[2])); g > 0 {
+		r := math.Hypot(x-s[0], y-s[1])
+		if g := clamp(1 - r/(7+5*s[2])); g > 0 {
 			c = c.mix(hex(0xfff6dc), s[2]*g*g)
 		}
-	}
-	if lit <= moonR {
-		c = moon(x, y, lit, c)
 	}
 	if edge > -max(5*u, 0.6) {
 		c = c.mix(hex(0xffffff), 0.05+0.19*(1-t))
@@ -217,32 +216,10 @@ func tileColour(p vec, size, edge float64) rgb {
 	return c
 }
 
-// moon paints the crescent over the sky colour c.
-func moon(x, y, lit float64, sky rgb) rgb {
-	shade := math.Hypot(x-moonShade.x, y-moonShade.y)
-	// The terminator is soft; the limb is sharp.
-	day := clamp((shade - moonShadeR) / 10)
-	if day <= 0 {
-		// The dark side keeps a trace of earthshine.
-		return sky.mix(hex(0x3a3770), 0.35)
-	}
-	// Lit from the lower left: pale gold, warmer toward the limb.
-	k := clamp(lit / moonR)
-	c := hex(0xfff4d6).mix(hex(0xf2c879), k*k*0.85)
-	// A few soft maria.
-	for _, m := range [][3]float64{{596, 374, 24}, {640, 432, 17}, {572, 312, 13}} {
-		if d := math.Hypot(x-m[0], y-m[1]); d < m[2] {
-			f := 1 - d/m[2]
-			c = c.mix(hex(0xe0b46e), 0.18*f)
-		}
-	}
-	return sky.mix(c, day)
-}
-
 // Icon draws the app icon.
 func Icon(size int) *image.RGBA { return render(size, true) }
 
-// Mark draws the woven L alone, on a transparent background.
+// Mark draws the moon and its thread alone, on a transparent background.
 func Mark(size int) *image.RGBA { return render(size, false) }
 
 func render(size int, tile bool) *image.RGBA {
@@ -287,8 +264,7 @@ func (m *mark) pixel(x, y, n int, tile bool) color.RGBA {
 				if !tile {
 					continue
 				}
-				c = tileColour(p, m.size, edge)
-				c = c.mix(hex(0x000000), m.shadow(p))
+				c = m.sky(p, edge)
 			}
 			sum = rgb{sum.r + c.r, sum.g + c.g, sum.b + c.b}
 			hit++

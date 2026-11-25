@@ -31,19 +31,37 @@ func TestEverySize(t *testing.T) {
 	}
 }
 
-func TestIconsetKeepsTheTileAndTheThreads(t *testing.T) {
+func TestIconsetKeepsTheMoonInTheTile(t *testing.T) {
 	for _, size := range []int{128, 256, 512, 1024} {
 		img := Icon(size)
 		if img.RGBAAt(0, 0).A != 0 || img.RGBAAt(size/2, size/2).A != 255 {
 			t.Fatalf("icon at %d: want a solid tile with clear corners", size)
 		}
 		m := layout(size, true)
-		for _, set := range [2][2]thread{m.warp, m.weft} {
-			for _, th := range set {
-				if tileEdge(th.a, m.size) > -th.r || tileEdge(th.b, m.size) > -th.r {
-					t.Fatalf("icon at %d: a thread leaves the tile", size)
-				}
+		px := func(d vec) vec { return vec{m.origin.x + d.x*m.unit, m.origin.y + d.y*m.unit} }
+		r := m.threadR() * m.unit
+		for _, d := range []vec{threadFrom, threadTo, {litCentre.x - litR, litCentre.y}, {litCentre.x, litCentre.y + litR}} {
+			if tileEdge(px(d), m.size) > -r {
+				t.Fatalf("icon at %d: the mark leaves the tile at %v", size, d)
 			}
 		}
+	}
+}
+
+func TestTheThreadIsWovenThroughTheMoon(t *testing.T) {
+	m := layout(1024, false)
+	over, under := false, false
+	for k := 0.0; k <= 1; k += 0.001 {
+		d := vec{threadFrom.x + (threadTo.x-threadFrom.x)*k, threadFrom.y + (threadTo.y-threadFrom.y)*k}
+		if _, on := m.moonAt(d); on {
+			if k < threadUnder {
+				over = true
+			} else {
+				under = true
+			}
+		}
+	}
+	if !over || !under {
+		t.Fatalf("the thread should cross both horns: over %v, under %v", over, under)
 	}
 }
