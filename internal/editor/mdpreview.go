@@ -1,7 +1,10 @@
 package editor
 
 import (
+	"net/url"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/zhuchops/loom/internal/markdown"
 )
@@ -53,6 +56,9 @@ func (v *renderer) drawPreview(e *editor, p *pane, box hitBox) {
 	b := p.b
 	v.previews = append(v.previews, previewBox{box, p})
 	v.screen.FillArea(box.x, box.y, box.w, box.h, ' ', baseStyle)
+	if v.native {
+		return // the desktop app lays the preview out as a page
+	}
 	title := " Preview · " + filepath.Base(b.path)
 	v.write(box.x, box.y, box.w, title, mutedStyle)
 	body := hitBox{box.x, box.y + 1, box.w, box.h - 1, 0}
@@ -116,8 +122,54 @@ func (v *renderer) drawPreview(e *editor, p *pane, box hitBox) {
 	}
 }
 
+// previewHTML is the preview of p as HTML, rebuilt when the buffer changes.
+func (p *pane) previewHTML() string {
+	if !p.mdHTMLSet || p.mdHTMLVersion != p.b.version {
+		p.mdHTML, p.mdHTMLVersion, p.mdHTMLSet = markdown.HTML(p.b.text), p.b.version, true
+	}
+	return p.mdHTML
+}
+
 // previewWheel scrolls a preview by hand until the cursor row changes again.
 func (v *renderer) previewWheel(p *pane, lines int) {
 	p.mdManual = true
 	p.mdTop = max(0, p.mdTop+lines)
+}
+
+// followLink opens what a link in preview i points to: a web page in the
+// browser, or a file next to the Markdown file in the editor.
+func (b *Bridge) followLink(i int, target string) {
+	e, v := b.m.editor, &b.m.view
+	if i < 0 || i >= len(v.previews) || target == "" {
+		return
+	}
+	lower := strings.ToLower(target)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "mailto:") {
+		if h, ok := b.host.(interface{ openURL(string) }); ok {
+			h.openURL(target)
+		} else {
+			e.notify("Can't open links here: " + target)
+		}
+		return
+	}
+	if strings.Contains(target, "://") {
+		return // no other schemes
+	}
+	path, _, _ := strings.Cut(target, "#")
+	if p, err := url.PathUnescape(path); err == nil {
+		path = p
+	}
+	if path == "" {
+		return
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(filepath.Dir(v.previews[i].p.b.path), path)
+	}
+	if info, err := os.Stat(path); err != nil {
+		e.notify("No such file: " + shortPath(path))
+	} else if info.IsDir() {
+		e.notify(shortPath(path) + " is a folder")
+	} else {
+		e.open(path)
+	}
 }

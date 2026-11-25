@@ -297,6 +297,9 @@ func (b *Bridge) act(name string, i int, s string) {
 		if inTabs {
 			e.switchBuffer(e.buffers[i])
 		}
+	case "md-link":
+		// A link in the Markdown preview: i is the preview, s the target.
+		b.followLink(i, s)
 	case "fold":
 		// A fold button: i is the row the fold starts at, s the pane.
 		v := &b.m.view

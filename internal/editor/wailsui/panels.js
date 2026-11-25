@@ -115,11 +115,12 @@ function renderDirectory(dir) {
 // ---- Over the panes ---------------------------------------------------------
 
 function renderPanes(panes) {
-  if (!changed('panes', [panes, state.cellW, state.cellH])) return;
+  if (!changed('panes', [panes, state.cellW, state.cellH, state.gridX, state.gridY, state.paneW, state.paneH])) return;
   const el = $('panes');
   el.replaceChildren();
-  const ox = grid.offsetLeft;
-  const oy = grid.offsetTop;
+  // Sizes come from fit(), so drawing this never waits for a layout.
+  const ox = state.gridX;
+  const oy = state.gridY;
   const W = state.cellW;
   const H = state.cellH;
   const box = (b, extend) => {
@@ -128,8 +129,8 @@ function renderPanes(panes) {
       // Panes at the edges reach the edge of the editor.
       if (b[0] === 0) { r.width += r.left; r.left = 0; }
       if (b[1] === 0) { r.height += r.top; r.top = 0; }
-      if (b[0] + b[2] >= state.cols) r.width = el.clientWidth - r.left;
-      if (b[1] + b[3] >= state.rows) r.height = el.clientHeight - r.top;
+      if (b[0] + b[2] >= state.cols) r.width = state.paneW - r.left;
+      if (b[1] + b[3] >= state.rows) r.height = state.paneH - r.top;
     }
     return r;
   };
@@ -221,9 +222,99 @@ function welcomeEl(w, pane) {
   return el;
 }
 
+// ---- Markdown preview -------------------------------------------------------
+
+// Each preview is a page that stays put between frames, so its scroll and
+// selection survive; it takes new HTML only when the file changed.
+const mdViews = new Map();
+
+function renderMarkdown(panes) {
+  const layer = $('mdlayer');
+  const seen = new Set();
+  for (const p of panes || []) {
+    if (!p.md) continue;
+    const md = p.md;
+    seen.add(md.key);
+    let view = mdViews.get(md.key);
+    if (!view) {
+      view = mdView(md.key);
+      mdViews.set(md.key, view);
+      layer.appendChild(view.el);
+    }
+    view.index = p.i;
+    const [x, y, w, hgt] = p.box;
+    const r = { left: state.gridX + x * state.cellW, top: state.gridY + y * state.cellH, width: w * state.cellW, height: hgt * state.cellH };
+    if (x === 0) { r.width += r.left; r.left = 0; }
+    if (y === 0) { r.height += r.top; r.top = 0; }
+    if (x + w >= state.cols) r.width = state.paneW - r.left;
+    if (y + hgt >= state.rows) r.height = state.paneH - r.top;
+    Object.assign(view.el.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    view.head.innerHTML = `${fileIcon(md.icon)}<span>${escapeHTML(md.name)}</span><span class="mdtag">Preview</span>`;
+    if (md.html !== undefined && md.v !== view.v) {
+      view.v = md.v;
+      view.body.innerHTML = md.html || '<p class="mdempty">Nothing to preview yet.</p>';
+      view.line = -1; // find the block again in the new page
+    }
+    if (md.line !== view.line || md.follow !== view.follow) {
+      const moved = md.line !== view.line;
+      view.line = md.line;
+      view.follow = md.follow;
+      if (moved) view.manual = false;
+      view.mark(md.line, md.follow && !view.manual);
+    }
+  }
+  for (const [key, view] of mdViews) {
+    if (!seen.has(key)) { view.el.remove(); mdViews.delete(key); }
+  }
+}
+
+function mdView(key) {
+  const el = h('div', 'mdview');
+  const head = h('div', 'mdhead');
+  const body = h('div', 'mdbody');
+  el.append(head, body);
+  const view = { key, el, head, body, v: null, line: -1, follow: false, manual: false, index: 0, current: null };
+  // The wheel and the scroll bar scroll by hand, until the cursor moves.
+  el.addEventListener('wheel', () => { view.manual = true; }, { passive: true });
+  el.addEventListener('mousedown', (e) => { if (e.offsetX > el.clientWidth) view.manual = true; });
+  body.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-href]');
+    if (!a) return;
+    e.preventDefault();
+    const href = a.dataset.href;
+    if (href.startsWith('#')) {
+      const target = body.querySelector(`[id="${CSS.escape(href.slice(1))}"]`);
+      if (target) { view.manual = true; el.scrollTo({ top: target.offsetTop - 12, behavior: 'smooth' }); }
+      return;
+    }
+    act('md-link', view.index, href);
+  });
+  // The block that holds the cursor's line: the innermost one.
+  view.mark = (line, scroll) => {
+    let best = null;
+    let before = null;
+    for (const b of body.querySelectorAll('[data-l]')) {
+      const [from, to] = b.dataset.l.split('-').map(Number);
+      if (from <= line && line <= to) best = b; // later matches are nested deeper
+      else if (from <= line && !best) before = b;
+    }
+    best = best || before;
+    if (view.current) view.current.classList.remove('cur');
+    view.current = best;
+    if (!best) return;
+    if (view.follow) best.classList.add('cur');
+    if (!scroll) return;
+    const top = best.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop;
+    const want = Math.max(0, top - el.clientHeight / 3);
+    if (Math.abs(want - el.scrollTop) > 2) el.scrollTo({ top: want, behavior: state.look && state.look.animations ? 'smooth' : 'auto' });
+  };
+  return view;
+}
+
 function applyPanels(ui) {
   renderGit(ui.git);
   renderDiff(ui.diff);
   renderDirectory(ui.directory);
   renderPanes(ui.panes);
+  renderMarkdown(ui.panes);
 }

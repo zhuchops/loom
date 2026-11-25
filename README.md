@@ -162,7 +162,7 @@ The desktop app has a settings window. Type to search all of it, move with the a
 | Fonts, code | `font_family`, `font_size`, `font_weight`, `font_bold_weight`, `line_height`, `letter_spacing`, `font_ligatures`, `italic_comments`, `font_fallback` |
 | Fonts, interface | `ui_font_family`, `ui_font_size` (scales the whole interface), `ui_font_weight` |
 | Editor | `line_numbers`, `relative_numbers`, `highlight_line`, `indent_guides`, `tab_size`, `indent_style`, `scrolloff`, `sticky_scroll` (breadcrumbs), `smooth_scroll`, `auto_complete`, `auto_pairs`, `hover_docs` |
-| Cursor | `cursor_normal`, `cursor_insert` (`block`, `bar` or `underline`), `cursor_blink`, `cursor_glide` |
+| Cursor | `cursor_normal`, `cursor_insert` (`block`, `bar` or `underline`), `cursor_blink`, `cursor_glide` (in the desktop app the cursor glides at the display's frame rate, and each new position starts from where it is on screen, so held keys move it smoothly) |
 | Interface | `path_bar`, `status_bar`, `scrollbar`, `preview_tabs` |
 | Files | `format_on_save`, `organize_imports`, `reopen_project`, `restore_session` |
 | Languages | Tab size, indent style and format on save per language, and whether its server and formatter are installed |
@@ -246,6 +246,7 @@ The status bar's segments (encoding, line endings, language and the cursor posit
 - **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click or × to close. A tinted bar beneath shows the file's path and the functions and blocks around the cursor.
 - **Pickers and panels:** the palette, file search with a highlighted preview, settings with switches, Source Control with stage and commit buttons, and a diff with both line numbers.
 - **Messages** appear as a toast at the bottom right. Click one for the history.
+- **Held keys:** Loom turns off macOS's accent picker for itself, so holding `j`, `k` or any letter repeats it, as in other editors. Frames are drawn without making the page measure its layout, so a held key keeps up with the key repeat.
 - **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first. **Save All** saves every changed file, in every session, then quits; **Don't Save** quits without them; **Cancel** keeps the window. A file that can't be saved (one without a name, or a failed save) keeps the window open on it.
 
 | macOS shortcut | Action |
@@ -444,6 +445,8 @@ Yank, delete and change copy to the system clipboard, and paste reads it, so tex
 ## Markdown preview
 
 `Space m` (or **Toggle Markdown Preview** in the palette) opens a rendered preview in a split beside a Markdown file. It redraws as you type and scrolls to follow your cursor; the block under the cursor gets an accent bar. The wheel scrolls it by hand until the cursor moves again. The preview never takes focus, and `Space m` again closes it. It renders headings, emphasis, inline code, links, lists with task boxes, quotes, tables, rules and highlighted code fences.
+
+In the desktop app the preview is a real page, set in the interface font like a rendered README: headings with rules, quotes, GitHub alerts (`> [!NOTE]`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`), nested and numbered lists, task boxes, tables with alignment, code blocks in the theme's colors, and text you can select and copy. It scrolls smoothly to the block under the cursor, which gets an accent mark (code blocks and tables an accent border, table rows a tint). Links to web pages open in the browser, links to files beside the Markdown file open them in the editor, and `#heading` links scroll the preview. For safety, HTML in the file is shown without scripts, styles or attributes, and images show their description instead of loading anything.
 
 ## Languages
 

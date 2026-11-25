@@ -195,6 +195,22 @@ func (b *Bridge) paneState() []any {
 		}
 		out = append(out, s)
 	}
+	for k, pv := range v.previews {
+		p := pv.p
+		key := fmt.Sprintf("%p", p)
+		doc := map[string]any{"key": key, "v": p.b.version, "name": filepath.Base(p.b.path),
+			"line": p.b.rowAt(p.b.cursor), "follow": e.b == p.b, "icon": b.fileIcon(p.b.path)}
+		// The page keeps the HTML; it comes again only when it changes.
+		if b.mdSent == nil {
+			b.mdSent = map[string]int{}
+		}
+		if sent, ok := b.mdSent[key]; !ok || sent != p.b.version || b.mdReset {
+			doc["html"] = p.previewHTML()
+			b.mdSent[key] = p.b.version
+		}
+		out = append(out, map[string]any{"md": doc, "i": k, "box": []int{pv.x, pv.y, pv.w, pv.h}})
+	}
+	b.mdReset = false
 	if e.directory == nil && !e.zen {
 		for _, div := range v.paneDividers {
 			out = append(out, map[string]any{"divider": []int{div.box.x, div.box.y, div.box.w, div.box.h}, "vertical": div.vertical})

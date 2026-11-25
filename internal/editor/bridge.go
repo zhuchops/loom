@@ -55,6 +55,10 @@ type Bridge struct {
 	settings   *settingsView
 	fonts      []webFont // installed families, as the page found them
 	preview    previewCache
+	// mdSent is the buffer version of the HTML the page has for each Markdown
+	// preview; mdReset sends them all again.
+	mdSent  map[string]int
+	mdReset bool
 }
 
 func newBridge(e *editor, ctx context.Context, explicit bool, host bridgeHost) *Bridge {

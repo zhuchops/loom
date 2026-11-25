@@ -76,7 +76,7 @@ static void loomInstallWindow(void) {
 }
 
 // loomQuietTyping turns off what macOS offers in text fields: inline
-// predictions, completion, corrections and substitutions. The page's only
+// predictions, completion, corrections, substitutions and the accent picker. The page's only
 // field is the hidden one that takes the keyboard, so they only get in the way.
 static void loomQuietTyping(void) {
 	loomQuietWebView();
@@ -90,6 +90,9 @@ static void loomQuietTyping(void) {
 			@"WebGrammarCheckingEnabled", @"WebAutomaticQuoteSubstitutionEnabled", @"WebAutomaticDashSubstitutionEnabled" ]) {
 		[d setBool:NO forKey:key];
 	}
+	// Holding a letter shows the accent picker instead of repeating the key,
+	// so held j or k would not move the cursor. Repeat, as editors do.
+	[d setBool:NO forKey:@"ApplePressAndHoldEnabled"];
 }
 
 static void loomRaise(void) {

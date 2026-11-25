@@ -185,6 +185,10 @@ func (b *Bridge) encodeRow(f *terminalFrame, y, w int) []cellRun {
 
 func simpleCell(s string) bool { return len(s) == 1 && s[0] >= 0x20 && s[0] < 0x7f }
 
+// synKinds are the token kinds a Markdown preview colours.
+var synKinds = []string{"keyword", "string", "regexp", "number", "constant", "comment", "function", "method", "type",
+	"class", "property", "namespace", "parameter", "operator", "decorator", "label", "macro", "modifier", "enumMember"}
+
 // themeVars are the interface colours as CSS custom properties.
 func themeVars(c uiColors) map[string]string {
 	vars := map[string]string{
@@ -196,6 +200,13 @@ func themeVars(c uiColors) map[string]string {
 		"removed": hexColor(c.removed), "hunk": hexColor(c.hunk), "red": hexColor(c.red), "yellow": hexColor(c.yellow),
 		"green": hexColor(c.green), "blue": hexColor(c.blue), "purple": hexColor(c.purple), "orange": hexColor(c.orange),
 	}
+	// Code colours, for code blocks in the Markdown preview.
+	for _, kind := range synKinds {
+		if h := semanticColor(kind); h != 0 {
+			vars["syn-"+kind] = hexColor(nrgba(rgb(h), c.text))
+		}
+	}
+	vars["syn-comment"] = hexColor(nrgba(th.comment, c.dim))
 	vars["scheme"] = "light"
 	if c.dark {
 		vars["scheme"] = "dark"

@@ -27,6 +27,11 @@ type pane struct {
 	mdVersion, mdWidth int
 	mdTop, mdRow       int
 	mdManual           bool
+	// The desktop app shows the preview as a page; html is cached for
+	// htmlVersion of the buffer.
+	mdHTML        string
+	mdHTMLVersion int
+	mdHTMLSet     bool
 }
 
 func (e *editor) editableLeaves() []*pane {

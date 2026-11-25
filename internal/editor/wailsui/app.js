@@ -19,6 +19,8 @@ const state = {
   rowEls: [], rowChars: [],
   look: null, cursor: null, ui: {},
   started: false,
+  gridX: 0, gridY: 0, paneW: 0, paneH: 0,
+  ground: '', // the theme's text background, which runs leave unpainted
 };
 
 // ---- Look -----------------------------------------------------------------
@@ -46,7 +48,7 @@ function applyLook(look) {
   state.cellH = Math.max(1, Math.round(look.size * (look.height || 1.5)));
   root.setProperty('--cell-w', `${state.cellW}px`);
   root.setProperty('--cell-h', `${state.cellH}px`);
-  cursorEl.classList.toggle('glide', !!(look.animations && look.glide));
+  glide.on = !!(look.animations && look.glide);
   for (let y = 0; y < state.rowEls.length; y++) state.rowEls[y].style.top = `${y * state.cellH}px`;
   fit();
 }
@@ -57,12 +59,22 @@ function applyTheme(theme) {
     if (k === 'scheme') document.documentElement.style.colorScheme = v;
     else root.setProperty(`--${k}`, v);
   }
+  if (theme.bg) state.ground = theme.bg;
 }
 
 // ---- Grid -----------------------------------------------------------------
 
 // fit sizes the grid in cells and tells the editor when that changes.
 function fit() {
+  // Where the grid sits in the editor, for the cursor, which is placed
+  // without asking the page for its layout on every frame.
+  state.gridX = grid.offsetLeft;
+  state.gridY = grid.offsetTop;
+  const panes = $('panes');
+  state.paneW = panes.clientWidth;
+  state.paneH = panes.clientHeight;
+  // What is drawn over the panes follows the grid.
+  if (state.ui && state.ui.panes && typeof renderPanes === 'function') { renderPanes(state.ui.panes); renderMarkdown(state.ui.panes); }
   const r = grid.getBoundingClientRect();
   const cols = Math.max(4, Math.floor(r.width / state.cellW));
   const rows = Math.max(5, Math.floor(r.height / state.cellH));
@@ -97,7 +109,7 @@ function drawRow(y, runs) {
   const el = state.rowEls[y];
   const chars = [];
   const frag = document.createDocumentFragment();
-  const ground = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  const ground = state.ground;
   for (const [text, x, cells, fg, bg, flags, under] of runs || []) {
     const span = document.createElement('span');
     let cls = 'run';
@@ -123,25 +135,64 @@ function drawRow(y, runs) {
 // ---- Cursor ---------------------------------------------------------------
 
 let blinkTimer = 0;
+let cursorLook = '';
+let cursorText = null;
+
+// glide moves the cursor to where it was sent over a few display frames,
+// at whatever rate the display runs. A new position starts from where the
+// cursor is on screen, so held keys give one smooth motion.
+const glide = {
+  on: false, x: 0, y: 0, fromX: 0, fromY: 0, toX: 0, toY: 0, start: 0, raf: 0, placed: false,
+  duration: 80,
+  to(x, y) {
+    if (!this.on || !this.placed || (x === this.toX && y === this.toY && !this.raf)) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.x = this.toX = x; this.y = this.toY = y;
+      this.placed = true;
+      this.paint();
+      return;
+    }
+    this.fromX = this.x; this.fromY = this.y;
+    this.toX = x; this.toY = y;
+    this.start = performance.now();
+    if (!this.raf) this.raf = requestAnimationFrame((t) => this.step(t));
+  },
+  step(now) {
+    const k = Math.min(1, (now - this.start) / this.duration);
+    const e = 1 - Math.pow(1 - k, 3);
+    this.x = this.fromX + (this.toX - this.fromX) * e;
+    this.y = this.fromY + (this.toY - this.fromY) * e;
+    this.paint();
+    this.raf = k < 1 ? requestAnimationFrame((t) => this.step(t)) : 0;
+  },
+  paint() { cursorEl.style.transform = `translate3d(${this.x}px, ${this.y}px, 0)`; },
+};
+
 function drawCursor(c) {
   state.cursor = c;
   if (!c) {
     cursorEl.style.display = 'none';
+    glide.placed = false;
     return;
   }
-  const ox = grid.offsetLeft;
-  const oy = grid.offsetTop;
-  cursorEl.style.display = 'block';
-  cursorEl.style.transform = `translate(${ox + c.x * state.cellW}px, ${oy + c.y * state.cellH}px)`;
+  if (cursorEl.style.display !== 'block') cursorEl.style.display = 'block';
+  glide.to(state.gridX + c.x * state.cellW, state.gridY + c.y * state.cellH);
   if (composing) placeInput();
-  cursorEl.className = cursorEl.className.replace(/\b(bar|underline|block|blink|idle)\b/g, '').trim();
-  cursorEl.classList.add(c.shape || 'block');
-  if (!document.hasFocus()) cursorEl.classList.add('idle');
+  const idle = !document.hasFocus();
+  const look = `${c.shape || 'block'}${idle ? ' idle' : ''}`;
+  if (look !== cursorLook) {
+    cursorLook = look;
+    cursorEl.className = look;
+  }
   const under = (state.rowChars[c.y] || [])[c.x];
-  cursorEl.textContent = under && under[0] !== '▏' ? under[0] : '';
-  cursorEl.style.fontWeight = under && under[1] & 1 ? 700 : '';
+  const text = under && under[0] !== '▏' ? under[0] : '';
+  const weight = under && under[1] & 1 ? '700' : '';
+  if (text !== cursorText) { cursorText = text; cursorEl.textContent = text; }
+  if (cursorEl.style.fontWeight !== weight) cursorEl.style.fontWeight = weight;
   // A moving cursor doesn't blink.
   clearTimeout(blinkTimer);
+  cursorEl.classList.remove('blink');
   if (c.blink) blinkTimer = setTimeout(() => cursorEl.classList.add('blink'), 530);
 }
 
@@ -228,8 +279,8 @@ input.addEventListener('compositionend', (e) => {
 function focusInput() {
   if (document.activeElement !== input) input.focus({ preventScroll: true });
 }
-window.addEventListener('focus', () => { focusInput(); if (state.cursor) drawCursor(state.cursor); });
-window.addEventListener('blur', () => cursorEl.classList.add('idle'));
+window.addEventListener('focus', () => { focusInput(); cursorLook = ''; if (state.cursor) drawCursor(state.cursor); });
+window.addEventListener('blur', () => { cursorLook = ''; cursorEl.classList.add('idle'); });
 
 // ---- Pointer on the grid --------------------------------------------------
 
