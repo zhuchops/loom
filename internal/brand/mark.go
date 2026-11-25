@@ -1,5 +1,7 @@
 // Package brand draws the Loom mark: two warp and two weft threads woven into
-// an L. The app icon and the logo inside the app both come from here.
+// an L. The app icon sets it on a night sky, with a crescent moon resting in
+// the crook of the L (Loom, lune). The app icon and the logo inside the app
+// both come from here.
 package brand
 
 import (
@@ -173,17 +175,68 @@ func tileEdge(p vec, size float64) float64 {
 	return math.Pow(math.Pow(qx, n)+math.Pow(qy, n), 1/n) - r
 }
 
+// The moon, in 1024 unit icon space: a lit disk with a darker one over its
+// upper right, leaving a crescent that opens away from the L and hugs its
+// corner.
+var (
+	moonLit   = vec{676, 330}
+	moonShade = vec{738, 276}
+)
+
+const (
+	moonR      = 146.0
+	moonShadeR = 134.0
+)
+
+// stars are small points of light on the sky: x, y and brightness.
+var stars = [][3]float64{
+	{886, 154, 0.9}, {520, 168, 0.6}, {872, 488, 0.55}, {478, 262, 0.4}, {610, 520, 0.35}, {900, 330, 0.3},
+}
+
 func tileColour(p vec, size, edge float64) rgb {
 	u := size / 1024
-	y := clamp((p.y/u - 100) / 824)
-	c := hex(0x363052).mix(hex(0x0c0b17), y)
-	// A faint glow behind the weave and a lit rim along the top.
-	glow := clamp(1 - math.Hypot(p.x/u-430, p.y/u-600)/470)
-	c = c.mix(hex(0x6a45d8), 0.2*glow*glow)
+	x, y := p.x/u, p.y/u
+	t := clamp((y - 100) / 824)
+	c := hex(0x2a2a58).mix(hex(0x0a0a1a), t)
+	// Moonlight: a halo that fades into the sky.
+	lit := math.Hypot(x-moonLit.x, y-moonLit.y)
+	halo := clamp(1 - (lit-moonR*0.7)/300)
+	c = c.mix(hex(0x8f86ff), 0.26*halo*halo)
+	for _, s := range stars {
+		d := math.Hypot(x-s[0], y-s[1])
+		if g := clamp(1 - d/(7+4*s[2])); g > 0 {
+			c = c.mix(hex(0xfff6dc), s[2]*g*g)
+		}
+	}
+	if lit <= moonR {
+		c = moon(x, y, lit, c)
+	}
 	if edge > -max(5*u, 0.6) {
-		c = c.mix(hex(0xffffff), 0.05+0.19*(1-y))
+		c = c.mix(hex(0xffffff), 0.05+0.19*(1-t))
 	}
 	return c
+}
+
+// moon paints the crescent over the sky colour c.
+func moon(x, y, lit float64, sky rgb) rgb {
+	shade := math.Hypot(x-moonShade.x, y-moonShade.y)
+	// The terminator is soft; the limb is sharp.
+	day := clamp((shade - moonShadeR) / 10)
+	if day <= 0 {
+		// The dark side keeps a trace of earthshine.
+		return sky.mix(hex(0x3a3770), 0.35)
+	}
+	// Lit from the lower left: pale gold, warmer toward the limb.
+	k := clamp(lit / moonR)
+	c := hex(0xfff4d6).mix(hex(0xf2c879), k*k*0.85)
+	// A few soft maria.
+	for _, m := range [][3]float64{{596, 374, 24}, {640, 432, 17}, {572, 312, 13}} {
+		if d := math.Hypot(x-m[0], y-m[1]); d < m[2] {
+			f := 1 - d/m[2]
+			c = c.mix(hex(0xe0b46e), 0.18*f)
+		}
+	}
+	return sky.mix(c, day)
 }
 
 // Icon draws the app icon.
