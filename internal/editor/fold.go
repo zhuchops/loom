@@ -190,14 +190,49 @@ func (e *editor) foldCommands() {
 	e.add("fold-open-all", "Open All Folds", func(e *editor) { e.b.folds.closed = nil })
 }
 
-func (e *editor) closeFold(start int) {
-	b := e.b
+func (e *editor) closeFold(start int) { e.b.closeFold(start) }
+
+func (b *buffer) closeFold(start int) {
 	if b.folds.closed == nil {
 		b.folds.closed = map[int]bool{}
 	}
 	b.folds.closed[start] = true
 	b.folds.lines = len(b.lines)
 	b.revealCursorRow()
+}
+
+// toggleFoldAt opens or closes the fold that starts at row, as a click on its
+// button in the gutter does. It reports whether there is one.
+func (b *buffer) toggleFoldAt(row int) bool {
+	if _, ok := b.foldEnds()[row]; !ok {
+		return false
+	}
+	b.syncFolds()
+	if b.folds.closed[row] {
+		delete(b.folds.closed, row)
+	} else {
+		b.closeFold(row)
+	}
+	return true
+}
+
+// foldClick handles a press in a pane's gutter: on a fold button it toggles
+// the fold and focuses the pane.
+func (e *editor) foldClick(pane paneBox, x, y int) bool {
+	if len(pane.folds) == 0 || x != pane.foldX {
+		return false
+	}
+	for _, m := range pane.folds {
+		if m.y != y {
+			continue
+		}
+		if pane.leaf != nil {
+			e.focusPane(pane.leaf)
+		}
+		e.tree.focused = false
+		return pane.b.toggleFoldAt(m.row)
+	}
+	return false
 }
 
 // visibleOffset counts the screen rows between top and row, skipping hidden rows.

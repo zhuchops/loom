@@ -318,6 +318,7 @@ When there are more tabs than fit, scroll the wheel or touchpad over the tab bar
 | `>` / `<` in Visual mode | Indent or outdent the selected lines. The selection stays active until you press Esc. `3>` shifts three times. |
 | `za` / `zc` / `zo` | Toggle, close, or open the fold at the cursor. Folds follow indentation, and a closing `}` joins its block. `j` and `k` skip folded lines. |
 | `zM` / `zR` | Close or open every fold in the file. Folds reset when lines are added or removed. |
+| Click the fold mark in the gutter | Every line that starts a fold has a mark between its number and the text: `▾` (a `⌄` button in the desktop app) for an open fold, `▸` (an accent `›`) for a closed one. Click it to close or open that fold. In the desktop app the marks are faint until the pointer is over the text, and closed ones always stand out. |
 | `g i` | Go to implementations. A single result jumps straight there. |
 | `space o` / `space O` | Pick a symbol in this file, or in the whole workspace. Workspace results update as you type. |
 | Typing `./`, `../`, `/`, or `~/` inside a string | Complete file and folder names from disk. Folders come first and end with `/`. |

@@ -289,6 +289,9 @@ func (v *renderer) mouse(e *editor, event pointerEvent) {
 			v.paneWheel(e, pane, 0, delta)
 			return
 		}
+		if press && !v.dragging && e.foldClick(pane, x, y) {
+			return
+		}
 		if press || v.dragging && down {
 			if pane.leaf != nil {
 				e.focusPane(pane.leaf)

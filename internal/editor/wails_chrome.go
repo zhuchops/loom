@@ -297,6 +297,19 @@ func (b *Bridge) act(name string, i int, s string) {
 		if inTabs {
 			e.switchBuffer(e.buffers[i])
 		}
+	case "fold":
+		// A fold button: i is the row the fold starts at, s the pane.
+		v := &b.m.view
+		k, err := strconv.Atoi(s)
+		if err != nil || k < 0 || k >= len(v.panes) {
+			return
+		}
+		pane := v.panes[k]
+		for _, m := range pane.folds {
+			if m.row == i {
+				e.foldClick(pane, pane.foldX, m.y)
+			}
+		}
 	case "tab-keep":
 		if inTabs {
 			e.keepTab(e.buffers[i])

@@ -393,6 +393,10 @@ body.dragging, body.dragging * { cursor: default !important; }
 .divider.v::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); }
 .divider.h::after { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--line); }
 .pscrollbar { position: absolute; pointer-events: auto; }
+.foldbtn { position: absolute; pointer-events: auto; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: .5; cursor: pointer; border-radius: 4px; transition: opacity .12s, background .12s; }
+#editor:hover .foldbtn { opacity: .85; }
+.foldbtn.closed { opacity: 1; color: var(--accent); }
+.foldbtn:hover { opacity: 1; color: var(--text); background: var(--hover); }
 .pscrollbar .thumb { position: absolute; right: 3px; width: 4px; border-radius: 2px; background: var(--thumb); opacity: .7; }
 .pscrollbar:hover .thumb { opacity: 1; width: 6px; right: 2px; }
 

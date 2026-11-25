@@ -180,6 +180,19 @@ func (b *Bridge) paneState() []any {
 		case e.cfg.Scrollbar && len(p.b.lines) > p.h:
 			s["scroll"] = []int{p.b.top, p.h, len(p.b.lines)}
 		}
+		if len(p.folds) > 0 && e.directory == nil {
+			// Fold buttons: the gutter column, then each one's screen row,
+			// buffer row and whether it is closed.
+			folds := make([][3]int, len(p.folds))
+			for k, m := range p.folds {
+				folds[k] = [3]int{m.y, m.row, 0}
+				if m.closed {
+					folds[k][2] = 1
+				}
+			}
+			s["folds"] = folds
+			s["foldX"] = p.foldX
+		}
 		out = append(out, s)
 	}
 	if e.directory == nil && !e.zen {

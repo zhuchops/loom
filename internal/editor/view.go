@@ -24,6 +24,15 @@ type paneBox struct {
 	b      *buffer
 	gutter int
 	leaf   *pane
+	folds  []foldMark // the fold buttons in the gutter
+	foldX  int        // the column they are in
+}
+
+// foldMark is a fold's button in the gutter: the screen row it is on and the
+// buffer row the fold starts at.
+type foldMark struct {
+	y, row int
+	closed bool
 }
 type previewBox struct {
 	hitBox
@@ -352,12 +361,18 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 	if box.w < 3 {
 		return
 	}
+	// The fold column sits right of the numbers; a graphical front end, whose
+	// fold buttons are wider than the glyph, leaves a column before the text.
+	foldX := gutter - 1
+	if v.native && box.w > gutter+4 {
+		gutter++
+	}
 	if b.dashboard {
 		v.panes = append(v.panes, paneBox{hitBox: box, b: b})
 		v.drawDashboard(e, box, focused)
 		return
 	}
-	v.panes = append(v.panes, paneBox{hitBox: box, b: b, gutter: gutter})
+	v.panes = append(v.panes, paneBox{hitBox: box, b: b, gutter: gutter, foldX: box.x + foldX})
 	if focused {
 		e.viewRows = box.h
 	}
@@ -435,16 +450,22 @@ func (v *renderer) drawPane(e *editor, b *buffer, box hitBox, focused bool) {
 			lineNumber = absInt(i - row)
 		}
 		if e.cfg.LineNumbers {
-			v.write(box.x+1, y, gutter-2, fmt.Sprintf("%*d", gutter-2, lineNumber), number)
+			v.write(box.x+1, y, foldX-1, fmt.Sprintf("%*d", foldX-1, lineNumber), number)
 		}
 		// The blank column between the number and the text shows fold state:
 		// ▾ for a fold that is open, ▸ for one that is closed.
-		if _, ok := foldable[i]; ok && gutter >= 2 {
-			glyph := "▾"
-			if b.folds.closed[i] {
-				glyph = "▸"
+		if _, ok := foldable[i]; ok && foldX >= 1 {
+			closed := b.folds.closed[i]
+			mark := &v.panes[len(v.panes)-1]
+			mark.folds = append(mark.folds, foldMark{y, i, closed})
+			// A graphical front end draws the button itself.
+			if !v.native {
+				glyph := "▾"
+				if closed {
+					glyph = "▸"
+				}
+				v.write(box.x+foldX, y, 1, glyph, number.Foreground(th.accent))
 			}
-			v.write(box.x+gutter-1, y, 1, glyph, number.Foreground(th.accent))
 		}
 		if severity := diagnosticAt(problems[i], b.lines[i], b.lineEnd(i)+1); severity != 0 {
 			v.write(box.x, y, 1, "●", number.Foreground(diagnosticColor(severity)))

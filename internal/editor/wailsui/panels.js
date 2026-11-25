@@ -147,6 +147,21 @@ function renderPanes(panes) {
       el.appendChild(w);
       continue;
     }
+    if (p.folds) {
+      // Fold buttons in the gutter: a chevron that opens or closes the block.
+      for (const [y, row, closed] of p.folds) {
+        const f = h('div', 'foldbtn' + (closed ? ' closed' : ''), icon(closed ? 'right' : 'down', 11));
+        f.title = closed ? 'Unfold' : 'Fold';
+        place(f, { left: ox + (p.foldX + 0.5) * W - 3, top: oy + y * H, width: W + 6, height: H });
+        f.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.button === 0) act('fold', row, String(p.i));
+          focusInput();
+        });
+        el.appendChild(f);
+      }
+    }
     if (p.scroll) {
       const [top, shown, total] = p.scroll;
       const r = box(p.box, true);
