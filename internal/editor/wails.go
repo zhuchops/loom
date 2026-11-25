@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
 	wopt "github.com/wailsapp/wails/v2/pkg/options"
@@ -75,7 +76,7 @@ func runWails(e *editor, explicit bool) error {
 		Height:           820,
 		MinWidth:         640,
 		MinHeight:        420,
-		BackgroundColour: &wopt.RGBA{R: 0, G: 0, B: 0, A: 0},
+		BackgroundColour: windowBackground(),
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        b.startup,
 		OnDomReady:       func(context.Context) { installWindow() },
@@ -89,6 +90,18 @@ func runWails(e *editor, explicit bool) error {
 			WindowIsTranslucent:  true,
 		},
 	})
+}
+
+// windowBackground is clear on macOS, where the window blurs the desktop
+// behind the chrome. Elsewhere the window is opaque: a see-through GTK window
+// repaints its translucent parts over what was there, so colors drift and
+// flash wherever the pointer changes something.
+func windowBackground() *wopt.RGBA {
+	if runtime.GOOS == "darwin" {
+		return &wopt.RGBA{}
+	}
+	r, g, b := th.bg.RGB()
+	return &wopt.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
 }
 
 func (b *Bridge) startup(ctx context.Context) {

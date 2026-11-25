@@ -216,6 +216,11 @@ body.dragging, body.dragging * { cursor: default !important; }
   box-shadow: 0 18px 50px rgba(0, 0, 0, .35), 0 2px 8px rgba(0, 0, 0, .18), inset 0 1px 0 color-mix(in srgb, white 9%, transparent);
   border-radius: 12px;
 }
+/* Without glass (Linux, Windows): opaque surfaces and no backdrop blur, which
+   WebKitGTK repaints badly. */
+html.solid, html.solid body, .solid #app { background: var(--bg); }
+.solid { --chrome: var(--side); }
+.solid .glass, .solid .tghost { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--raised); }
 .dialog { width: min(430px, calc(100vw - 24px)); padding: 22px 18px 16px 24px; }
 .dtitle { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 .dbody { color: var(--dim); white-space: pre-wrap; margin-bottom: 20px; padding-right: 6px; }

@@ -6,6 +6,8 @@
 const $ = (id) => document.getElementById(id);
 const bridge = () => window.go.editor.Bridge;
 const isMac = navigator.platform.toUpperCase().includes('MAC');
+// Only macOS gives the window glass; elsewhere everything is painted opaque.
+if (!isMac) document.documentElement.classList.add('solid');
 
 const grid = $('grid');
 const cursorEl = $('cursor');

@@ -62,7 +62,7 @@ The terminal version needs only Go. For the system clipboard install `wl-clipboa
 
 If `go version` prints less than 1.26 after that, use the tarball above.
 
-The desktop window (`loom-desktop`) is drawn in the system web view through [Wails](https://wails.io). It is built with cgo and needs a C compiler plus the development files for GTK 3 and WebKitGTK. Current distributions ship WebKitGTK 4.1, which takes the extra build tag `webkit2_41`; on an older one that only has 4.0 (Ubuntu 22.04, Debian 11) install the 4.0 package and leave the tag out. The Linux desktop build has not been tested, so treat these lists as a starting point:
+The desktop window (`loom-desktop`) is drawn in the system web view through [Wails](https://wails.io). It is built with cgo and needs a C compiler plus the development files for GTK 3 and WebKitGTK. Current distributions ship WebKitGTK 4.1, which takes the extra build tag `webkit2_41`; on an older one that only has 4.0 (Ubuntu 22.04, Debian 11) install the 4.0 package and leave the tag out. On Linux the window is opaque, without the macOS glass: a see-through GTK window repaints its translucent parts badly, so colors flashed wherever the pointer went. Loom also sets `WEBKIT_DISABLE_DMABUF_RENDERER=1`, which stops WebKitGTK flickering on many drivers; set it to `0` yourself to keep that renderer. The Linux desktop build has not been tested, so treat these lists as a starting point:
 
 | Distribution | Build dependencies |
 |---|---|
