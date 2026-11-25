@@ -246,7 +246,7 @@ The status bar's segments (encoding, line endings, language and the cursor posit
 - **Tabs and path:** drag tabs to reorder them or onto the text to split, middle-click or × to close. A tinted bar beneath shows the file's path and the functions and blocks around the cursor.
 - **Pickers and panels:** the palette, file search with a highlighted preview, settings with switches, Source Control with stage and commit buttons, and a diff with both line numbers.
 - **Messages** appear as a toast at the bottom right. Click one for the history.
-- **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first.
+- **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first. **Save All** saves every changed file, in every session, then quits; **Don't Save** quits without them; **Cancel** keeps the window. A file that can't be saved (one without a name, or a failed save) keeps the window open on it.
 
 | macOS shortcut | Action |
 | --- | --- |

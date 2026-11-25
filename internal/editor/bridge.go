@@ -41,6 +41,9 @@ type Bridge struct {
 	inbox      chan tea.Msg
 	calls      chan func()
 	ticker     *time.Ticker
+	// stopped closes when the editor's goroutine ends, as it quits. Nothing
+	// runs queued calls after that.
+	stopped chan struct{}
 
 	explicit   bool
 	started    bool
@@ -55,7 +58,7 @@ type Bridge struct {
 }
 
 func newBridge(e *editor, ctx context.Context, explicit bool, host bridgeHost) *Bridge {
-	b := &Bridge{inbox: make(chan tea.Msg, 256), calls: make(chan func(), 256), ticker: time.NewTicker(time.Second), explicit: explicit, host: host}
+	b := &Bridge{inbox: make(chan tea.Msg, 256), calls: make(chan func(), 256), stopped: make(chan struct{}), ticker: time.NewTicker(time.Second), explicit: explicit, host: host}
 	b.m = &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0), native: true}, ctx: ctx, ticks: b.ticker.C}
 	b.m.attach()
 	e.settingsPage = b.toggleSettings
@@ -78,6 +81,7 @@ func (b *Bridge) loop() {
 		}
 		b.drain()
 		if b.m.editor.quit {
+			close(b.stopped)
 			if b.host != nil {
 				b.host.quit()
 			}

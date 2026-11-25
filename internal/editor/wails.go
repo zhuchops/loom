@@ -99,9 +99,14 @@ func (b *Bridge) startup(ctx context.Context) {
 
 // beforeClose keeps the window open while files are unsaved, and asks what
 // to do with them.
+//
+// Quitting from the editor (Save All or Don't Save in that question, ⌘Q)
+// ends the editor's goroutine and then asks Wails to quit, which calls this
+// again on another goroutine. By then nothing runs queued calls, and the
+// editor has already settled what to do, so the window just closes.
 func (b *Bridge) beforeClose(context.Context) bool {
-	reply := make(chan bool)
-	b.calls <- func() {
+	reply := make(chan bool, 1)
+	ask := func() {
 		if b.m.editor.quit || !b.unsaved() {
 			reply <- false
 			return
@@ -109,7 +114,17 @@ func (b *Bridge) beforeClose(context.Context) bool {
 		b.requestQuit()
 		reply <- true
 	}
-	return <-reply
+	select {
+	case b.calls <- ask:
+	case <-b.stopped:
+		return false
+	}
+	select {
+	case keep := <-reply:
+		return keep
+	case <-b.stopped:
+		return false
+	}
 }
 
 // wailsHost is the desktop app's own window.
