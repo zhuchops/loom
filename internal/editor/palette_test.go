@@ -96,8 +96,10 @@ func TestTreeIcons(t *testing.T) {
 		{"/p/src", true, false, "\U000f024b"},
 		{"/p/src", true, true, "\U000f0770"},
 		{"/p/main.go", false, false, "\U000f07d3"},
-		{"/p/go.mod", false, false, "\U000f03d6"},
-		{"/p/app.TSX", false, false, "\U000f06e6"},
+		{"/p/go.mod", false, false, "\U000f07d3"},
+		{"/p/Cargo.lock", false, false, "\U000f033e"},
+		{"/p/app.TSX", false, false, "\U000f0708"},
+		{"/p/app.ts", false, false, "\U000f06e6"},
 		{"/p/notes.md", false, false, "\U000f0354"},
 		{"/p/unknown.xyz", false, false, "\U000f09ee"},
 	}

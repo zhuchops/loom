@@ -27,63 +27,12 @@ func bufferName(b *buffer) string {
 
 // fileMark is a short coloured monogram for a file type.
 func fileMarkOf(c *uiColors, path string) (string, color.NRGBA) {
-	switch strings.ToLower(filepath.Base(path)) {
-	case "makefile", "dockerfile":
-		return "#", c.orange
-	case "mix.exs", "mix.lock":
-		return "EX", c.purple
-	case "go.mod", "go.sum", "go.work":
-		return "GO", c.purple
-	case ".gitignore", ".gitattributes", ".gitmodules":
-		return "git", c.orange
+	style, ok := fileStyleOf(path)
+	if !ok {
+		return "", c.dim
 	}
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".go":
-		return "GO", c.blue
-	case ".ts", ".tsx":
-		return "TS", c.blue
-	case ".js", ".jsx", ".mjs", ".cjs":
-		return "JS", c.yellow
-	case ".json", ".jsonc":
-		return "{}", c.yellow
-	case ".md", ".markdown":
-		return "MD", c.blue
-	case ".html", ".xml", ".svg":
-		return "<>", c.orange
-	case ".css", ".scss":
-		return "#", c.purple
-	case ".py":
-		return "PY", c.yellow
-	case ".rs":
-		return "RS", c.orange
-	case ".rb":
-		return "RB", c.red
-	case ".java", ".kt":
-		return "JV", c.orange
-	case ".c", ".h":
-		return "C", c.blue
-	case ".cpp", ".cc", ".hpp":
-		return "C+", c.blue
-	case ".sh", ".zsh", ".bash":
-		return "$", c.green
-	case ".yaml", ".yml":
-		return "YM", c.red
-	case ".toml", ".ini", ".conf":
-		return "TM", c.orange
-	case ".sql":
-		return "DB", c.purple
-	case ".lua":
-		return "LU", c.blue
-	case ".swift":
-		return "SW", c.orange
-	case ".dingo":
-		return "DG", c.orange
-	case ".ex", ".exs":
-		return "EX", c.purple
-	case ".heex", ".eex", ".leex":
-		return "<>", c.purple
-	}
-	return "", c.dim
+	inks := map[byte]color.NRGBA{'r': c.red, 'y': c.yellow, 'g': c.green, 'b': c.blue, 'p': c.purple, 'o': c.orange, 'd': c.dim}
+	return style.mark, inks[style.ink]
 }
 
 func languageName(id string) string {
