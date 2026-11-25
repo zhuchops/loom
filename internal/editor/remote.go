@@ -156,6 +156,8 @@ func (b *Bridge) dispatch(c remoteCall) {
 		}
 	case "Redraw":
 		b.Redraw()
+	case "Drawn":
+		b.Drawn()
 	case "Key":
 		if arg(0, &key) {
 			b.Key(key)

@@ -105,30 +105,31 @@ function ensureRows(n) {
   }
 }
 
+const escapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+const escapeCell = (t) => t.replace(/[&<>"]/g, (c) => escapes[c]);
+
+// drawRow sets a row as one piece of HTML, which the page parses far faster
+// than it builds the same spans one by one; a scroll redraws every row.
 function drawRow(y, runs) {
   const el = state.rowEls[y];
   const chars = [];
-  const frag = document.createDocumentFragment();
   const ground = state.ground;
+  const W = state.cellW;
+  let html = '';
   for (const [text, x, cells, fg, bg, flags, under] of runs || []) {
-    const span = document.createElement('span');
     let cls = 'run';
     if (flags & 1) cls += ' b';
     if (flags & 2) cls += ' i';
     if (under) cls += ' u';
     if (cells > 1 && [...text].length === 1) cls += ' g';
-    span.className = cls;
-    span.style.left = `${x * state.cellW}px`;
-    span.style.width = `${cells * state.cellW}px`;
-    span.style.color = fg;
-    if (bg !== ground) span.style.background = bg;
-    if (under) span.style.textDecorationColor = under;
-    span.textContent = text;
-    frag.appendChild(span);
+    let style = `left:${x * W}px;width:${cells * W}px;color:${fg}`;
+    if (bg !== ground) style += `;background:${bg}`;
+    if (under) style += `;text-decoration-color:${under}`;
+    html += `<span class="${cls}" style="${style}">${escapeCell(text)}</span>`;
     if (cells === text.length) for (let i = 0; i < text.length; i++) chars[x + i] = [text[i], flags];
     else chars[x] = [text, flags];
   }
-  el.replaceChildren(frag);
+  el.innerHTML = html;
   state.rowChars[y] = chars;
 }
 
@@ -143,7 +144,7 @@ let cursorText = null;
 // cursor is on screen, so held keys give one smooth motion.
 const glide = {
   on: false, x: 0, y: 0, fromX: 0, fromY: 0, toX: 0, toY: 0, start: 0, raf: 0, placed: false,
-  duration: 80,
+  duration: 60,
   to(x, y) {
     if (!this.on || !this.placed || (x === this.toX && y === this.toY && !this.raf)) {
       cancelAnimationFrame(this.raf);
@@ -205,6 +206,9 @@ function applyFrame(f) {
   if (f.grid) for (const [y, runs] of Object.entries(f.grid)) drawRow(Number(y), runs);
   drawCursor(f.cursor);
   if (f.ui) applyUI(f.ui);
+  // Ask for the next frame once this one is on screen: the editor never
+  // sends more than the page can draw, so nothing piles up.
+  requestAnimationFrame(() => bridge().Drawn());
 }
 
 function applyUI(ui) {
@@ -235,6 +239,9 @@ function keyEvent(e) {
 
 input.addEventListener('keydown', (e) => {
   if (e.isComposing || e.keyCode === 229) return;
+  // A held key's repeats that waited while the page was busy are stale:
+  // drop them, so the cursor stops the moment the key is let go.
+  if (e.repeat && performance.now() - e.timeStamp > 50) { e.preventDefault(); return; }
   const named = namedKeys.has(e.key);
   const optionChord = e.altKey && (e.code.startsWith('Key') || e.code.startsWith('Digit'));
   if (!named && !e.ctrlKey && !e.metaKey && !optionChord) return; // typing arrives as text

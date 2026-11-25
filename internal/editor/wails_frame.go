@@ -71,9 +71,10 @@ func (b *Bridge) cellFG(c terminalColor, bg color.NRGBA) color.NRGBA {
 }
 
 // render lays the frame out and sends what changed to the web view.
-func (b *Bridge) render() {
+// render sends the page a frame and reports whether it did.
+func (b *Bridge) render() bool {
 	if b.host == nil || !b.started || b.cols == 0 {
-		return
+		return false
 	}
 	e := b.m.editor
 	v := &b.m.view
@@ -128,6 +129,7 @@ func (b *Bridge) render() {
 		b.frame.ui, out.UI = string(data), ui
 	}
 	b.host.emit(out)
+	return true
 }
 
 // encodeRow groups a row of the grid into runs of one style.

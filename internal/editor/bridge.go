@@ -59,7 +59,21 @@ type Bridge struct {
 	// preview; mdReset sends them all again.
 	mdSent  map[string]int
 	mdReset bool
+
+	// Flow control: one frame is on its way to the page at a time. Input
+	// keeps being applied while the page draws, and the next frame carries
+	// the state as it is then, so a held key never builds a queue of frames
+	// that keeps the cursor moving after the key is let go.
+	inFlight bool
+	sentAt   time.Time
+	dirty    bool
+	acks     int
+	wake     *time.Timer
 }
+
+// frameTimeout is how long a frame may go without the page saying it drew
+// it, as when the window is hidden, before the next one is sent anyway.
+const frameTimeout = 200 * time.Millisecond
 
 func newBridge(e *editor, ctx context.Context, explicit bool, host bridgeHost) *Bridge {
 	b := &Bridge{inbox: make(chan tea.Msg, 256), calls: make(chan func(), 256), stopped: make(chan struct{}), ticker: time.NewTicker(time.Second), explicit: explicit, host: host}
@@ -77,13 +91,15 @@ func newBridge(e *editor, ctx context.Context, explicit bool, host bridgeHost) *
 // loop is the editor's goroutine: it applies input and results, then draws.
 func (b *Bridge) loop() {
 	for {
+		b.acks = 0
+		n := 1
 		select {
 		case f := <-b.calls:
 			f()
 		case msg := <-b.inbox:
 			b.send(msg)
 		}
-		b.drain()
+		n += b.drain()
 		if b.m.editor.quit {
 			close(b.stopped)
 			if b.host != nil {
@@ -91,11 +107,16 @@ func (b *Bridge) loop() {
 			}
 			return
 		}
-		b.render()
+		if n > b.acks {
+			b.dirty = true
+		}
+		b.flush()
 	}
 }
 
-func (b *Bridge) drain() {
+// drain applies everything that is waiting and says how much there was.
+func (b *Bridge) drain() int {
+	n := 0
 	for {
 		select {
 		case f := <-b.calls:
@@ -103,9 +124,41 @@ func (b *Bridge) drain() {
 		case msg := <-b.inbox:
 			b.send(msg)
 		default:
+			return n
+		}
+		n++
+	}
+}
+
+// flush sends a frame when something changed and the page is ready for it.
+func (b *Bridge) flush() {
+	if !b.dirty {
+		return
+	}
+	if b.inFlight {
+		if wait := frameTimeout - time.Since(b.sentAt); wait > 0 {
+			if b.wake == nil {
+				b.wake = time.AfterFunc(wait, func() { b.calls <- func() { b.wake = nil } })
+			}
 			return
 		}
 	}
+	b.dirty = false
+	if b.render() {
+		b.inFlight, b.sentAt = true, time.Now()
+	}
+}
+
+// Drawn is the page saying it has drawn the last frame.
+func (b *Bridge) Drawn() {
+	if b.peer != nil {
+		b.peer.forward("Drawn")
+		return
+	}
+	b.call(func() {
+		b.acks++
+		b.inFlight = false
+	})
 }
 
 // post hands msg to the editor's goroutine from any other.
