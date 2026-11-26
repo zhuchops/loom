@@ -28,22 +28,31 @@ type bridgeHost interface {
 	appearance(dark bool)
 }
 
-// Bridge is what the web view calls. Every call is queued and runs on the
-// editor's own goroutine, so the editor is never touched from two at once.
+// Bridge is what the web view of one window calls. Every call is queued and
+// runs on its desk's goroutine, so an editor is never touched from two at once.
 type Bridge struct {
-	app  context.Context // the Wails runtime, once started
+	desk *desk
 	host bridgeHost
 	// peer is set in a window that shows a remote editor: the page's calls go
 	// there instead of to an editor here.
 	peer       *remotePeer
 	remoteHost string // the machine a remote editor runs on, for the title bar
-	m          *terminalModel
-	inbox      chan tea.Msg
-	calls      chan func()
-	ticker     *time.Ticker
-	// stopped closes when the editor's goroutine ends, as it quits. Nothing
-	// runs queued calls after that.
+	remoteRoot string // and its project's name, in a window that shows one
+	// window is the desktop window around the page, when there is one.
+	window interface{ focus() }
+	// quitApp, set in the desktop app, quits Loom as a whole: every window.
+	// Without it, quitting closes this window's editor.
+	quitApp func()
+	m       *terminalModel
+	ticker  *time.Ticker
+	// stopped closes when the window's editor has quit. Nothing runs its
+	// queued calls after that.
 	stopped chan struct{}
+	gone    bool
+	// process is what this window's editor last set for the whole process
+	// (theme, working directory, tab width), kept while another window's runs.
+	process *processState
+	events  int // calls applied since the last frame
 
 	explicit   bool
 	started    bool
@@ -75,8 +84,19 @@ type Bridge struct {
 // it, as when the window is hidden, before the next one is sent anyway.
 const frameTimeout = 200 * time.Millisecond
 
+// newBridge makes a window's bridge on a desk of its own.
 func newBridge(e *editor, ctx context.Context, explicit bool, host bridgeHost) *Bridge {
-	b := &Bridge{inbox: make(chan tea.Msg, 256), calls: make(chan func(), 256), stopped: make(chan struct{}), ticker: time.NewTicker(time.Second), explicit: explicit, host: host}
+	return newDesk().bridge(e, ctx, explicit, host)
+}
+
+// bridge makes the bridge of another window on d. It runs on d's goroutine,
+// or before d's loop starts.
+func (d *desk) bridge(e *editor, ctx context.Context, explicit bool, host bridgeHost) *Bridge {
+	b := &Bridge{desk: d, stopped: make(chan struct{}), ticker: time.NewTicker(time.Second), explicit: explicit, host: host}
+	d.open = append(d.open, b)
+	if d.active == nil {
+		d.active = b // the editor was just made, so the process is set up for it
+	}
 	b.m = &terminalModel{editor: e, view: renderer{screen: newTerminalFrame(0, 0), native: true}, ctx: ctx, ticks: b.ticker.C}
 	b.m.attach()
 	e.settingsPage = b.toggleSettings
@@ -88,47 +108,8 @@ func newBridge(e *editor, ctx context.Context, explicit bool, host bridgeHost) *
 	return b
 }
 
-// loop is the editor's goroutine: it applies input and results, then draws.
-func (b *Bridge) loop() {
-	for {
-		b.acks = 0
-		n := 1
-		select {
-		case f := <-b.calls:
-			f()
-		case msg := <-b.inbox:
-			b.send(msg)
-		}
-		n += b.drain()
-		if b.m.editor.quit {
-			close(b.stopped)
-			if b.host != nil {
-				b.host.quit()
-			}
-			return
-		}
-		if n > b.acks {
-			b.dirty = true
-		}
-		b.flush()
-	}
-}
-
-// drain applies everything that is waiting and says how much there was.
-func (b *Bridge) drain() int {
-	n := 0
-	for {
-		select {
-		case f := <-b.calls:
-			f()
-		case msg := <-b.inbox:
-			b.send(msg)
-		default:
-			return n
-		}
-		n++
-	}
-}
+// loop runs the desk until every window on it has closed.
+func (b *Bridge) loop() { b.desk.loop() }
 
 // flush sends a frame when something changed and the page is ready for it.
 func (b *Bridge) flush() {
@@ -138,7 +119,7 @@ func (b *Bridge) flush() {
 	if b.inFlight {
 		if wait := frameTimeout - time.Since(b.sentAt); wait > 0 {
 			if b.wake == nil {
-				b.wake = time.AfterFunc(wait, func() { b.calls <- func() { b.wake = nil } })
+				b.wake = time.AfterFunc(wait, func() { b.call(func() { b.wake = nil }) })
 			}
 			return
 		}
@@ -162,7 +143,7 @@ func (b *Bridge) Drawn() {
 }
 
 // post hands msg to the editor's goroutine from any other.
-func (b *Bridge) post(msg tea.Msg) { b.inbox <- msg }
+func (b *Bridge) post(msg tea.Msg) { b.call(func() { b.send(msg) }) }
 
 // run executes a Bubble Tea command in the background and queues its result.
 func (b *Bridge) run(cmd tea.Cmd) {
@@ -206,7 +187,7 @@ func (b *Bridge) send(msg tea.Msg) {
 }
 
 // call queues f on the editor's goroutine.
-func (b *Bridge) call(f func()) { b.calls <- f }
+func (b *Bridge) call(f func()) { b.desk.calls <- deskCall{b, f} }
 
 // Start is the web view saying it is ready, with the size of its text grid.
 func (b *Bridge) Start(cols, rows int) {

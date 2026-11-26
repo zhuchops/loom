@@ -59,62 +59,42 @@ static void loomQuietWebView(void) {
 	}
 }
 
-// loomParentWindow finds the window of the Loom that started this one.
-static BOOL loomParentWindow(NSRect *out) {
-	pid_t parent = getppid();
-	CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
-	if (list == NULL) {
-		return NO;
-	}
-	BOOL found = NO;
-	for (NSDictionary *w in (__bridge NSArray *)list) {
-		if ([w[(id)kCGWindowOwnerPID] intValue] != parent || [w[(id)kCGWindowLayer] intValue] != 0) {
-			continue;
-		}
-		CGRect r;
-		if (CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)w[(id)kCGWindowBounds], &r) && r.size.width > 200) {
-			*out = NSRectFromCGRect(r);
-			found = YES;
-			break;
-		}
-	}
-	CFRelease(list);
-	return found;
-}
-
-// loomInstallWindow gives the window what the system offers windows: it
-// reopens where it was left, and it can go full screen. Another window
-// (cascade) starts down and to the right of that place and is not
-// remembered, and comes to the front, as it was started from this app.
-static void loomInstallWindow(int cascade) {
+// loomInstallWindow gives a window what the system offers windows: the
+// first reopens where it was left; another (cascade) starts down and to the
+// right of the window in front, and comes to the front itself.
+static void loomInstallWindow(void *ptr, int cascade) {
+	NSWindow *window = (__bridge NSWindow *)ptr;
 	dispatch_async(dispatch_get_main_queue(), ^{
-		NSWindow *window = NSApp.mainWindow ?: NSApp.windows.firstObject;
 		if (window == nil) {
 			return;
 		}
 		window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
 		if (cascade) {
-			NSRect from;
-			if (loomParentWindow(&from)) {
-				// Screen coordinates there count down from the top of the
-				// main screen; the window's count up from its bottom.
-				CGFloat top = NSScreen.screens.firstObject.frame.size.height;
-				[window setFrame:NSMakeRect(from.origin.x, 0, from.size.width, from.size.height) display:NO];
-				[window setFrameTopLeftPoint:NSMakePoint(from.origin.x + 28, top - from.origin.y - 28)];
+			NSWindow *from = nil;
+			for (NSWindow *w in NSApp.orderedWindows) {
+				if (w != window && w.visible && w.frame.size.width > 200) {
+					from = w;
+					break;
+				}
+			}
+			if (from != nil) {
+				NSRect f = from.frame;
+				[window setFrame:NSMakeRect(f.origin.x, f.origin.y, f.size.width, f.size.height) display:NO];
+				[window setFrameTopLeftPoint:NSMakePoint(f.origin.x + 28, f.origin.y + f.size.height - 28)];
 			} else if ([window setFrameUsingName:@"LoomMain"]) {
 				NSRect f = window.frame;
 				[window setFrameTopLeftPoint:NSMakePoint(f.origin.x + 28, f.origin.y + f.size.height - 28)];
 			} else {
 				[window center];
 			}
-			[NSApp activateIgnoringOtherApps:YES];
-			[window makeKeyAndOrderFront:nil];
-			return;
+		} else {
+			if (![window setFrameUsingName:@"LoomMain"]) {
+				[window center];
+			}
+			[window setFrameAutosaveName:@"LoomMain"];
 		}
-		if (![window setFrameUsingName:@"LoomMain"]) {
-			[window center];
-		}
-		[window setFrameAutosaveName:@"LoomMain"];
+		[NSApp activateIgnoringOtherApps:YES];
+		[window makeKeyAndOrderFront:nil];
 	});
 }
 
@@ -206,21 +186,27 @@ static void loomRaise(void) {
 
 // The window's material follows the theme: dark glass behind a dark theme,
 // light glass behind a light one.
-static void loomAppearance(int dark) {
+static void loomAppearance(void *ptr, int dark) {
+	NSWindow *window = (__bridge NSWindow *)ptr;
 	dispatch_async(dispatch_get_main_queue(), ^{
-		NSApp.appearance = [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];
+		window.appearance = [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];
 	});
 }
 */
 import "C"
 
-// installWindow lets the window remember where it was.
-func installWindow(cascade bool) {
+import "unsafe"
+
+// installWindow places a new window: see loomInstallWindow.
+func installWindow(window unsafe.Pointer, cascade bool) {
+	if window == nil {
+		return
+	}
 	n := C.int(0)
 	if cascade {
 		n = 1
 	}
-	C.loomInstallWindow(n)
+	C.loomInstallWindow(window, n)
 }
 
 func installDock() { C.loomInstallDock() }
@@ -228,14 +214,17 @@ func installDock() { C.loomInstallDock() }
 // quietTyping turns off the system's typing suggestions for this app.
 func quietTyping() { C.loomQuietTyping() }
 
-// raiseWindow brings Loom in front of other apps.
-func raiseWindow() { C.loomRaise() }
+// raiseApp brings Loom in front of other apps.
+func raiseApp() { C.loomRaise() }
 
-// setAppearance makes the window's chrome and glass dark or light.
-func setAppearance(dark bool) {
+// setAppearance makes a window's chrome and glass dark or light.
+func setAppearance(window unsafe.Pointer, dark bool) {
+	if window == nil {
+		return
+	}
 	d := C.int(0)
 	if dark {
 		d = 1
 	}
-	C.loomAppearance(d)
+	C.loomAppearance(window, d)
 }

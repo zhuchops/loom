@@ -101,7 +101,11 @@ func (b *Bridge) command(id string) {
 		b.zoom(0)
 		return
 	case "quit":
-		b.requestQuit()
+		if b.quitApp != nil {
+			b.quitApp()
+		} else {
+			b.requestQuit()
+		}
 		return
 	}
 
@@ -433,13 +437,20 @@ func (b *Bridge) closeTab(buf *buffer) {
 
 func (b *Bridge) unsaved() bool { return len(b.m.editor.hub.unsaved()) > 0 }
 
+// requestQuit closes this window's editor, asking first about unsaved work.
 func (b *Bridge) requestQuit() {
-	h := b.m.editor.hub
-	waiting := h.unsaved()
-	if len(waiting) == 0 {
-		h.quitAll(false)
+	if !b.unsaved() {
+		b.m.editor.hub.quitAll(false)
 		return
 	}
+	b.askQuit(nil)
+}
+
+// askQuit asks what to do with this window's unsaved work before its editor
+// quits. Cancel runs cancelled.
+func (b *Bridge) askQuit(cancelled func()) {
+	h := b.m.editor.hub
+	waiting := h.unsaved()
 	body := "Some files have changes that haven't been saved."
 	if len(h.live) > 1 {
 		var names []string
@@ -448,14 +459,16 @@ func (b *Bridge) requestQuit() {
 		}
 		body = "Unsaved changes in these sessions: " + strings.Join(names, ", ") + "."
 	}
-	b.ask("Save your changes before quitting?", body,
+	b.ask("Save your changes before closing?", body,
 		dialogChoice{"Save All", func() {
 			if b.saveEverySession() {
 				h.quitAll(false)
+			} else if cancelled != nil {
+				cancelled()
 			}
 		}},
 		dialogChoice{"Don't Save", func() { h.quitAll(true) }},
-		dialogChoice{"Cancel", nil})
+		dialogChoice{"Cancel", cancelled})
 }
 
 // saveEverySession saves in each session as if it were on screen, which is

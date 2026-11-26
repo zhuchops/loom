@@ -23,6 +23,11 @@
 </div>
 <textarea id="input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-gramm="false" aria-label="Editor input"></textarea>
 <span id="measure"></span>
+<script type="module">
+  // Wails' runtime: calls into Go and the events Go sends.
+  import * as wails from '/wails/runtime.js';
+  window.wails = wails;
+</script>
 <script src="icons.js"></script>
 <script src="app.js"></script>
 <script src="chrome.js"></script>

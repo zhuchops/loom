@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-const version = "0.42.0"
+const version = "0.43.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
@@ -88,7 +88,7 @@ func prepare(tolerant bool) (e *editor, explicit bool, done bool, err error) {
 	if *dump {
 		return nil, false, true, printConfig()
 	}
-	if tolerant && !newWindow && *path == "" && forwardToRunning(flag.Args()) {
+	if tolerant && *path == "" && forwardToRunning(flag.Args(), newWindow) {
 		return nil, false, true, nil // an open window took it
 	}
 	if tolerant {

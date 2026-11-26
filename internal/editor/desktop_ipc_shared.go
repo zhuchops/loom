@@ -13,15 +13,15 @@ import (
 )
 
 // One desktop Loom owns a socket in the state folder. Starting loom-desktop
-// again with a file or folder hands it to that window instead of opening a
-// second one; -new opts out and starts a window of its own.
+// again with a file or folder hands it to the Loom that is open; with -new
+// that Loom opens another window for it.
 
-// newWindow is set by -new: the process neither forwards nor takes the socket.
+// newWindow is set by -new.
 var newWindow bool
 
 // forwardToRunning gives paths to a Loom that is already open. It reports
 // whether one took them; with no paths it just brings that window forward.
-func forwardToRunning(paths []string) bool {
+func forwardToRunning(paths []string, newWin bool) bool {
 	sock := ipcSocket()
 	if sock == "" {
 		return false
@@ -33,7 +33,7 @@ func forwardToRunning(paths []string) bool {
 	defer conn.Close()
 	wd, _ := os.Getwd()
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
-	if json.NewEncoder(conn).Encode(openRequest{Cwd: wd, Paths: paths}) != nil {
+	if json.NewEncoder(conn).Encode(openRequest{Cwd: wd, Paths: paths, NewWindow: newWin}) != nil {
 		return false
 	}
 	reply, err := bufio.NewReader(conn).ReadString('\n')
@@ -45,7 +45,7 @@ func forwardToRunning(paths []string) bool {
 // A remote editor's request keeps its connection, which remote takes over.
 func listenForRequests(handle func(openRequest), remote func(net.Conn, remoteHello)) {
 	sock := ipcSocket()
-	if sock == "" || newWindow {
+	if sock == "" {
 		return
 	}
 	if conn, err := net.DialTimeout("unix", sock, 300*time.Millisecond); err == nil {

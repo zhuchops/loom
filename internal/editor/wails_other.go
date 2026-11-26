@@ -5,6 +5,7 @@ package editor
 import (
 	"os"
 	"runtime"
+	"unsafe"
 )
 
 // platformEnvironment turns off WebKitGTK's DMA-BUF renderer, which makes
@@ -18,11 +19,11 @@ func platformEnvironment() {
 	}
 }
 
-func raiseWindow() {}
+func raiseApp() {}
 
-func setAppearance(bool) {}
+func setAppearance(unsafe.Pointer, bool) {}
 
-func installWindow(bool) {}
+func installWindow(unsafe.Pointer, bool) {}
 
 func installDock() {}
 

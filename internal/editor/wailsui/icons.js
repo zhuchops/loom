@@ -3,7 +3,7 @@
 
 // Errors in the page go to Loom's log, as there are no developer tools.
 window.addEventListener('error', (e) => {
-  try { window.go.editor.Bridge.Log(`${e.message} at ${e.filename}:${e.lineno}:${e.colno}`); } catch (_) { /* not ready */ }
+  try { bridge().Log(`${e.message} at ${e.filename}:${e.lineno}:${e.colno}`); } catch (_) { /* not ready */ }
 });
 
 const iconPaths = {

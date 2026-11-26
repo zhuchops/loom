@@ -62,19 +62,19 @@ The terminal version needs only Go. For the system clipboard install `wl-clipboa
 
 If `go version` prints less than 1.26 after that, use the tarball above.
 
-The desktop window (`loom-desktop`) is drawn in the system web view through [Wails](https://wails.io). It is built with cgo and needs a C compiler plus the development files for GTK 3 and WebKitGTK. Current distributions ship WebKitGTK 4.1, which takes the extra build tag `webkit2_41`; on an older one that only has 4.0 (Ubuntu 22.04, Debian 11) install the 4.0 package and leave the tag out. On Linux the window is opaque, without the macOS glass: a see-through GTK window repaints its translucent parts badly, so colors flashed wherever the pointer went. Loom also sets `WEBKIT_DISABLE_DMABUF_RENDERER=1`, which stops WebKitGTK flickering on many drivers; set it to `0` yourself to keep that renderer. The Linux desktop build has not been tested, so treat these lists as a starting point:
+The desktop window (`loom-desktop`) is drawn in the system web view through [Wails](https://wails.io) v3. It is built with cgo and needs a C compiler plus the development files for GTK 3, WebKitGTK 4.1 and X11; the build tag `gtk3` picks them. Without the tag Wails builds against GTK 4 and WebKitGTK 6.0 instead (`libgtk-4-dev libwebkitgtk-6.0-dev`). On Linux the window is opaque, without the macOS glass: a see-through GTK window repaints its translucent parts badly, so colors flashed wherever the pointer went. Loom also sets `WEBKIT_DISABLE_DMABUF_RENDERER=1`, which stops WebKitGTK flickering on many drivers; set it to `0` yourself to keep that renderer. The Linux desktop build has not been tested, so treat these lists as a starting point:
 
 | Distribution | Build dependencies |
 |---|---|
-| Debian, Ubuntu, Mint | `sudo apt install gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev` |
-| Fedora, RHEL | `sudo dnf install gcc pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel` |
-| Arch, Manjaro | `sudo pacman -S gcc pkgconf gtk3 webkit2gtk-4.1` |
-| openSUSE, Alpine, others | a C compiler, `pkg-config`, and the GTK 3 and WebKitGTK 4.1 development packages |
+| Debian, Ubuntu, Mint | `sudo apt install gcc pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libx11-dev` |
+| Fedora, RHEL | `sudo dnf install gcc pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel libX11-devel` |
+| Arch, Manjaro | `sudo pacman -S gcc pkgconf gtk3 webkit2gtk-4.1 libx11` |
+| openSUSE, Alpine, others | a C compiler, `pkg-config`, and the GTK 3, WebKitGTK 4.1 and X11 development packages |
 
 Then:
 
 ```sh
-go install -tags desktop,production,webkit2_41 github.com/zhuchops/loom/cmd/loom-desktop@latest
+go install -tags desktop,production,gtk3 github.com/zhuchops/loom/cmd/loom-desktop@latest
 loom-desktop
 ```
 
@@ -248,7 +248,7 @@ The status bar's segments (encoding, line endings, language and the cursor posit
 - **Messages** appear as a toast at the bottom right. Click one for the history.
 - **Held keys:** Loom turns off macOS's accent picker for itself, so holding `j`, `k` or any letter repeats it, as in other editors. Frames are drawn without making the page measure its layout, and the editor sends a new frame only after the page has drawn the last one, carrying the state as it is by then; repeats of a held key that waited while the page was busy are dropped. So nothing queues up, and the cursor stops the moment the key is let go, however long it was held.
 - **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first. **Save All** saves every changed file, in every session, then quits; **Don't Save** quits without them; **Cancel** keeps the window. A file that can't be saved (one without a name, or a failed save) keeps the window open on it.
-- **Windows:** **File → New Window** (`⇧⌘N`, or **New Window** in the palette) opens another window on the start page. In **Switch Session** (`⌘K`), `Ctrl+O` or the button at the end of a row opens that session in a new window instead of switching to it: an open session moves there with its tabs, and a project that isn't open starts there. A session with unsaved changes stays until they are saved or discarded. **Move Session to New Window** does the same for the shown session. Right-click Loom in the Dock for **New Window** and the recent projects, each opening in a window of its own (one already open in that window comes forward). Each window is a process of its own, as Wails has one window per process, so on macOS every window has its own Dock icon. On Linux the desktop entry from `install.sh` offers **New Window** too. A new window opens a little below and right of the one it came from.
+- **Windows:** **File → New Window** (`⇧⌘N`, or **New Window** in the palette) opens another window on the start page. In **Switch Session** (`⌘K`), `Ctrl+O` or the button at the end of a row opens that session in a new window instead of switching to it: an open session moves there with its tabs, and a project that isn't open starts there. A session with unsaved changes stays until they are saved or discarded. **Move Session to New Window** does the same for the shown session. Right-click Loom in the Dock for **New Window**, the open windows and the recent projects, each opening in a window of its own (one already open in a window brings that window forward). **File → Close Window** (`⇧⌘W`) or the window's close button closes one window, asking first about its unsaved files; Loom quits with the last one. **Quit** (`⌘Q`) closes them all, asking in each window that has unsaved work, and Cancel in any of them keeps Loom open. All windows are one app with one Dock icon; each has its own sessions, theme and settings as its projects set them, and a window catches up on settings changed in another when it comes to the front. On Linux the desktop entry from `install.sh` offers **New Window** too. A new window opens a little below and right of the one in front.
 
 | macOS shortcut | Action |
 | --- | --- |
@@ -293,13 +293,13 @@ The desktop app is a single window. Starting it again with a path hands the path
 loom-desktop ./notes.txt       # a file opens in the project it belongs to, or in the shown one
 loom-desktop ~/code/api        # a folder opens as a session, or shows the one it already has
 loom-desktop                   # just brings the open window forward
-loom-desktop -new ./notes.txt  # a window of its own (-n works too)
+loom-desktop -new ~/code/api   # a new window on that folder (-n works too)
 loom-desktop -foreground .     # keep the terminal attached and print the log there (-f works too)
 ```
 
 Started from a terminal, `loom-desktop` runs in the background: the prompt comes back after a moment and the log goes to `desktop.log` in the state folder (`~/.local/state/loom`), which each start replaces. If it cannot start, because of a bad flag or a config it cannot use, the message is printed in the terminal and the exit status is 1. Use `-foreground` to debug, or when a service manager wants the process to stay. Started from Finder or a launcher it has no terminal and nothing changes.
 
-A file goes to the open session whose folder holds it (the deepest one), and the window comes to the front. A folder that is not open yet becomes a new session. If no window is open, the first launch opens one, and later launches find it. Relative paths and `~` count from where you typed the command. The hand-over uses a socket named `desktop.sock` in Loom's state folder (`~/.local/state/loom`), readable only by you; a window started with `-new` does not take it, and without a path it opens on the start page. With `-config` a launch always opens its own window. On macOS the binary inside the bundle is `Loom.app/Contents/MacOS/loom`, so a shell alias or a symlink to it gives a command: `ln -s /Applications/Loom.app/Contents/MacOS/loom ~/.local/bin/loom-app`. `open -a Loom file` only brings the app forward; it does not pass the file.
+A file goes to the open session whose folder holds it (the deepest one), and the window comes to the front. A folder that is not open yet becomes a new session. If no window is open, the first launch opens one, and later launches find it. Relative paths and `~` count from where you typed the command. The hand-over uses a socket named `desktop.sock` in Loom's state folder (`~/.local/state/loom`), readable only by you; `-new` asks the open Loom for another window, on the folder given or on the start page; a file given with it opens as without `-new`. With `-config` a launch always opens its own window. On macOS the binary inside the bundle is `Loom.app/Contents/MacOS/loom`, so a shell alias or a symlink to it gives a command: `ln -s /Applications/Loom.app/Contents/MacOS/loom ~/.local/bin/loom-app`. `open -a Loom file` only brings the app forward; it does not pass the file.
 
 ### Touchpad scrolling
 
@@ -672,6 +672,7 @@ Bubble Tea v2 owns the terminal lifecycle, input decoding, and terminal output. 
 - `directory.go` runs the modal engine on a scratch listing. Newline tags associate edited rows with original entries, and a reserved tag identifies the parent row. A write first validates the plan, then stages sources and rolls back failed filesystem moves. Navigation checks for unapplied edits.
 - `language.go`, `lsp.go`, and `actions.go` handle LSP transport and edits. Worker goroutines send callbacks to the editor event loop. Workspace edits validate versions and disk content before applying edits.
 - `sessions.go` keeps an editor per open project and switches the front end between them. Only the shown one sets the working directory, theme and tab width; the event loop keeps serving the others.
+- `desk.go` runs the editors of all the desktop windows on one goroutine, and gives each its theme, working directory and tab width back when its work comes up. `wails.go` opens the windows on Wails v3 and routes each page call to its window's bridge.
 - `disk.go` and `recovery.go` implement conflict review and per-session snapshots. The editor event loop is the owner of UI state.
 - `theme.go` applies a theme from `internal/theme` to the renderer's styles and saves the choice. `mdpreview.go` draws the Markdown preview pane, which `panes.go` stores as a leaf that never takes focus. `tabdrag.go` handles dragging a tab into a split.
 - `fold.go` computes indentation folds, `symbols.go` the symbol pickers, `pathcomplete.go` file-name completion, and `tree.go` the explorer, including its filter and sort.

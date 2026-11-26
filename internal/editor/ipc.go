@@ -13,6 +13,8 @@ import (
 type openRequest struct {
 	Cwd   string   `json:"cwd"`
 	Paths []string `json:"paths"`
+	// NewWindow asks for a window of its own (loom-desktop -new).
+	NewWindow bool `json:"newWindow,omitempty"`
 	// Remote is set by a Loom on another machine that wants a window here
 	// for its editor; the connection then carries the session.
 	Remote *remoteHello `json:"remote,omitempty"`

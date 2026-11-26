@@ -4,7 +4,17 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const bridge = () => window.go.editor.Bridge;
+// The page's calls go to Go's Page service by name, as the window they come
+// from. A call that fails is logged by Go; the page needs no answer.
+const pagePrefix = 'github.com/zhuchops/loom/internal/editor.Page.';
+const page = new Proxy({}, {
+  get: (_, name) => (...args) => {
+    const p = window.wails.Call.ByName(pagePrefix + String(name), ...args);
+    p.catch(() => {});
+    return p;
+  },
+});
+const bridge = () => page;
 const isMac = navigator.platform.toUpperCase().includes('MAC');
 // Only macOS gives the window glass; elsewhere everything is painted opaque.
 if (!isMac) document.documentElement.classList.add('solid');
@@ -346,14 +356,14 @@ new ResizeObserver(() => { if (state.look) fit(); }).observe(grid);
 
 async function start() {
   try { state.logo = await bridge().Logo(64); } catch (e) { state.logo = ''; }
-  window.runtime.EventsOn('frame', applyFrame);
+  window.wails.Events.On('frame', (ev) => applyFrame(ev.data));
   focusInput();
   // The first frame brings the look; until then use the defaults to start.
   applyLook({ size: 13, height: 1.5, spacing: 0, ligatures: true, uiSize: 13 });
 }
 
-// The bindings arrive with the runtime scripts; wait for them.
+// The runtime is a module, which runs after these scripts; wait for it.
 (function wait() {
-  if (window.runtime && window.go && window.go.editor && window.go.editor.Bridge) start();
-  else setTimeout(wait, 10);
+  if (window.wails) start();
+  else setTimeout(wait, 5);
 })();

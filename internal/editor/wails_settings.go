@@ -299,7 +299,11 @@ func (b *Bridge) settingsKey(in keyInput) {
 			b.resetRow(rows[picks[s.sel]])
 		}
 	case "ctrl+q":
-		b.requestQuit()
+		if b.quitApp != nil {
+			b.quitApp()
+		} else {
+			b.requestQuit()
+		}
 	default:
 		if text, ok := editField(s.query, in); ok {
 			s.query, s.sel, s.scroll = text, 0, 0

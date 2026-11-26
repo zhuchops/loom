@@ -35,7 +35,7 @@ linux)
 	aarch64 | arm64) arch=arm64 ;;
 	*) echo "unsupported machine: $(uname -m)" >&2; exit 1 ;;
 	esac
-	go build -trimpath -tags desktop,production,webkit2_41 -ldflags "-s -w" -o "$work/loom-desktop" ./cmd/loom-desktop
+	go build -trimpath -tags desktop,production,gtk3 -ldflags "-s -w" -o "$work/loom-desktop" ./cmd/loom-desktop
 	# The icon for the desktop entry that install.sh writes.
 	go run packaging/linux/icon.go "$work/loom.png" 256
 	tar -czf "$out/loom-desktop_linux_${arch}.tar.gz" -C "$work" loom-desktop loom.png

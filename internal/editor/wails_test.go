@@ -221,7 +221,8 @@ func TestDialogAnswers(t *testing.T) {
 		t.Fatalf("closing a changed tab asked %+v", b.dialog)
 	}
 	b.Key(KeyEvent{Key: "Escape"}) // queued
-	(<-b.calls)()
+	c := <-b.desk.calls
+	c.f()
 	if b.dialog != nil {
 		t.Fatal("Escape left the question up")
 	}
@@ -268,7 +269,7 @@ func TestDesktopOpensWhatALaterLaunchSends(t *testing.T) {
 	// The socket carries a request from a second launch to the first.
 	got := make(chan openRequest, 1)
 	listenForRequests(func(r openRequest) { got <- r }, nil)
-	if !forwardToRunning([]string{"a.txt", "dir"}) {
+	if !forwardToRunning([]string{"a.txt", "dir"}, false) {
 		t.Fatal("a running Loom did not take the launch")
 	}
 	if r := <-got; len(r.Paths) != 2 || r.Cwd == "" {

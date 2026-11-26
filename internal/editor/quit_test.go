@@ -3,27 +3,19 @@
 package editor
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
 )
 
-// closingHost quits the way Wails does: OnBeforeClose runs on another
-// goroutine, and the window closes when it says so.
+// closingHost is a window that closes when its editor quits.
 type closingHost struct {
 	b      *Bridge
 	closed chan struct{}
 }
 
-func (h closingHost) emit(any) {}
-func (h closingHost) quit() {
-	go func() {
-		if !h.b.beforeClose(context.Background()) {
-			close(h.closed)
-		}
-	}()
-}
+func (h closingHost) emit(any)                                 {}
+func (h closingHost) quit()                                    { close(h.closed) }
 func (h closingHost) pick(pickKind, string, func(string)) bool { return false }
 func (h closingHost) appearance(bool)                          {}
 
@@ -45,7 +37,12 @@ func TestQuittingWithUnsavedChanges(t *testing.T) {
 			go b.loop()
 
 			// The window's close button: the dialog asks first.
-			if !b.beforeClose(context.Background()) {
+			asked := make(chan bool)
+			b.call(func() {
+				b.requestQuit()
+				asked <- b.dialog != nil
+			})
+			if !<-asked {
 				t.Fatal("closed with unsaved changes")
 			}
 			b.Answer(choice.index)

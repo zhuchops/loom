@@ -17,7 +17,5 @@ func loomDockProjects() *C.char {
 
 //export loomDockOpen
 func loomDockOpen(path *C.char) {
-	if b := dockBridge; b != nil {
-		b.dockOpen(C.GoString(path))
-	}
+	go dockOpen(C.GoString(path))
 }
