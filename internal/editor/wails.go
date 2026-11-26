@@ -69,6 +69,8 @@ func runWails(e *editor, explicit bool) error {
 	defer cancel()
 	b := newBridge(e, ctx, explicit, nil)
 	b.host = wailsHost{b}
+	e.hub.window = spawnWindow
+	dockBridge = b
 	defer b.ticker.Stop()
 	assets, err := fs.Sub(wailsAssets, "wailsui")
 	if err != nil {
@@ -83,12 +85,15 @@ func runWails(e *editor, explicit bool) error {
 		BackgroundColour: windowBackground(),
 		AssetServer:      &assetserver.Options{Assets: assets},
 		OnStartup:        b.startup,
-		OnDomReady:       func(context.Context) { installWindow() },
-		OnBeforeClose:    b.beforeClose,
-		OnShutdown:       func(context.Context) { e.hub.finish() },
-		Bind:             []any{b},
-		Menu:             b.appMenu(),
-		Linux:            linuxOptions(),
+		OnDomReady: func(context.Context) {
+			installWindow(newWindow)
+			installDock()
+		},
+		OnBeforeClose: b.beforeClose,
+		OnShutdown:    func(context.Context) { e.hub.finish() },
+		Bind:          []any{b},
+		Menu:          b.appMenu(),
+		Linux:         linuxOptions(),
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),
 			WebviewIsTransparent: true,
@@ -119,6 +124,9 @@ func windowBackground() *wopt.RGBA {
 	r, g, b := th.bg.RGB()
 	return &wopt.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 255}
 }
+
+// dockBridge is the window the Dock menu speaks for.
+var dockBridge *Bridge
 
 func (b *Bridge) startup(ctx context.Context) {
 	b.app = ctx

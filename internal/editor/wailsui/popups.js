@@ -114,6 +114,7 @@ function rowHTML(row) {
     else if (h[0] === 'keys') html += `<span class="mhint keys">${keysHTML(h[1])}</span>`;
     else html += `<span class="mhint text">${escapeHTML(h[1])}</span>`;
   }
+  if (row.window) html += `<span class="mwin" title="Open in New Window">${icon('newWindow', 14)}</span>`;
   return html;
 }
 
@@ -163,7 +164,7 @@ function renderMenu(m) {
         if (i < m.top || i >= m.top + rows) return;
         const el = h('div', 'prow' + (i === m.selected ? ' sel' : ''), rowHTML(row));
         el.style.top = `${6 + (i - m.top) * ROW}px`;
-        el.addEventListener('click', () => act('menu-pick', i));
+        el.addEventListener('click', (e) => act(e.target.closest('.mwin') ? 'menu-window' : 'menu-pick', i));
         list.appendChild(el);
       });
       if (m.total > rows) {

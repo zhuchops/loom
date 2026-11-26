@@ -95,6 +95,8 @@ func (b *Bridge) menuState() map[string]any {
 		s["hints"] = []string{"↵", "confirm", "esc", "cancel"}
 	case m.details:
 		s["hints"] = []string{"↑↓", "navigate", "↵", "details", "esc", "close"}
+	case m.remove != nil && m.window != nil:
+		s["hints"] = []string{"↑↓", "navigate", "↵", "switch", "Ctrl+O", "new window", "Ctrl+X", "close", "esc", "cancel"}
 	case m.remove != nil:
 		s["hints"] = []string{"↑↓", "navigate", "↵", "switch", "Ctrl+X", "close session", "esc", "cancel"}
 	default:
@@ -200,6 +202,9 @@ func (b *Bridge) menuRow(m *menu, k pickerKind, o option) map[string]any {
 			id, ink = "folder", "var(--faint)"
 		}
 		row["icon"] = []string{"svg", id, ink}
+		if m.window[hint] != nil {
+			row["window"] = true
+		}
 		if hint != "" {
 			row["detail"], hint = parts[len(parts)-1], strings.Join(parts[:len(parts)-1], sessionSep)
 		}
@@ -484,6 +489,12 @@ func (b *Bridge) popupAct(name string, i int, s string) bool {
 			e.menu = nil
 			m.matches[i].run()
 		}
+	case "menu-window":
+		if m == nil || i < 0 || i >= len(m.matches) {
+			return true
+		}
+		m.selected = i
+		e.windowSelected()
 	case "menu-rows":
 		b.list.rows = max(1, i)
 	case "menu-scroll":

@@ -248,6 +248,7 @@ The status bar's segments (encoding, line endings, language and the cursor posit
 - **Messages** appear as a toast at the bottom right. Click one for the history.
 - **Held keys:** Loom turns off macOS's accent picker for itself, so holding `j`, `k` or any letter repeats it, as in other editors. Frames are drawn without making the page measure its layout, and the editor sends a new frame only after the page has drawn the last one, carrying the state as it is by then; repeats of a held key that waited while the page was busy are dropped. So nothing queues up, and the cursor stops the moment the key is let go, however long it was held.
 - **Unsaved work:** closing a tab with its button, closing the window and quitting all ask first. **Save All** saves every changed file, in every session, then quits; **Don't Save** quits without them; **Cancel** keeps the window. A file that can't be saved (one without a name, or a failed save) keeps the window open on it.
+- **Windows:** **File → New Window** (`⇧⌘N`, or **New Window** in the palette) opens another window on the start page. In **Switch Session** (`⌘K`), `Ctrl+O` or the button at the end of a row opens that session in a new window instead of switching to it: an open session moves there with its tabs, and a project that isn't open starts there. A session with unsaved changes stays until they are saved or discarded. **Move Session to New Window** does the same for the shown session. Right-click Loom in the Dock for **New Window** and the recent projects, each opening in a window of its own (one already open in that window comes forward). Each window is a process of its own, as Wails has one window per process, so on macOS every window has its own Dock icon. On Linux the desktop entry from `install.sh` offers **New Window** too. A new window opens a little below and right of the one it came from.
 
 | macOS shortcut | Action |
 | --- | --- |
@@ -255,6 +256,7 @@ The status bar's segments (encoding, line endings, language and the cursor posit
 | `⌘O` / `⇧⌘O` | Open a file / a project with Finder |
 | `⌘K` | Switch session |
 | `⌘N`, `⌘S`, `⇧⌘S`, `⌘W` | New file, Save, Save As, Close Tab |
+| `⇧⌘N` | New window |
 | `⌘Z` / `⇧⌘Z` | Undo / Redo |
 | `⌘X`, `⌘C`, `⌘V`, `⌘A` | Cut, Copy, Paste, Select All |
 | `⌘F`, `⌥⌘F`, `⇧⌘F` | Find, Replace, Find in Project |
@@ -297,7 +299,7 @@ loom-desktop -foreground .     # keep the terminal attached and print the log th
 
 Started from a terminal, `loom-desktop` runs in the background: the prompt comes back after a moment and the log goes to `desktop.log` in the state folder (`~/.local/state/loom`), which each start replaces. If it cannot start, because of a bad flag or a config it cannot use, the message is printed in the terminal and the exit status is 1. Use `-foreground` to debug, or when a service manager wants the process to stay. Started from Finder or a launcher it has no terminal and nothing changes.
 
-A file goes to the open session whose folder holds it (the deepest one), and the window comes to the front. A folder that is not open yet becomes a new session. If no window is open, the first launch opens one, and later launches find it. Relative paths and `~` count from where you typed the command. The hand-over uses a socket named `desktop.sock` in Loom's state folder (`~/.local/state/loom`), readable only by you; a window started with `-new` does not take it. With `-config` a launch always opens its own window. On macOS the binary inside the bundle is `Loom.app/Contents/MacOS/loom`, so a shell alias or a symlink to it gives a command: `ln -s /Applications/Loom.app/Contents/MacOS/loom ~/.local/bin/loom-app`. `open -a Loom file` only brings the app forward; it does not pass the file.
+A file goes to the open session whose folder holds it (the deepest one), and the window comes to the front. A folder that is not open yet becomes a new session. If no window is open, the first launch opens one, and later launches find it. Relative paths and `~` count from where you typed the command. The hand-over uses a socket named `desktop.sock` in Loom's state folder (`~/.local/state/loom`), readable only by you; a window started with `-new` does not take it, and without a path it opens on the start page. With `-config` a launch always opens its own window. On macOS the binary inside the bundle is `Loom.app/Contents/MacOS/loom`, so a shell alias or a symlink to it gives a command: `ln -s /Applications/Loom.app/Contents/MacOS/loom ~/.local/bin/loom-app`. `open -a Loom file` only brings the app forward; it does not pass the file.
 
 ### Touchpad scrolling
 

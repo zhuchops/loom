@@ -25,6 +25,7 @@ type menu struct {
 	suggestions                 func(string) []option
 	confirmation                bool
 	remove                      map[string]func() // what Ctrl+X does, by the option's hint
+	window                      map[string]func() // what Ctrl+O does: open it in a new window
 	hidePreview                 bool
 	details                     bool // Hover selects an entry; Enter opens its full text.
 	hovering                    bool
@@ -195,6 +196,10 @@ func (e *editor) menuInput(in keyInput) {
 	case "ctrl+x":
 		if m.remove != nil {
 			e.removeSelected()
+		}
+	case "ctrl+o":
+		if m.window != nil {
+			e.windowSelected()
 		}
 	default:
 		m.caretInput(in)

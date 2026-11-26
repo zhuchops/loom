@@ -23,6 +23,8 @@ func (e *editor) workspaceCommands() {
 	e.add("recent-projects", "Recent Projects", func(e *editor) { e.projectMenu() })
 	e.add("sessions", "Switch Session", func(e *editor) { e.sessionsMenu("", 0) })
 	e.add("close-project", "Close Project", func(e *editor) { e.closeProject() })
+	e.add("new-window", "New Window", func(e *editor) { e.hub.openWindow("") })
+	e.add("session-window", "Move Session to New Window", func(e *editor) { e.hub.moveToWindow(e) })
 	e.add("dashboard", "Open Dashboard", func(e *editor) { e.showDashboard() })
 	e.add("explorer-popup", "Open Explorer Popup", func(e *editor) { e.openDirectory("") })
 	e.add("toggle-sidebar", "Toggle Sidebar", func(e *editor) {

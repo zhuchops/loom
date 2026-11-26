@@ -4,6 +4,7 @@ package editor
 
 import (
 	"os"
+	"os/exec"
 	"runtime"
 
 	wmenu "github.com/wailsapp/wails/v2/pkg/menu"
@@ -38,10 +39,12 @@ func (b *Bridge) appMenu() *wmenu.Menu {
 
 	m = bar.AddSubmenu("File")
 	item(m, "New File", "new-file", cmd("n"))
+	item(m, "New Window", "new-window", shift("n"))
 	item(m, "Open File…", "open-file", cmd("o"))
 	item(m, "Open Project…", "open-project", shift("o"))
 	item(m, "Recent Projects…", "projects", nil)
 	item(m, "Switch Session…", "sessions", cmd("k"))
+	item(m, "Move Session to New Window", "session-window", nil)
 	m.AddSeparator()
 	item(m, "Save", "save", cmd("s"))
 	item(m, "Save As…", "save-as", shift("s"))
@@ -120,4 +123,48 @@ func (b *Bridge) serveLaunches() {
 		return
 	}
 	listenForRequests(func(req openRequest) { b.call(func() { b.openRequested(req) }) }, openRemoteWindow)
+}
+
+// spawnWindow starts another Loom window on dir, or on the start page. It is
+// a process of its own, as Wails has one window per process; -new keeps it
+// from taking this one's place for launches from other terminals.
+func spawnWindow(dir string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	args := []string{"-new"}
+	if dir != "" {
+		args = append(args, dir)
+	}
+	cmd := exec.Command(exe, args...)
+	cmd.Env = append(os.Environ(), detachedMark+"=1")
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
+}
+
+// dockOpen runs a pick from the Dock menu: an empty path is a new window, a
+// project open here comes forward, any other opens in a new window.
+func (b *Bridge) dockOpen(path string) {
+	b.call(func() {
+		h := b.m.editor.hub
+		if path != "" {
+			if open := h.find(path); open != nil {
+				h.show(open)
+				raiseWindow()
+				return
+			}
+		}
+		h.openWindow(path)
+	})
+}
+
+// dockProjects are the recent projects the Dock menu offers.
+func dockProjects() []string {
+	list := recentProjects()
+	return list[:min(len(list), 10)]
 }

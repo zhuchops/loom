@@ -22,6 +22,8 @@ func raiseWindow() {}
 
 func setAppearance(bool) {}
 
-func installWindow() {}
+func installWindow(bool) {}
+
+func installDock() {}
 
 func quietTyping() {}

@@ -112,7 +112,7 @@ func runRemoteWindow() error {
 				wrt.Quit(ctx)
 			}()
 		},
-		OnDomReady: func(context.Context) { installWindow() },
+		OnDomReady: func(context.Context) { installWindow(true) },
 		OnBeforeClose: func(context.Context) bool {
 			if quitting {
 				return false

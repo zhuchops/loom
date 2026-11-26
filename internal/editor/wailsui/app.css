@@ -277,6 +277,10 @@ html.solid, html.solid body, .solid #app { background: var(--bg); }
 .mhint { margin-left: auto; flex: none; display: flex; align-items: center; color: var(--dim); }
 .mhint.text { font-size: 12px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .mhint.check { color: var(--accent); }
+.mwin { margin-left: auto; flex: none; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-right: -4px; border-radius: 6px; color: var(--dim); opacity: 0; }
+.mhint + .mwin { margin-left: 8px; }
+.prow:hover .mwin, .prow.sel .mwin { opacity: 1; }
+.mwin:hover { color: var(--text); background: var(--hover); }
 .mhint.toggle { width: 28px; height: 16px; border-radius: 8px; background: var(--thumb); position: relative; }
 .mhint.toggle span { position: absolute; top: 2.5px; left: 2.5px; width: 11px; height: 11px; border-radius: 6px; background: var(--text); }
 .mhint.toggle.on { background: var(--accent); }

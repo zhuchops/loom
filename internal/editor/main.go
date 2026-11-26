@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-const version = "0.41.1"
+const version = "0.42.0"
 
 // Main runs the editor as the loom command and exits the process on failure.
 func Main() {
@@ -111,6 +111,11 @@ func prepare(tolerant bool) (e *editor, explicit bool, done bool, err error) {
 		reopen := true
 		if cfg, err := readConfig(*path, explicit); err == nil {
 			reopen = cfg.ReopenProject
+		}
+		// A new window beside one that is open starts on the start page:
+		// the last project is in that one.
+		if newWindow {
+			reopen = false
 		}
 		if last := lastProject(); reopen && last != "" {
 			if err := os.Chdir(last); err != nil {

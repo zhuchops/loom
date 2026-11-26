@@ -19,6 +19,52 @@ type sessionHub struct {
 	live    []*editor // most recently shown first
 	// onShow, set by a front end, follows the switch.
 	onShow func(*editor)
+	// window, set by the desktop app, starts another window on dir, or on
+	// the start page when dir is empty.
+	window func(dir string) error
+}
+
+// openWindow starts a window of its own on dir.
+func (h *sessionHub) openWindow(dir string) {
+	if h.window == nil {
+		h.current.notify("New windows are part of the desktop app")
+		return
+	}
+	if err := h.window(dir); err != nil {
+		h.current.notify("Can't open a new window: " + err.Error())
+		return
+	}
+	if dir != "" {
+		h.current.notify("Opened " + shortPath(dir) + " in a new window")
+	}
+}
+
+// moveToWindow takes a session out of this window and opens it in a new
+// one, where its tabs come back. A session with unsaved changes stays: they
+// live only here.
+func (h *sessionHub) moveToWindow(o *editor) {
+	if h.window == nil {
+		h.openWindow("")
+		return
+	}
+	if o.noProject {
+		h.openWindow("")
+		return
+	}
+	if o.unsavedCount() > 0 {
+		h.current.notify("Save or discard the changes in " + o.sessionName() + " before moving it to a new window")
+		return
+	}
+	root := o.root
+	if len(h.live) > 1 {
+		h.closeSession(o)
+	} else {
+		o.closeProject()
+	}
+	if h.find(root) != nil {
+		return // it would not close
+	}
+	h.openWindow(root)
 }
 
 func sessionsPath() string {
@@ -357,6 +403,9 @@ func (e *editor) sessionsMenu(input string, selected int) {
 		exact: func(input string) bool {
 			return filepath.IsAbs(input) || strings.HasPrefix(input, "~") || strings.HasPrefix(input, ".")
 		}}
+	if h.window != nil {
+		m.window = map[string]func(){}
+	}
 	listed := map[string]bool{}
 	where := func(o *editor) string {
 		if o.noProject {
@@ -381,6 +430,9 @@ func (e *editor) sessionsMenu(input string, selected int) {
 		} else {
 			m.remove[hint] = func() { h.closeSession(o) }
 		}
+		if m.window != nil {
+			m.window[hint] = func() { h.moveToWindow(o) }
+		}
 		if !o.noProject {
 			listed[o.root] = true
 		}
@@ -397,6 +449,9 @@ func (e *editor) sessionsMenu(input string, selected int) {
 		listed[root] = true
 		hint := state + sessionSep + shortPath(root)
 		m.options = append(m.options, option{filepath.Base(root), hint, func() { h.current.openProject(root) }, func() itemPreview { return directoryPreview(root) }})
+		if m.window != nil {
+			m.window[hint] = func() { h.openWindow(root) }
+		}
 		return hint
 	}
 	for _, root := range savedSessions() {
@@ -465,4 +520,16 @@ func (e *editor) removeSelected() {
 	e.menu = nil
 	remove()
 	h.current.sessionsMenu(input, at)
+}
+
+// windowSelected opens the selected session in a new window.
+func (e *editor) windowSelected() {
+	m := e.menu
+	if m.selected >= len(m.matches) {
+		return
+	}
+	if open := m.window[m.matches[m.selected].hint]; open != nil {
+		e.menu = nil
+		open()
+	}
 }

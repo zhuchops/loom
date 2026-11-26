@@ -59,19 +59,122 @@ static void loomQuietWebView(void) {
 	}
 }
 
+// loomParentWindow finds the window of the Loom that started this one.
+static BOOL loomParentWindow(NSRect *out) {
+	pid_t parent = getppid();
+	CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements, kCGNullWindowID);
+	if (list == NULL) {
+		return NO;
+	}
+	BOOL found = NO;
+	for (NSDictionary *w in (__bridge NSArray *)list) {
+		if ([w[(id)kCGWindowOwnerPID] intValue] != parent || [w[(id)kCGWindowLayer] intValue] != 0) {
+			continue;
+		}
+		CGRect r;
+		if (CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)w[(id)kCGWindowBounds], &r) && r.size.width > 200) {
+			*out = NSRectFromCGRect(r);
+			found = YES;
+			break;
+		}
+	}
+	CFRelease(list);
+	return found;
+}
+
 // loomInstallWindow gives the window what the system offers windows: it
-// reopens where it was left, and it can go full screen.
-static void loomInstallWindow(void) {
+// reopens where it was left, and it can go full screen. Another window
+// (cascade) starts down and to the right of that place and is not
+// remembered, and comes to the front, as it was started from this app.
+static void loomInstallWindow(int cascade) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		NSWindow *window = NSApp.mainWindow ?: NSApp.windows.firstObject;
 		if (window == nil) {
 			return;
 		}
 		window.collectionBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
+		if (cascade) {
+			NSRect from;
+			if (loomParentWindow(&from)) {
+				// Screen coordinates there count down from the top of the
+				// main screen; the window's count up from its bottom.
+				CGFloat top = NSScreen.screens.firstObject.frame.size.height;
+				[window setFrame:NSMakeRect(from.origin.x, 0, from.size.width, from.size.height) display:NO];
+				[window setFrameTopLeftPoint:NSMakePoint(from.origin.x + 28, top - from.origin.y - 28)];
+			} else if ([window setFrameUsingName:@"LoomMain"]) {
+				NSRect f = window.frame;
+				[window setFrameTopLeftPoint:NSMakePoint(f.origin.x + 28, f.origin.y + f.size.height - 28)];
+			} else {
+				[window center];
+			}
+			[NSApp activateIgnoringOtherApps:YES];
+			[window makeKeyAndOrderFront:nil];
+			return;
+		}
 		if (![window setFrameUsingName:@"LoomMain"]) {
 			[window center];
 		}
 		[window setFrameAutosaveName:@"LoomMain"];
+	});
+}
+
+// The Dock menu: New Window, and the recent projects, each in a window of
+// its own. Wails' application delegate has no Dock menu, so one is added
+// to its class. The picks and the list come from Go (wails_dock_darwin.go).
+extern char *loomDockProjects(void);
+extern void loomDockOpen(char *path);
+
+@interface LoomDockTarget : NSObject
+@end
+
+@implementation LoomDockTarget
+- (void)open:(NSMenuItem *)item {
+	NSString *path = item.representedObject;
+	loomDockOpen((char *)path.UTF8String);
+}
+@end
+
+static LoomDockTarget *loomDockTarget;
+
+static NSMenuItem *loomDockItem(NSMenu *menu, NSString *title, NSString *path) {
+	NSMenuItem *item = [menu addItemWithTitle:title action:@selector(open:) keyEquivalent:@""];
+	item.target = loomDockTarget;
+	item.representedObject = path;
+	return item;
+}
+
+static NSMenu *loomDockMenu(id self, SEL cmd, NSApplication *app) {
+	NSMenu *menu = [[NSMenu alloc] init];
+	menu.autoenablesItems = NO;
+	loomDockItem(menu, @"New Window", @"");
+	char *list = loomDockProjects();
+	NSString *text = list != NULL ? [NSString stringWithUTF8String:list] : @"";
+	free(list);
+	BOOL first = YES;
+	for (NSString *path in [text componentsSeparatedByString:@"\n"]) {
+		if (path.length == 0) {
+			continue;
+		}
+		if (first) {
+			[menu addItem:[NSMenuItem separatorItem]];
+			NSMenuItem *head = [menu addItemWithTitle:@"Open in New Window" action:nil keyEquivalent:@""];
+			head.enabled = NO;
+			first = NO;
+		}
+		NSMenuItem *item = loomDockItem(menu, path.lastPathComponent, path);
+		item.toolTip = path;
+	}
+	return menu;
+}
+
+static void loomInstallDock(void) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		id delegate = NSApp.delegate;
+		if (delegate == nil || loomDockTarget != nil) {
+			return;
+		}
+		loomDockTarget = [LoomDockTarget new];
+		class_addMethod([delegate class], @selector(applicationDockMenu:), (IMP)loomDockMenu, "@@:@");
 	});
 }
 
@@ -112,7 +215,15 @@ static void loomAppearance(int dark) {
 import "C"
 
 // installWindow lets the window remember where it was.
-func installWindow() { C.loomInstallWindow() }
+func installWindow(cascade bool) {
+	n := C.int(0)
+	if cascade {
+		n = 1
+	}
+	C.loomInstallWindow(n)
+}
+
+func installDock() { C.loomInstallDock() }
 
 // quietTyping turns off the system's typing suggestions for this app.
 func quietTyping() { C.loomQuietTyping() }
