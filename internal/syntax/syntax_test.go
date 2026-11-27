@@ -24,6 +24,9 @@ func TestHighlightKinds(t *testing.T) {
 		{"kotlin", "fun main() {}", "fun", "keyword"},
 		{"go", "package main\nfunc run() {}", "run", "function"},
 		{"markdown", "don't panic", "don't panic", ""},
+		{"crystal", "struct Point\n  getter x : Int32\nend", "getter", "keyword"},
+		{"crystal", "x = nil # note", "# note", "comment"},
+		{"crystal", "x = nil # note", "nil", "constant"},
 	}
 	for _, c := range cases {
 		if got := kinds(c.src, c.lang)[c.word]; got != c.want {

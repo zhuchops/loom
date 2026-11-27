@@ -3,6 +3,7 @@ package editor
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -342,6 +343,45 @@ func elixirBlockOpener(line string) bool {
 	return strings.HasSuffix(t, " do") || strings.HasSuffix(t, "->") || strings.HasSuffix(t, "|> fn")
 }
 
+// crystalBlockOpener reports whether a Crystal line opens a block that
+// "end" closes, or continues one (else, when, rescue), so the next line is
+// indented. Bodiless declarations (abstract def, fun in a lib) and one-line
+// blocks are left alone.
+func crystalBlockOpener(line string) bool {
+	t := strings.TrimSpace(line)
+	if i := strings.Index(t, " #"); i >= 0 {
+		t = strings.TrimSpace(t[:i])
+	}
+	if t == "" || strings.HasPrefix(t, "#") || strings.HasSuffix(t, " end") || strings.HasSuffix(t, ";end") {
+		return false
+	}
+	switch t {
+	case "begin", "else", "ensure", "rescue", "do":
+		return true
+	}
+	if strings.HasSuffix(t, " do") || crystalDoBlock.MatchString(t) {
+		return true
+	}
+	words := strings.Fields(t)
+	for len(words) > 1 && (words[0] == "private" || words[0] == "protected") {
+		words = words[1:]
+	}
+	switch words[0] {
+	case "def", "class", "module", "struct", "enum", "lib", "macro", "annotation", "union",
+		"if", "unless", "while", "until", "case", "select", "when", "in", "elsif", "rescue":
+		return true
+	}
+	// x = if y, z = case w
+	for _, w := range []string{"= if ", "= unless ", "= case ", "= begin"} {
+		if strings.Contains(t, w) {
+			return true
+		}
+	}
+	return false
+}
+
+var crystalDoBlock = regexp.MustCompile(`\bdo\s*\|[^|]*\|$`)
+
 // closerFor returns the bracket that closes the opener ending text, or 0.
 func closerFor(text string) rune {
 	switch {
@@ -366,6 +406,9 @@ func (e *editor) indentAfter(before string) string {
 		return e.indentUnit(before)
 	}
 	if elixirBlockOpener(before) && e.cfg.languageFor(e.b.path) == "elixir" {
+		return e.indentUnit(before)
+	}
+	if crystalBlockOpener(before) && e.cfg.languageFor(e.b.path) == "crystal" {
 		return e.indentUnit(before)
 	}
 	if !strings.HasSuffix(before, ":") {

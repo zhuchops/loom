@@ -43,7 +43,7 @@ func languageName(id string) string {
 		"html": "HTML", "css": "CSS", "sh": "Shell", "c": "C", "cpp": "C++", "toml": "TOML", "sql": "SQL",
 		"asm": "Assembly", "cmake": "CMake", "csharp": "C#", "dockerfile": "Dockerfile", "graphql": "GraphQL",
 		"javascriptreact": "JavaScript JSX", "makefile": "Makefile", "ocaml": "OCaml", "php": "PHP", "proto": "Protocol Buffers",
-		"shellscript": "Shell", "dingo": "Dingo", "elixir": "Elixir", "ex": "Elixir", "exs": "Elixir", "heex": "HEEx", "typescriptreact": "TypeScript TSX", "xml": "XML",
+		"shellscript": "Shell", "dingo": "Dingo", "elixir": "Elixir", "crystal": "Crystal", "cr": "Crystal", "ex": "Elixir", "exs": "Elixir", "heex": "HEEx", "typescriptreact": "TypeScript TSX", "xml": "XML",
 	}
 	if name, ok := names[strings.ToLower(id)]; ok {
 		return name

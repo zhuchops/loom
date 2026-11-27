@@ -51,7 +51,7 @@ func scopeRows(b *buffer, row int) []int {
 	return out
 }
 
-var scopeName = regexp.MustCompile(`(?:func|defp|defmodule|defmacrop|defmacro|defprotocol|defimpl|defguard|def|class|fn|function|struct|interface|type|impl|trait|enum|module|namespace|mod|object|record|protocol|extension|describe|it|test)\s+(?:\([^)]*\)\s*)?([A-Za-z_$][\w$.<>?!]*)`)
+var scopeName = regexp.MustCompile(`(?:func|defp|defmodule|defmacrop|defmacro|macro|defprotocol|defimpl|defguard|def|class|fn|function|struct|interface|type|impl|trait|enum|module|namespace|mod|object|record|protocol|extension|describe|it|test)\s+(?:\([^)]*\)\s*)?([A-Za-z_$][\w$.<>?!]*)`)
 
 // scopeLabel names a scope line: the declared name when there is one.
 func scopeLabel(line string) string {

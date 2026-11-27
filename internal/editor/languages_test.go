@@ -3,6 +3,8 @@ package editor
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -112,6 +114,35 @@ func TestElixirSupport(t *testing.T) {
 	e.open(fixture(t, e.root, "a.ex", ""))
 	for before, want := range map[string]bool{
 		"def run(x) do": true, "  fn x ->": true, "case y do": true, "else": true, "x = 1": false, "  foo(1) # do": false,
+	} {
+		if got := e.indentAfter(before) != ""; got != want {
+			t.Errorf("indentAfter(%q) indents = %v, want %v", before, got, want)
+		}
+	}
+}
+
+func TestCrystalSupport(t *testing.T) {
+	cfg := defaultConfig()
+	if got := cfg.languageFor("src/app.cr"); got != "crystal" {
+		t.Fatalf("languageFor = %q", got)
+	}
+	c := cfg.Languages["crystal"]
+	if len(c.Server) != 1 || c.Server[0] != "crystalline" {
+		t.Fatalf("crystal server = %v", c.Server)
+	}
+	if strings.Join(c.Format, " ") != "crystal tool format -" || !slices.Contains(c.Roots, "shard.yml") {
+		t.Fatalf("crystal format = %v, roots = %v", c.Format, c.Roots)
+	}
+	if got := scopeLabel("  macro define_getter(name)"); got != "define_getter" {
+		t.Errorf("macro label = %q", got)
+	}
+	e := testEditor(t, "vim", "")
+	e.open(fixture(t, e.root, "a.cr", ""))
+	for before, want := range map[string]bool{
+		"def run(x : Int32) : Int32": true, "  private def helper": true, "class Foo < Bar": true, "struct Point": true,
+		"  if x > 1": true, "else": true, "  when 1": true, "items.each do |item|": true, "spawn do": true,
+		"x = if y": true, "lib LibC": true, "x = 1": false, "return if done": false, "def x; 1; end": false,
+		"abstract def area : Float64": false, "  foo(1) # do": false, "end": false,
 	} {
 		if got := e.indentAfter(before) != ""; got != want {
 			t.Errorf("indentAfter(%q) indents = %v, want %v", before, got, want)
