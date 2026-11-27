@@ -9,7 +9,7 @@
 class Loom < Formula
   desc "Vim-style code editor for the terminal and the desktop"
   homepage "https://github.com/zhuchops/loom"
-  url "https://github.com/zhuchops/loom.git", tag: "v0.43.0"
+  url "https://github.com/zhuchops/loom.git", tag: "v0.45.0"
   head "https://github.com/zhuchops/loom.git", branch: "main"
 
   depends_on "go" => :build

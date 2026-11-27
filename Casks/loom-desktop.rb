@@ -6,8 +6,8 @@
 #
 # The release workflow updates version and sha256 for every release.
 cask "loom-desktop" do
-  version "0.43.0"
-  sha256 "c0b253f3de3fe72b9c790ba1f00a5492ff44ed225b4e94e8abcda39eb940563a"
+  version "0.45.0"
+  sha256 "6def9dbb45c4fcdadd29f89d8dd9a81a53cfd2cc3fc49da3ed4214e43c7b4785"
 
   url "https://github.com/zhuchops/loom/releases/download/v#{version}/Loom_darwin_universal.zip"
   name "Loom"
