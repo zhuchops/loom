@@ -380,6 +380,40 @@ func crystalBlockOpener(line string) bool {
 	return false
 }
 
+// nimBlockOpener reports whether a Nim line opens an indented block: it ends
+// in ":" (if, for, of, try) or "=" (proc, a type's body), or is a section
+// such as type or var on its own, or declares an object, enum or tuple.
+func nimBlockOpener(line string) bool {
+	t := strings.TrimSpace(line)
+	if i := strings.Index(t, " #"); i >= 0 {
+		t = strings.TrimSpace(t[:i])
+	}
+	if t == "" || strings.HasPrefix(t, "#") {
+		return false
+	}
+	switch t {
+	case "type", "var", "let", "const", "using", "import", "export":
+		return true
+	}
+	if strings.HasSuffix(t, ":") {
+		return true
+	}
+	if strings.HasSuffix(t, "=") {
+		for _, op := range []string{"==", "!=", "<=", ">="} {
+			if strings.HasSuffix(t, op) {
+				return false
+			}
+		}
+		return true
+	}
+	for _, w := range []string{" object", " tuple", " enum", " concept"} {
+		if strings.HasSuffix(t, w) {
+			return true
+		}
+	}
+	return strings.Contains(t, " object of ") && !strings.Contains(t, ";")
+}
+
 var crystalDoBlock = regexp.MustCompile(`\bdo\s*\|[^|]*\|$`)
 
 // closerFor returns the bracket that closes the opener ending text, or 0.
@@ -409,6 +443,9 @@ func (e *editor) indentAfter(before string) string {
 		return e.indentUnit(before)
 	}
 	if crystalBlockOpener(before) && e.cfg.languageFor(e.b.path) == "crystal" {
+		return e.indentUnit(before)
+	}
+	if nimBlockOpener(before) && e.cfg.languageFor(e.b.path) == "nim" {
 		return e.indentUnit(before)
 	}
 	if !strings.HasSuffix(before, ":") {

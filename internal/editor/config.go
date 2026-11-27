@@ -60,6 +60,7 @@ func defaultLanguages() map[string]languageConfig {
 		"c":               {Extensions: []string{"c", "h"}, Server: []string{"clangd"}, Format: []string{"clang-format"}},
 		"cpp":             {Extensions: []string{"cc", "cpp", "cxx", "hpp", "hh"}, Server: []string{"clangd"}, Format: []string{"clang-format"}},
 		"ruby":            {Extensions: []string{"rb"}, Server: []string{"ruby-lsp"}},
+		"nim":             {Extensions: []string{"nim", "nims", "nimble"}, Server: []string{"nimlangserver"}, Roots: []string{"*.nimble", "nim.cfg", "config.nims"}, Format: []string{"nph", "-"}},
 		"crystal":         {Extensions: []string{"cr"}, Server: []string{"crystalline"}, Roots: []string{"shard.yml"}, Format: []string{"crystal", "tool", "format", "-"}},
 		"lua":             {Extensions: []string{"lua"}, Server: []string{"lua-language-server"}, Format: []string{"stylua", "-"}},
 		"shellscript":     {Extensions: []string{"sh", "bash", "zsh"}, Server: []string{"bash-language-server", "start"}, Format: []string{"shfmt"}},

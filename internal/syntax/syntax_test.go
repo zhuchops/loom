@@ -27,6 +27,9 @@ func TestHighlightKinds(t *testing.T) {
 		{"crystal", "struct Point\n  getter x : Int32\nend", "getter", "keyword"},
 		{"crystal", "x = nil # note", "# note", "comment"},
 		{"crystal", "x = nil # note", "nil", "constant"},
+		{"nim", "proc add(a, b: int): int =\n  result = a + b", "proc", "keyword"},
+		{"nim", "proc add(a, b: int): int =\n  result = a + b", "result", "constant"},
+		{"nim", "let s = \"\"\"a\nb\"\"\" # note", "# note", "comment"},
 	}
 	for _, c := range cases {
 		if got := kinds(c.src, c.lang)[c.word]; got != c.want {

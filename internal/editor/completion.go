@@ -189,6 +189,13 @@ func workspaceRoot(path, lang string, roots []string) string {
 	marks := append(slices.Clone(roots), projectMarkers...)
 	for p := dir; ; p = filepath.Dir(p) {
 		for _, mark := range marks {
+			if strings.ContainsAny(mark, "*?[") {
+				// A pattern such as *.nimble, for a marker named after its project.
+				if found, _ := filepath.Glob(filepath.Join(p, mark)); len(found) > 0 {
+					return p
+				}
+				continue
+			}
 			if _, err := os.Stat(filepath.Join(p, mark)); err == nil {
 				return p
 			}

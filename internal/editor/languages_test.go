@@ -150,6 +150,44 @@ func TestCrystalSupport(t *testing.T) {
 	}
 }
 
+func TestNimSupport(t *testing.T) {
+	cfg := defaultConfig()
+	for _, path := range []string{"src/app.nim", "config.nims", "app.nimble"} {
+		if got := cfg.languageFor(path); got != "nim" {
+			t.Errorf("languageFor(%q) = %q", path, got)
+		}
+	}
+	n := cfg.Languages["nim"]
+	if len(n.Server) != 1 || n.Server[0] != "nimlangserver" || strings.Join(n.Format, " ") != "nph -" {
+		t.Fatalf("nim server = %v, format = %v", n.Server, n.Format)
+	}
+	// A Nimble package is rooted at the folder of its <name>.nimble file.
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "src", "app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "app.nimble"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := workspaceRoot(filepath.Join(root, "src", "app", "x.nim"), "nim", n.Roots); got != root {
+		t.Errorf("workspaceRoot = %q, want %q", got, root)
+	}
+	if got := scopeLabel("proc parse*(s: string): Node ="); got != "parse" {
+		t.Errorf("proc label = %q", got)
+	}
+	e := testEditor(t, "vim", "")
+	e.open(fixture(t, e.root, "a.nim", ""))
+	for before, want := range map[string]bool{
+		"proc add(a, b: int): int =": true, "type": true, "  Point = object": true, "Node = ref object of RootObj": true,
+		"  if x > 1:": true, "  of 1:": true, "for i in 0..<n:": true, "Color = enum": true, "let": true,
+		"x = 1": false, "if a == b": false, "echo x # note:": false, "discard": false,
+	} {
+		if got := e.indentAfter(before) != ""; got != want {
+			t.Errorf("indentAfter(%q) indents = %v, want %v", before, got, want)
+		}
+	}
+}
+
 func TestDingoSupport(t *testing.T) {
 	cfg := defaultConfig()
 	if got := cfg.languageFor("cmd/main.dingo"); got != "dingo" {
